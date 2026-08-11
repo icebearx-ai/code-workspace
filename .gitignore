@@ -1,0 +1,14 @@
+.DS_Store
+/node_modules
+coverage
+*.tgz
+
+# OpenSpec Workspace local project registry and managed state
+/.openspec-workspace/
+
+# 本机 Codex 配置
+/.codex/config.toml
+
+# 旧版本本地状态和项目配置，仅用于迁移
+/.workspace-init/
+/config-workspace.yaml

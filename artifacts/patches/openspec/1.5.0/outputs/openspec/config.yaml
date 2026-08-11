@@ -1,0 +1,39 @@
+schema: workspace-workflow
+
+context: |
+  Language: {{WORKSPACE_LANGUAGE}}
+
+  Project: OpenSpec Workspace, a local multi-project extension for OpenSpec.
+
+  Responsibilities:
+  - OpenSpec defines and executes proposal, spec, design, tasks, apply, sync, and archive lifecycles. Workspace patches inject only multi-project preflight, ownership context, edit boundaries, and delegation to Workspace-owned recovery operations.
+  - Manage the local project registry, Git worktree and branch validation, capability ownership, cross-project task validation, AI context output, and Codex writable roots.
+  - Extend native OpenSpec commands and skills through thin patches managed by exact OpenSpec version; never reimplement Workspace state persistence inside those workflows.
+
+  Mandatory constraints:
+  - The project registry is local-only state. Do not create or depend on team-shared absolute-path configuration.
+  - Every capability must belong to one project and use the ID format `<specPrefix>-<local-capability>`.
+  - Modify production code only inside the owning project's registered `location`. Resolve paths through the registry and never assume projects are inside the workspace.
+  - Validate the actual Git worktree and branch. Never create or switch production project branches automatically.
+  - Use `Cross-project` only for coordination, contracts, and integration verification. It must not contain production code changes without project ownership.
+  - Treat `Affected Projects`, `Capabilities`, `New Capabilities`, `Modified Capabilities`, `Project`, `Capability`, and `Cross-project` as untranslated protocol tokens. Prose and descriptions may use the configured language.
+  - Apply Workspace orchestration only to a repo-local OpenSpec planning home whose root matches the Workspace root. Standalone stores are not implicitly bound to a Workspace registry.
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours

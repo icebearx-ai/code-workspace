@@ -1,0 +1,944 @@
+===================================================================
+--- a/.claude/commands/opsx/apply.md	OpenSpec 1.5.0
++++ b/.claude/commands/opsx/apply.md	workspace override
+@@ -30,11 +30,34 @@
+    - `schemaName`: The workflow being used (e.g., "spec-driven")
+    - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
+    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
+
+-3. **Get apply instructions**
++3. **Validate the workspace contract**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`. Standalone OpenSpec stores are not
++   bound to a Workspace registry; stop instead of guessing one.
++
++   Then run before reading implementation instructions or editing production
++   files:
++
+    ```bash
++   openspec-workspace change validate "<name>" --json
++   openspec-workspace context --change "<name>" --json
++   ```
++
++   Require the context result's `data.workspaceRoot` to equal `planningHome.root`
++   and `data.change.name` to equal `<name>`. The first command checks proposal,
++   specs, tasks, participating project state, and ownership. For a
++   `PROJECT_BRANCH_MISMATCH`, invoke the installed
++   `openspec-workspace-resolve-branch` Skill for that project, then rerun both
++   commands; do not recover branches or edit Workspace configuration inline.
++   Stop on any other failure. Keep the successful change-scoped `data.projects`
++   records as the authoritative project-to-location mapping.
++
++4. **Get apply instructions**
++
++   ```bash
+    openspec instructions apply --change "<name>" --json
+    ```
+
+    This returns:
+@@ -47,27 +70,37 @@
+    - If `state: "blocked"` (missing artifacts): show message, suggest using `/opsx:continue`
+    - If `state: "all_done"`: congratulate, suggest archive
+    - Otherwise: proceed to implementation
+
+-4. **Read context files**
++5. **Read context files**
+
+    Read every file path listed under `contextFiles` from the apply instructions output.
+    The files depend on the schema being used:
+    - **spec-driven**: proposal, specs, design, tasks
+    - Other schemas: follow the contextFiles from CLI output
+
+-5. **Show current progress**
++6. **Show current progress**
+
+    Display:
+    - Schema being used
+    - Progress: "N/M tasks complete"
+    - Remaining tasks overview
+    - Dynamic instruction from CLI
+
+-6. **Implement tasks (loop until done or blocked)**
++7. **Implement tasks (loop until done or blocked)**
+
+    For each pending task:
+    - Show which task is being worked on
++   - For `workspace-workflow`, derive the task's project from the nearest
++     `## <n>. <project-name>:` heading in `tasks.md`
++   - Confirm that project exists in the change-scoped context output
++   - Before the first task for that project, run
++     `openspec-workspace project verify "<project-name>" --json`
++   - On `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch`,
++     then refresh `context --change "<name>" --json` and re-check the roots
++   - Edit production files only inside that project's configured `location`
++   - Treat `Cross-project` groups as coordination and verification work; if they
++     require production edits, pause and split those edits into project-owned tasks
+    - Make the code changes required
+    - Keep changes minimal and focused
+    - Mark task complete in the tasks file: `- [ ]` → `- [x]`
+    - Continue to next task
+@@ -77,9 +110,9 @@
+    - Implementation reveals a design issue → suggest updating artifacts
+    - Error or blocker encountered → report and wait for guidance
+    - User interrupts
+
+-7. **On completion or pause, show status**
++8. **On completion or pause, show status**
+
+    Display:
+    - Tasks completed this session
+    - Overall progress: "N/M tasks complete"
+@@ -145,8 +178,9 @@
+ - Keep code changes minimal and scoped to each task
+ - Update task checkbox immediately after completing each task
+ - Pause on errors, blockers, or unclear requirements - don't guess
+ - Use contextFiles from CLI output, don't assume specific file names
++- For `workspace-workflow`, never edit `.openspec-workspace/config.yaml` directly and never duplicate branch recovery
+
+ **Fluid Workflow Integration**
+
+ This skill supports the "actions on a change" model:
+
+===================================================================
+--- a/.claude/commands/opsx/archive.md	OpenSpec 1.5.0
++++ b/.claude/commands/opsx/archive.md	workspace override
+@@ -35,10 +35,28 @@
+    - Display warning listing incomplete artifacts
+    - Prompt user for confirmation to continue
+    - Proceed if user confirms
+
+-3. **Check task completion status**
++3. **Validate the workspace contract**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`; standalone stores are not bound to a
++   Workspace registry. Then run:
++
++   ```bash
++   openspec-workspace change validate "<name>" --json
++   openspec-workspace context --change "<name>" --json
++   ```
++
++   Require `data.workspaceRoot` from context to equal `planningHome.root` and
++   `data.change.name` to equal `<name>`. This confirms that proposal, delta
++   specs, tasks, participating project state, and ownership still agree. On
++   `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch` for the
++   named project and rerun both commands; do not recover branches or edit the
++   registry inline. Stop on any other failure.
++
++4. **Check task completion status**
++
+    Read the tasks file (typically `tasks.md`) to check for incomplete tasks.
+
+    Count tasks marked with `- [ ]` (incomplete) vs `- [x]` (complete).
+
+@@ -48,9 +66,9 @@
+    - Proceed if user confirms
+
+    **If no tasks file exists:** Proceed without task-related warning.
+
+-4. **Assess delta spec sync state**
++5. **Assess delta spec sync state**
+
+    Use `artifactPaths.specs.existingOutputPaths` from status JSON to check for delta specs. If none exist, proceed without sync prompt.
+
+    **If delta specs exist:**
+@@ -63,10 +81,20 @@
+    - If already synced: "Archive now", "Sync anyway", "Cancel"
+
+    If user chooses sync, use Task tool (subagent_type: "general-purpose", prompt: "Use Skill tool to invoke openspec-sync-specs for change '<name>'. Delta spec analysis: <include the analyzed delta spec summary>"). Proceed to archive regardless of choice.
+
+-5. **Perform the archive**
++   After a successful sync for `workspace-workflow`, run:
+
++   ```bash
++   openspec-workspace change validate "<name>" --require-main-specs --json
++   ```
++
++   This checks that every delta spec now exists as a main spec and still maps to
++   exactly one configured project owner. Stop before moving the change if it
++   fails.
++
++6. **Perform the archive**
++
+    Create an `archive` directory under `planningHome.changesDir` if it doesn't exist:
+    ```bash
+    mkdir -p "<planningHome.changesDir>/archive"
+    ```
+@@ -80,9 +108,9 @@
+    ```bash
+    mv "<changeRoot>" "<planningHome.changesDir>/archive/YYYY-MM-DD-<name>"
+    ```
+
+-6. **Display summary**
++7. **Display summary**
+
+    Show archive completion summary including:
+    - Change name
+    - Schema that was used
+@@ -157,4 +185,5 @@
+ - Preserve .openspec.yaml when moving to archive (it moves with the directory)
+ - Show clear summary of what happened
+ - If sync is requested, use the Skill tool to invoke `openspec-sync-specs` (agent-driven)
+ - If delta specs exist, always run the sync assessment and show the combined summary before prompting
++- For `workspace-workflow`, never edit Workspace configuration or recover project branches inline
+
+===================================================================
+--- a/.claude/commands/opsx/explore.md	OpenSpec 1.5.0
++++ b/.claude/commands/opsx/explore.md	workspace override
+@@ -83,8 +83,30 @@
+ ## OpenSpec Awareness
+
+ You have full context of the OpenSpec system. Use it naturally, don't force it.
+
++### Investigate workspace projects safely
++
++Do not make workspace validation a global prerequisite for thinking. When the
++discussion needs registered project code in a repo-local Workspace planning
++context:
++
++1. Run `openspec-workspace project list --json` and select only the relevant
++   project records from `data.projects`.
++2. Run `openspec-workspace project verify "<project-name>" --json` for each
++   selected project before reading its code.
++3. On `PROJECT_BRANCH_MISMATCH`, invoke the installed
++   `openspec-workspace-resolve-branch` Skill for that project, then list and
++   verify it again. Never recover branches or edit Workspace configuration
++   inline.
++4. Run `openspec-workspace context --project "<project-name>" --json` and start
++   investigation from that record's configured `location`.
++
++Require the standard JSON envelope and use only structured diagnostic fields,
++never values parsed from `message`. Do not invent projects, paths, or ownership.
++If the current OpenSpec planning home is a standalone store, preserve upstream
++store behavior; it is not implicitly bound to the current Workspace registry.
++
+ ### Check for context
+
+ At the start, quickly check what exists:
+ ```bash
+@@ -121,10 +143,10 @@
+ 3. **Offer to capture when decisions are made**
+
+     | Insight Type               | Where to Capture               |
+     |----------------------------|--------------------------------|
+-    | New requirement discovered | `specs/<capability>/spec.md` |
+-    | Requirement changed        | `specs/<capability>/spec.md` |
++    | New requirement discovered | `specs/<spec-id>/spec.md` |
++    | Requirement changed        | `specs/<spec-id>/spec.md` |
+     | Design decision made       | `design.md`                  |
+     | Scope changed              | `proposal.md`                |
+     | New work identified        | `tasks.md`                   |
+     | Assumption invalidated     | Relevant artifact              |
+@@ -168,7 +190,8 @@
+ - **Don't fake understanding** - If something is unclear, dig deeper
+ - **Don't rush** - Discovery is thinking time, not task time
+ - **Don't force structure** - Let patterns emerge naturally
+ - **Don't auto-capture** - Offer to save insights, don't just do it
++- **Don't invent projects** - Treat `openspec-workspace context --json` as the workspace project source of truth
+ - **Do visualize** - A good diagram is worth many paragraphs
+ - **Do explore the codebase** - Ground discussions in reality
+ - **Do question assumptions** - Including the user's and your own
+
+===================================================================
+--- a/.claude/commands/opsx/propose.md	OpenSpec 1.5.0
++++ b/.claude/commands/opsx/propose.md	workspace override
+@@ -45,10 +45,32 @@
+    - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
+    - `artifacts`: list of all artifacts with their status and dependencies
+    - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context. Use these instead of assuming repo-local paths.
+
+-4. **Create artifacts in sequence until apply-ready**
++4. **Validate the workspace contract when selected**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`. A standalone store is not implicitly
++   bound to a Workspace registry; stop before creating artifacts rather than
++   guessing one.
++
++   Run `openspec-workspace project list --json`, select the project records
++   affected by the request, and ask the user if ownership is ambiguous. For each
++   selected project run:
++
++   ```bash
++   openspec-workspace project verify "<project-name>" --json
++   openspec-workspace context --project "<project-name>" --json
++   ```
++
++   Require the context `data.workspaceRoot` to equal `planningHome.root`. On
++   `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch` for that
++   project, then list, verify, and load its context again. Never recover branches
++   or edit Workspace configuration inline. Stop on other diagnostics. Cache only
++   the selected verified project records for artifact generation.
++
++5. **Create artifacts in sequence until apply-ready**
++
+    Use the **TodoWrite tool** to track progress through the artifacts.
+
+    Loop through artifacts in dependency order (artifacts with no pending dependencies first):
+
+@@ -77,9 +99,9 @@
+    c. **If an artifact requires user input** (unclear context):
+       - Use **AskUserQuestion tool** to clarify
+       - Then continue with creation
+
+-5. **Show final status**
++6. **Show final status**
+    ```bash
+    openspec status --change "<name>"
+    ```
+
+@@ -94,8 +116,12 @@
+ **Artifact Creation Guidelines**
+
+ - Follow the `instruction` field from `openspec instructions` for each artifact type
+ - The schema defines what each artifact should contain - follow it
++- Use the cached project list for Affected Projects and use each owning project's
++  `specPrefix` when constructing capability spec IDs
++- Keep `Affected Projects`, `Capabilities`, `New Capabilities`, `Modified Capabilities`,
++  `Project`, `Capability`, and `Cross-project` as untranslated protocol tokens
+ - Read dependency artifacts for context before creating new ones
+ - Use `template` as the structure for your output file - fill in its sections
+ - **IMPORTANT**: `context` and `rules` are constraints for YOU, not content for the file
+   - Do NOT copy `<context>`, `<rules>`, `<project_context>` blocks into the artifact
+@@ -103,7 +129,9 @@
+
+ **Guardrails**
+ - Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
+ - Always read dependency artifacts before creating a new one
++- Do not invent projects, project paths, or capability ownership outside the selected verified records
++- Never edit `.openspec-workspace/config.yaml` directly or duplicate branch recovery
+ - If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
+ - If a change with that name already exists, ask if user wants to continue it or create a new one
+ - Verify each artifact file exists after writing before proceeding to next
+
+===================================================================
+--- a/.claude/skills/openspec-apply-change/SKILL.md	OpenSpec 1.5.0
++++ b/.claude/skills/openspec-apply-change/SKILL.md	workspace override
+@@ -34,11 +34,34 @@
+    - `schemaName`: The workflow being used (e.g., "spec-driven")
+    - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
+    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
+
+-3. **Get apply instructions**
++3. **Validate the workspace contract**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`. Standalone OpenSpec stores are not
++   bound to a Workspace registry; stop instead of guessing one.
++
++   Then run before reading implementation instructions or editing production
++   files:
++
+    ```bash
++   openspec-workspace change validate "<name>" --json
++   openspec-workspace context --change "<name>" --json
++   ```
++
++   Require the context result's `data.workspaceRoot` to equal `planningHome.root`
++   and `data.change.name` to equal `<name>`. The first command checks proposal,
++   specs, tasks, participating project state, and ownership. For a
++   `PROJECT_BRANCH_MISMATCH`, invoke the installed
++   `openspec-workspace-resolve-branch` Skill for that project, then rerun both
++   commands; do not recover branches or edit Workspace configuration inline.
++   Stop on any other failure. Keep the successful change-scoped `data.projects`
++   records as the authoritative project-to-location mapping.
++
++4. **Get apply instructions**
++
++   ```bash
+    openspec instructions apply --change "<name>" --json
+    ```
+
+    This returns:
+@@ -51,27 +74,37 @@
+    - If `state: "blocked"` (missing artifacts): show message, suggest using openspec-continue-change
+    - If `state: "all_done"`: congratulate, suggest archive
+    - Otherwise: proceed to implementation
+
+-4. **Read context files**
++5. **Read context files**
+
+    Read every file path listed under `contextFiles` from the apply instructions output.
+    The files depend on the schema being used:
+    - **spec-driven**: proposal, specs, design, tasks
+    - Other schemas: follow the contextFiles from CLI output
+
+-5. **Show current progress**
++6. **Show current progress**
+
+    Display:
+    - Schema being used
+    - Progress: "N/M tasks complete"
+    - Remaining tasks overview
+    - Dynamic instruction from CLI
+
+-6. **Implement tasks (loop until done or blocked)**
++7. **Implement tasks (loop until done or blocked)**
+
+    For each pending task:
+    - Show which task is being worked on
++   - For `workspace-workflow`, derive the task's project from the nearest
++     `## <n>. <project-name>:` heading in `tasks.md`
++   - Confirm that project exists in the change-scoped context output
++   - Before the first task for that project, run
++     `openspec-workspace project verify "<project-name>" --json`
++   - On `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch`,
++     then refresh `context --change "<name>" --json` and re-check the roots
++   - Edit production files only inside that project's configured `location`
++   - Treat `Cross-project` groups as coordination and verification work; if they
++     require production edits, pause and split those edits into project-owned tasks
+    - Make the code changes required
+    - Keep changes minimal and focused
+    - Mark task complete in the tasks file: `- [ ]` → `- [x]`
+    - Continue to next task
+@@ -81,9 +114,9 @@
+    - Implementation reveals a design issue → suggest updating artifacts
+    - Error or blocker encountered → report and wait for guidance
+    - User interrupts
+
+-7. **On completion or pause, show status**
++8. **On completion or pause, show status**
+
+    Display:
+    - Tasks completed this session
+    - Overall progress: "N/M tasks complete"
+@@ -149,8 +182,9 @@
+ - Keep code changes minimal and scoped to each task
+ - Update task checkbox immediately after completing each task
+ - Pause on errors, blockers, or unclear requirements - don't guess
+ - Use contextFiles from CLI output, don't assume specific file names
++- For `workspace-workflow`, never edit `.openspec-workspace/config.yaml` directly and never duplicate branch recovery
+
+ **Fluid Workflow Integration**
+
+ This skill supports the "actions on a change" model:
+
+===================================================================
+--- a/.claude/skills/openspec-archive-change/SKILL.md	OpenSpec 1.5.0
++++ b/.claude/skills/openspec-archive-change/SKILL.md	workspace override
+@@ -39,10 +39,28 @@
+    - Display warning listing incomplete artifacts
+    - Use **AskUserQuestion tool** to confirm user wants to proceed
+    - Proceed if user confirms
+
+-3. **Check task completion status**
++3. **Validate the workspace contract**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`; standalone stores are not bound to a
++   Workspace registry. Then run:
++
++   ```bash
++   openspec-workspace change validate "<name>" --json
++   openspec-workspace context --change "<name>" --json
++   ```
++
++   Require `data.workspaceRoot` from context to equal `planningHome.root` and
++   `data.change.name` to equal `<name>`. This confirms that proposal, delta
++   specs, tasks, participating project state, and ownership still agree. On
++   `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch` for the
++   named project and rerun both commands; do not recover branches or edit the
++   registry inline. Stop on any other failure.
++
++4. **Check task completion status**
++
+    Read the tasks file (typically `tasks.md`) to check for incomplete tasks.
+
+    Count tasks marked with `- [ ]` (incomplete) vs `- [x]` (complete).
+
+@@ -52,9 +70,9 @@
+    - Proceed if user confirms
+
+    **If no tasks file exists:** Proceed without task-related warning.
+
+-4. **Assess delta spec sync state**
++5. **Assess delta spec sync state**
+
+    Use `artifactPaths.specs.existingOutputPaths` from status JSON to check for delta specs. If none exist, proceed without sync prompt.
+
+    **If delta specs exist:**
+@@ -67,10 +85,20 @@
+    - If already synced: "Archive now", "Sync anyway", "Cancel"
+
+    If user chooses sync, use Task tool (subagent_type: "general-purpose", prompt: "Use Skill tool to invoke openspec-sync-specs for change '<name>'. Delta spec analysis: <include the analyzed delta spec summary>"). Proceed to archive regardless of choice.
+
+-5. **Perform the archive**
++   After a successful sync for `workspace-workflow`, run:
+
++   ```bash
++   openspec-workspace change validate "<name>" --require-main-specs --json
++   ```
++
++   This checks that every delta spec now exists as a main spec and still maps to
++   exactly one configured project owner. Stop before moving the change if it
++   fails.
++
++6. **Perform the archive**
++
+    Create an `archive` directory under `planningHome.changesDir` if it doesn't exist:
+    ```bash
+    mkdir -p "<planningHome.changesDir>/archive"
+    ```
+@@ -84,9 +112,9 @@
+    ```bash
+    mv "<changeRoot>" "<planningHome.changesDir>/archive/YYYY-MM-DD-<name>"
+    ```
+
+-6. **Display summary**
++7. **Display summary**
+
+    Show archive completion summary including:
+    - Change name
+    - Schema that was used
+@@ -114,4 +142,5 @@
+ - Preserve .openspec.yaml when moving to archive (it moves with the directory)
+ - Show clear summary of what happened
+ - If sync is requested, use openspec-sync-specs approach (agent-driven)
+ - If delta specs exist, always run the sync assessment and show the combined summary before prompting
++- For `workspace-workflow`, never edit Workspace configuration or recover project branches inline
+
+===================================================================
+--- a/.claude/skills/openspec-explore/SKILL.md	OpenSpec 1.5.0
++++ b/.claude/skills/openspec-explore/SKILL.md	workspace override
+@@ -80,8 +80,30 @@
+ ## OpenSpec Awareness
+
+ You have full context of the OpenSpec system. Use it naturally, don't force it.
+
++### Investigate workspace projects safely
++
++Do not make workspace validation a global prerequisite for thinking. When the
++discussion needs registered project code in a repo-local Workspace planning
++context:
++
++1. Run `openspec-workspace project list --json` and select only the relevant
++   project records from `data.projects`.
++2. Run `openspec-workspace project verify "<project-name>" --json` for each
++   selected project before reading its code.
++3. On `PROJECT_BRANCH_MISMATCH`, invoke the installed
++   `openspec-workspace-resolve-branch` Skill for that project, then list and
++   verify it again. Never recover branches or edit Workspace configuration
++   inline.
++4. Run `openspec-workspace context --project "<project-name>" --json` and start
++   investigation from that record's configured `location`.
++
++Require the standard JSON envelope and use only structured diagnostic fields,
++never values parsed from `message`. Do not invent projects, paths, or ownership.
++If the current OpenSpec planning home is a standalone store, preserve upstream
++store behavior; it is not implicitly bound to the current Workspace registry.
++
+ ### Check for context
+
+ At the start, quickly check what exists:
+ ```bash
+@@ -116,10 +138,10 @@
+ 3. **Offer to capture when decisions are made**
+
+     | Insight Type               | Where to Capture               |
+     |----------------------------|--------------------------------|
+-    | New requirement discovered | `specs/<capability>/spec.md` |
+-    | Requirement changed        | `specs/<capability>/spec.md` |
++    | New requirement discovered | `specs/<spec-id>/spec.md` |
++    | Requirement changed        | `specs/<spec-id>/spec.md` |
+     | Design decision made       | `design.md`                  |
+     | Scope changed              | `proposal.md`                |
+     | New work identified        | `tasks.md`                   |
+     | Assumption invalidated     | Relevant artifact              |
+@@ -283,7 +305,8 @@
+ - **Don't fake understanding** - If something is unclear, dig deeper
+ - **Don't rush** - Discovery is thinking time, not task time
+ - **Don't force structure** - Let patterns emerge naturally
+ - **Don't auto-capture** - Offer to save insights, don't just do it
++- **Don't invent projects** - Treat `openspec-workspace context --json` as the workspace project source of truth
+ - **Do visualize** - A good diagram is worth many paragraphs
+ - **Do explore the codebase** - Ground discussions in reality
+ - **Do question assumptions** - Including the user's and your own
+
+===================================================================
+--- a/.claude/skills/openspec-propose/SKILL.md	OpenSpec 1.5.0
++++ b/.claude/skills/openspec-propose/SKILL.md	workspace override
+@@ -49,10 +49,32 @@
+    - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
+    - `artifacts`: list of all artifacts with their status and dependencies
+    - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context. Use these instead of assuming repo-local paths.
+
+-4. **Create artifacts in sequence until apply-ready**
++4. **Validate the workspace contract when selected**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`. A standalone store is not implicitly
++   bound to a Workspace registry; stop before creating artifacts rather than
++   guessing one.
++
++   Run `openspec-workspace project list --json`, select the project records
++   affected by the request, and ask the user if ownership is ambiguous. For each
++   selected project run:
++
++   ```bash
++   openspec-workspace project verify "<project-name>" --json
++   openspec-workspace context --project "<project-name>" --json
++   ```
++
++   Require the context `data.workspaceRoot` to equal `planningHome.root`. On
++   `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch` for that
++   project, then list, verify, and load its context again. Never recover branches
++   or edit Workspace configuration inline. Stop on other diagnostics. Cache only
++   the selected verified project records for artifact generation.
++
++5. **Create artifacts in sequence until apply-ready**
++
+    Use the **TodoWrite tool** to track progress through the artifacts.
+
+    Loop through artifacts in dependency order (artifacts with no pending dependencies first):
+
+@@ -81,9 +103,9 @@
+    c. **If an artifact requires user input** (unclear context):
+       - Use **AskUserQuestion tool** to clarify
+       - Then continue with creation
+
+-5. **Show final status**
++6. **Show final status**
+    ```bash
+    openspec status --change "<name>"
+    ```
+
+@@ -98,8 +120,12 @@
+ **Artifact Creation Guidelines**
+
+ - Follow the `instruction` field from `openspec instructions` for each artifact type
+ - The schema defines what each artifact should contain - follow it
++- Use the cached project list for Affected Projects and use each owning project's
++  `specPrefix` when constructing capability spec IDs
++- Keep `Affected Projects`, `Capabilities`, `New Capabilities`, `Modified Capabilities`,
++  `Project`, `Capability`, and `Cross-project` as untranslated protocol tokens
+ - Read dependency artifacts for context before creating new ones
+ - Use `template` as the structure for your output file - fill in its sections
+ - **IMPORTANT**: `context` and `rules` are constraints for YOU, not content for the file
+   - Do NOT copy `<context>`, `<rules>`, `<project_context>` blocks into the artifact
+@@ -107,7 +133,9 @@
+
+ **Guardrails**
+ - Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
+ - Always read dependency artifacts before creating a new one
++- Do not invent projects, project paths, or capability ownership outside the selected verified records
++- Never edit `.openspec-workspace/config.yaml` directly or duplicate branch recovery
+ - If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
+ - If a change with that name already exists, ask if user wants to continue it or create a new one
+ - Verify each artifact file exists after writing before proceeding to next
+
+===================================================================
+--- a/.codex/skills/openspec-apply-change/SKILL.md	OpenSpec 1.5.0
++++ b/.codex/skills/openspec-apply-change/SKILL.md	workspace override
+@@ -34,11 +34,34 @@
+    - `schemaName`: The workflow being used (e.g., "spec-driven")
+    - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
+    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
+
+-3. **Get apply instructions**
++3. **Validate the workspace contract**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`. Standalone OpenSpec stores are not
++   bound to a Workspace registry; stop instead of guessing one.
++
++   Then run before reading implementation instructions or editing production
++   files:
++
+    ```bash
++   openspec-workspace change validate "<name>" --json
++   openspec-workspace context --change "<name>" --json
++   ```
++
++   Require the context result's `data.workspaceRoot` to equal `planningHome.root`
++   and `data.change.name` to equal `<name>`. The first command checks proposal,
++   specs, tasks, participating project state, and ownership. For a
++   `PROJECT_BRANCH_MISMATCH`, invoke the installed
++   `openspec-workspace-resolve-branch` Skill for that project, then rerun both
++   commands; do not recover branches or edit Workspace configuration inline.
++   Stop on any other failure. Keep the successful change-scoped `data.projects`
++   records as the authoritative project-to-location mapping.
++
++4. **Get apply instructions**
++
++   ```bash
+    openspec instructions apply --change "<name>" --json
+    ```
+
+    This returns:
+@@ -51,27 +74,37 @@
+    - If `state: "blocked"` (missing artifacts): show message, suggest using openspec-continue-change
+    - If `state: "all_done"`: congratulate, suggest archive
+    - Otherwise: proceed to implementation
+
+-4. **Read context files**
++5. **Read context files**
+
+    Read every file path listed under `contextFiles` from the apply instructions output.
+    The files depend on the schema being used:
+    - **spec-driven**: proposal, specs, design, tasks
+    - Other schemas: follow the contextFiles from CLI output
+
+-5. **Show current progress**
++6. **Show current progress**
+
+    Display:
+    - Schema being used
+    - Progress: "N/M tasks complete"
+    - Remaining tasks overview
+    - Dynamic instruction from CLI
+
+-6. **Implement tasks (loop until done or blocked)**
++7. **Implement tasks (loop until done or blocked)**
+
+    For each pending task:
+    - Show which task is being worked on
++   - For `workspace-workflow`, derive the task's project from the nearest
++     `## <n>. <project-name>:` heading in `tasks.md`
++   - Confirm that project exists in the change-scoped context output
++   - Before the first task for that project, run
++     `openspec-workspace project verify "<project-name>" --json`
++   - On `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch`,
++     then refresh `context --change "<name>" --json` and re-check the roots
++   - Edit production files only inside that project's configured `location`
++   - Treat `Cross-project` groups as coordination and verification work; if they
++     require production edits, pause and split those edits into project-owned tasks
+    - Make the code changes required
+    - Keep changes minimal and focused
+    - Mark task complete in the tasks file: `- [ ]` → `- [x]`
+    - Continue to next task
+@@ -81,9 +114,9 @@
+    - Implementation reveals a design issue → suggest updating artifacts
+    - Error or blocker encountered → report and wait for guidance
+    - User interrupts
+
+-7. **On completion or pause, show status**
++8. **On completion or pause, show status**
+
+    Display:
+    - Tasks completed this session
+    - Overall progress: "N/M tasks complete"
+@@ -149,8 +182,9 @@
+ - Keep code changes minimal and scoped to each task
+ - Update task checkbox immediately after completing each task
+ - Pause on errors, blockers, or unclear requirements - don't guess
+ - Use contextFiles from CLI output, don't assume specific file names
++- For `workspace-workflow`, never edit `.openspec-workspace/config.yaml` directly and never duplicate branch recovery
+
+ **Fluid Workflow Integration**
+
+ This skill supports the "actions on a change" model:
+
+===================================================================
+--- a/.codex/skills/openspec-archive-change/SKILL.md	OpenSpec 1.5.0
++++ b/.codex/skills/openspec-archive-change/SKILL.md	workspace override
+@@ -39,10 +39,28 @@
+    - Display warning listing incomplete artifacts
+    - Use **AskUserQuestion tool** to confirm user wants to proceed
+    - Proceed if user confirms
+
+-3. **Check task completion status**
++3. **Validate the workspace contract**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`; standalone stores are not bound to a
++   Workspace registry. Then run:
++
++   ```bash
++   openspec-workspace change validate "<name>" --json
++   openspec-workspace context --change "<name>" --json
++   ```
++
++   Require `data.workspaceRoot` from context to equal `planningHome.root` and
++   `data.change.name` to equal `<name>`. This confirms that proposal, delta
++   specs, tasks, participating project state, and ownership still agree. On
++   `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch` for the
++   named project and rerun both commands; do not recover branches or edit the
++   registry inline. Stop on any other failure.
++
++4. **Check task completion status**
++
+    Read the tasks file (typically `tasks.md`) to check for incomplete tasks.
+
+    Count tasks marked with `- [ ]` (incomplete) vs `- [x]` (complete).
+
+@@ -52,9 +70,9 @@
+    - Proceed if user confirms
+
+    **If no tasks file exists:** Proceed without task-related warning.
+
+-4. **Assess delta spec sync state**
++5. **Assess delta spec sync state**
+
+    Use `artifactPaths.specs.existingOutputPaths` from status JSON to check for delta specs. If none exist, proceed without sync prompt.
+
+    **If delta specs exist:**
+@@ -67,10 +85,20 @@
+    - If already synced: "Archive now", "Sync anyway", "Cancel"
+
+    If user chooses sync, use Task tool (subagent_type: "general-purpose", prompt: "Use Skill tool to invoke openspec-sync-specs for change '<name>'. Delta spec analysis: <include the analyzed delta spec summary>"). Proceed to archive regardless of choice.
+
+-5. **Perform the archive**
++   After a successful sync for `workspace-workflow`, run:
+
++   ```bash
++   openspec-workspace change validate "<name>" --require-main-specs --json
++   ```
++
++   This checks that every delta spec now exists as a main spec and still maps to
++   exactly one configured project owner. Stop before moving the change if it
++   fails.
++
++6. **Perform the archive**
++
+    Create an `archive` directory under `planningHome.changesDir` if it doesn't exist:
+    ```bash
+    mkdir -p "<planningHome.changesDir>/archive"
+    ```
+@@ -84,9 +112,9 @@
+    ```bash
+    mv "<changeRoot>" "<planningHome.changesDir>/archive/YYYY-MM-DD-<name>"
+    ```
+
+-6. **Display summary**
++7. **Display summary**
+
+    Show archive completion summary including:
+    - Change name
+    - Schema that was used
+@@ -114,4 +142,5 @@
+ - Preserve .openspec.yaml when moving to archive (it moves with the directory)
+ - Show clear summary of what happened
+ - If sync is requested, use openspec-sync-specs approach (agent-driven)
+ - If delta specs exist, always run the sync assessment and show the combined summary before prompting
++- For `workspace-workflow`, never edit Workspace configuration or recover project branches inline
+
+===================================================================
+--- a/.codex/skills/openspec-explore/SKILL.md	OpenSpec 1.5.0
++++ b/.codex/skills/openspec-explore/SKILL.md	workspace override
+@@ -80,8 +80,30 @@
+ ## OpenSpec Awareness
+
+ You have full context of the OpenSpec system. Use it naturally, don't force it.
+
++### Investigate workspace projects safely
++
++Do not make workspace validation a global prerequisite for thinking. When the
++discussion needs registered project code in a repo-local Workspace planning
++context:
++
++1. Run `openspec-workspace project list --json` and select only the relevant
++   project records from `data.projects`.
++2. Run `openspec-workspace project verify "<project-name>" --json` for each
++   selected project before reading its code.
++3. On `PROJECT_BRANCH_MISMATCH`, invoke the installed
++   `openspec-workspace-resolve-branch` Skill for that project, then list and
++   verify it again. Never recover branches or edit Workspace configuration
++   inline.
++4. Run `openspec-workspace context --project "<project-name>" --json` and start
++   investigation from that record's configured `location`.
++
++Require the standard JSON envelope and use only structured diagnostic fields,
++never values parsed from `message`. Do not invent projects, paths, or ownership.
++If the current OpenSpec planning home is a standalone store, preserve upstream
++store behavior; it is not implicitly bound to the current Workspace registry.
++
+ ### Check for context
+
+ At the start, quickly check what exists:
+ ```bash
+@@ -116,10 +138,10 @@
+ 3. **Offer to capture when decisions are made**
+
+     | Insight Type               | Where to Capture               |
+     |----------------------------|--------------------------------|
+-    | New requirement discovered | `specs/<capability>/spec.md` |
+-    | Requirement changed        | `specs/<capability>/spec.md` |
++    | New requirement discovered | `specs/<spec-id>/spec.md` |
++    | Requirement changed        | `specs/<spec-id>/spec.md` |
+     | Design decision made       | `design.md`                  |
+     | Scope changed              | `proposal.md`                |
+     | New work identified        | `tasks.md`                   |
+     | Assumption invalidated     | Relevant artifact              |
+@@ -283,7 +305,8 @@
+ - **Don't fake understanding** - If something is unclear, dig deeper
+ - **Don't rush** - Discovery is thinking time, not task time
+ - **Don't force structure** - Let patterns emerge naturally
+ - **Don't auto-capture** - Offer to save insights, don't just do it
++- **Don't invent projects** - Treat `openspec-workspace context --json` as the workspace project source of truth
+ - **Do visualize** - A good diagram is worth many paragraphs
+ - **Do explore the codebase** - Ground discussions in reality
+ - **Do question assumptions** - Including the user's and your own
+
+===================================================================
+--- a/.codex/skills/openspec-propose/SKILL.md	OpenSpec 1.5.0
++++ b/.codex/skills/openspec-propose/SKILL.md	workspace override
+@@ -49,10 +49,32 @@
+    - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
+    - `artifacts`: list of all artifacts with their status and dependencies
+    - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context. Use these instead of assuming repo-local paths.
+
+-4. **Create artifacts in sequence until apply-ready**
++4. **Validate the workspace contract when selected**
+
++   If `schemaName` is `workspace-workflow`, require `planningHome.kind: "repo"`
++   and `actionContext.mode: "repo-local"`. A standalone store is not implicitly
++   bound to a Workspace registry; stop before creating artifacts rather than
++   guessing one.
++
++   Run `openspec-workspace project list --json`, select the project records
++   affected by the request, and ask the user if ownership is ambiguous. For each
++   selected project run:
++
++   ```bash
++   openspec-workspace project verify "<project-name>" --json
++   openspec-workspace context --project "<project-name>" --json
++   ```
++
++   Require the context `data.workspaceRoot` to equal `planningHome.root`. On
++   `PROJECT_BRANCH_MISMATCH`, invoke `openspec-workspace-resolve-branch` for that
++   project, then list, verify, and load its context again. Never recover branches
++   or edit Workspace configuration inline. Stop on other diagnostics. Cache only
++   the selected verified project records for artifact generation.
++
++5. **Create artifacts in sequence until apply-ready**
++
+    Use the **TodoWrite tool** to track progress through the artifacts.
+
+    Loop through artifacts in dependency order (artifacts with no pending dependencies first):
+
+@@ -81,9 +103,9 @@
+    c. **If an artifact requires user input** (unclear context):
+       - Use **AskUserQuestion tool** to clarify
+       - Then continue with creation
+
+-5. **Show final status**
++6. **Show final status**
+    ```bash
+    openspec status --change "<name>"
+    ```
+
+@@ -98,8 +120,12 @@
+ **Artifact Creation Guidelines**
+
+ - Follow the `instruction` field from `openspec instructions` for each artifact type
+ - The schema defines what each artifact should contain - follow it
++- Use the cached project list for Affected Projects and use each owning project's
++  `specPrefix` when constructing capability spec IDs
++- Keep `Affected Projects`, `Capabilities`, `New Capabilities`, `Modified Capabilities`,
++  `Project`, `Capability`, and `Cross-project` as untranslated protocol tokens
+ - Read dependency artifacts for context before creating new ones
+ - Use `template` as the structure for your output file - fill in its sections
+ - **IMPORTANT**: `context` and `rules` are constraints for YOU, not content for the file
+   - Do NOT copy `<context>`, `<rules>`, `<project_context>` blocks into the artifact
+@@ -107,7 +133,9 @@
+
+ **Guardrails**
+ - Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
+ - Always read dependency artifacts before creating a new one
++- Do not invent projects, project paths, or capability ownership outside the selected verified records
++- Never edit `.openspec-workspace/config.yaml` directly or duplicate branch recovery
+ - If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
+ - If a change with that name already exists, ask if user wants to continue it or create a new one
+ - Verify each artifact file exists after writing before proceeding to next

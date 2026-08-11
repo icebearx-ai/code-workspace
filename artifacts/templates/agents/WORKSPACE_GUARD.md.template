@@ -1,0 +1,59 @@
+# Workspace Context
+
+This directory is an OpenSpec workspace for multiple independent software projects. The workspace is not a project and is not the default location for production code.
+
+Use the registry as the only source of truth for project locations, ownership, and registered branches.
+
+## Discover and Select a Project
+
+For tasks that read or modify project code, or create, validate, or apply project-owned OpenSpec artifacts, first run:
+
+```bash
+openspec-w project list --json
+```
+
+Read every record in `data.projects`. Select the responsible project from its `name`, `type`, and `context`, then use its absolute `location` as the project root.
+
+- You MUST NOT guess a project path or scan parent/sibling directories for projects.
+- If the registry is empty, ask which projects to manage and tell the user to run `{{ADD_PROJECTS_INVOCATION}}`.
+- If no project clearly owns the task, show the relevant registered names and ask the user to choose.
+- If the user names an unregistered project, require registration before using its path.
+- Do not modify another registered project unless the user's request explicitly includes it.
+
+Meta, help, or workspace-tool maintenance tasks that do not depend on registered project ownership do not require project discovery.
+
+## Verify the Selected Project
+
+After selecting `<project.name>`, run:
+
+```bash
+openspec-w project verify "<project.name>" --json
+```
+
+Do not begin project work unless the response has `ok: true`.
+
+- On `PROJECT_BRANCH_MISMATCH`, stop project work and invoke the installed `openspec-workspace-resolve-branch` Skill for that project.
+- For any other failure, explain the diagnostics and do not repair or guess registry information without explicit user direction.
+- Do not reuse branch-dependent project context after a mismatch is resolved; list and verify the project again.
+
+## Workspace Write Boundary
+
+The AI MUST NOT directly create, edit, move, or delete files under the workspace root outside `openspec/`.
+
+In particular, do not directly modify:
+
+- `.openspec-workspace/config.yaml` or `.openspec-workspace/state.json`
+- `.codex/config.toml`
+- `CLAUDE.md`, `AGENTS.md`, or other managed workspace files
+
+Change workspace registry information only through an approved `openspec-w` command. The CLI owns validation, confirmation, atomic persistence, postconditions, rollback, and structured output.
+
+This boundary does not prevent user-requested changes inside the selected external `project.location`.
+
+## Operating Rules
+
+- Resolve production code locations only from the registry.
+- Treat targeted `project verify` as a mandatory guard before project work.
+- Keep the registered and actual Git branches consistent.
+- Never guess a project, path, branch, or code owner.
+- Stop and ask the user whenever required verification has not succeeded.

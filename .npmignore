@@ -1,0 +1,6 @@
+src/__test__/
+.openspec-workspace/
+.codex/
+.claude/
+openspec/
+config-workspace.yaml
