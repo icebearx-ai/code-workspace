@@ -165,7 +165,6 @@ openspec-w init "$UPGRADE_WS" --tools codex --language en-US --yes --json
 cd "$UPGRADE_WS"
 openspec-w project add "$PROJECT_A" \
   --name frontend-app \
-  --spec-prefix frontend-app \
   --type frontend \
   --context-file "$TEST_BASE/frontend-context.txt" \
   --yes \
@@ -197,7 +196,6 @@ openspec-w language --json
 openspec-w project list --json
 openspec-w project verify --json
 openspec-w context --json
-openspec-w validate --json
 openspec-w doctor --json
 ```
 
@@ -241,7 +239,6 @@ cat > "$TEST_BASE/frontend-project.json" <<EOF
   "schemaVersion": 1,
   "project": {
     "name": "frontend-app",
-    "specPrefix": "frontend-app",
     "location": "$PROJECT_A",
     "branch": "main",
     "type": "frontend",
@@ -256,7 +253,6 @@ cat > "$TEST_BASE/backend-projects.json" <<EOF
   "projects": [
     {
       "name": "backend-api",
-      "specPrefix": "backend-api",
       "location": "$PROJECT_B",
       "branch": "main",
       "type": "backend",
@@ -421,7 +417,7 @@ openspec-w project list --json
 
 | ID | P | 操作 | 预期 |
 |---|---:|---|---|
-| CLI-PADD-001 | P0 | 使用路径模式添加 A：`openspec-w project add "$PROJECT_A" --name frontend-app --spec-prefix frontend-app --type frontend --context-file "$TEST_BASE/frontend-context.txt" --yes --json` | 成功；config 新增完整记录；同步 `.codex/config.toml`。 |
+| CLI-PADD-001 | P0 | 使用路径模式添加 A：`openspec-w project add "$PROJECT_A" --name frontend-app --type frontend --context-file "$TEST_BASE/frontend-context.txt" --yes --json` | 成功；config 新增完整记录；同步 `.codex/config.toml`。 |
 | CLI-PADD-002 | P1 | 对完全相同的 A 重复执行上一命令 | 成功且 `data.action="skip"`；不重复写项目。 |
 | CLI-PADD-003 | P0 | `openspec-w project add --project-file "$TEST_BASE/frontend-project.json" --yes --json` | 在空工作区副本中成功添加单条记录。 |
 | CLI-PADD-004 | P0 | `openspec-w project add --projects-file "$TEST_BASE/backend-projects.json" --yes --json` | 主工作区成功批量添加 B。 |
@@ -436,10 +432,10 @@ openspec-w project list --json
 | CLI-PADD-013 | P0 | project JSON 增加未知字段 | `PROJECT_INPUT_UNKNOWN_FIELD`。 |
 | CLI-PADD-014 | P0 | project JSON location 使用相对路径 | `PROJECT_LOCATION_NOT_ABSOLUTE`。 |
 | CLI-PADD-015 | P0 | project JSON branch 与真实分支不一致 | `PROJECT_BRANCH_MISMATCH`。 |
-| CLI-PADD-016 | P0 | 批量文件中放入两个相同 specPrefix 的不同项目 | 整批失败，含 `DUPLICATE_SPEC_PREFIX`；不能只写第一条。 |
+| CLI-PADD-016 | P0 | 批量文件中放入两个同名项目 | 整批失败，含 `DUPLICATE_PROJECT_NAME`；不能只写第一条。 |
 | CLI-PADD-017 | P0 | 在工作区副本自身执行 `git init -b main` 并提交一个文件，再尝试把该工作区根注册为项目 | 失败，含 `PROJECT_OVERLAPS_WORKSPACE`。 |
 | CLI-PADD-018 | P0 | 在 `.codex/config.toml` 制造未托管 `sandbox_mode` 冲突，再添加新项目 | `PROJECT_CONFIGURATION_UPDATE_FAILED`；config 回滚；权限文件保持原样。 |
-| CLI-PADD-019 | P1 | 使用相同 name、不同 location/specPrefix 添加项目 | `PROJECT_CONFLICT`。 |
+| CLI-PADD-019 | P1 | 使用相同 name、不同 location 添加项目 | `PROJECT_CONFLICT`。 |
 | CLI-PADD-020 | P2 | 同时提供位置参数和未来可能冲突的同义选项组合 | 观察项：确认所有输入模式都有明确互斥规则，不能静默选一个。 |
 
 ## 9. `project list`、`project show`、`project verify`、`project remove`
@@ -470,63 +466,7 @@ openspec-w project list --json
 | CLI-PREM-004 | P0 | 删除不存在项目 | `PROJECT_NOT_FOUND`。 |
 | CLI-PREM-005 | P0 | 制造权限配置冲突后删除项目 | `PROJECT_CONFIGURATION_UPDATE_FAILED`；删除操作回滚。 |
 
-## 10. 准备已有 change 记录 fixture
-
-```sh
-export CHANGE_NAME="manual-auth-change"
-export CHANGE_ROOT="$WS_ROOT/openspec/changes/$CHANGE_NAME"
-
-mkdir -p "$CHANGE_ROOT/specs/frontend-app-auth"
-
-cat > "$CHANGE_ROOT/proposal.md" <<'EOF'
-# Manual auth change
-
-## Affected Projects
-
-- `frontend-app`: add authentication UI
-
-## Capabilities
-
-### New Capabilities
-
-- Project: `frontend-app`; Capability: `frontend-app-auth`; Description: Add authentication UI
-EOF
-
-cat > "$CHANGE_ROOT/tasks.md" <<'EOF'
-## 1. frontend-app: authentication UI
-
-- [ ] 1.1 Implement the UI
-EOF
-
-cat > "$CHANGE_ROOT/specs/frontend-app-auth/spec.md" <<'EOF'
-# frontend-app-auth
-
-## Requirements
-
-### Requirement: Authentication UI
-
-The frontend SHALL render an authentication UI.
-EOF
-```
-
-## 11. `change validate`
-
-| ID | P | 操作 | 预期 |
-|---|---:|---|---|
-| CLI-CHG-001 | P0 | `openspec-w change validate "$CHANGE_NAME" --json` | `command="change.validate"`；`ok=true`。 |
-| CLI-CHG-002 | P1 | `openspec-w change validate --change "$CHANGE_NAME" --json` | 与位置参数形式等价。 |
-| CLI-CHG-003 | P0 | 不提供 change 名称 | `ok=false`；diagnostics 含 `CHANGE_REQUIRED`。 |
-| CLI-CHG-004 | P0 | 验证不存在 change | `CHANGE_NOT_FOUND`。 |
-| CLI-CHG-005 | P1 | 在副本中删除 proposal.md | `PROPOSAL_MISSING`，并按实际内容收集其他相关诊断。 |
-| CLI-CHG-006 | P1 | 在副本中删除 tasks.md | `TASKS_MISSING`。 |
-| CLI-CHG-007 | P0 | proposal 引用未知项目 | `UNKNOWN_AFFECTED_PROJECT`。 |
-| CLI-CHG-008 | P0 | Affected Projects 有项目但 tasks 缺对应分组 | `AFFECTED_PROJECT_WITHOUT_TASKS`。 |
-| CLI-CHG-009 | P0 | capability 不使用项目 specPrefix | `CAPABILITY_PREFIX_MISMATCH`。 |
-| CLI-CHG-010 | P0 | 声明 capability 但删除 delta spec | `DELTA_SPEC_MISSING`。 |
-| CLI-CHG-011 | P0 | 增加未声明的 delta spec | `UNDECLARED_DELTA_SPEC`。 |
-| CLI-CHG-012 | P1 | 在缺少 workspace.language 的旧配置副本验证 change | 不应被 language 阻断。 |
-
-## 12. `context`
+## 10. `context`
 
 | ID | P | 操作 | 预期 |
 |---|---:|---|---|
@@ -536,7 +476,7 @@ EOF
 | CLI-CTX-004 | P2 | 使用不存在的 `--project` | 观察项：当前可能返回空成功；确认产品是否应改为 `PROJECT_NOT_FOUND`。 |
 | CLI-CTX-005 | P0 | 在缺少 language、monitor 非法但 projects 有效的配置副本运行 context | 仍成功，证明只依赖 projects 域。 |
 
-## 13. `sync`
+## 11. `sync`
 
 | ID | P | 操作 | 预期 |
 |---|---:|---|---|
@@ -547,18 +487,7 @@ EOF
 | CLI-SYNC-005 | P0 | 在 managed block 外写入 `sandbox_mode = "read-only"` 后 sync | `WORKSPACE_PERMISSIONS_CONFLICT`；不覆盖用户配置。 |
 | CLI-SYNC-006 | P0 | 在缺少 language 的旧配置副本 sync | 成功且不迁移 config。 |
 
-## 14. `validate`
-
-| ID | P | 操作 | 预期 |
-|---|---:|---|---|
-| CLI-VAL-001 | P0 | `openspec-w validate --json` | 项目、主 specs、全部 change 均有效时 `ok=true`。 |
-| CLI-VAL-002 | P1 | 空工作区 validate | `ok=true`，含 `NO_PROJECTS` warning。 |
-| CLI-VAL-003 | P0 | 在 `openspec/specs/unknown-owner/spec.md` 创建未知前缀主 spec | `UNKNOWN_SPEC_OWNER`。 |
-| CLI-VAL-004 | P0 | 破坏有效 change 的 capability 或 tasks | 聚合对应 change 诊断，退出码非 0。 |
-| CLI-VAL-005 | P0 | 项目 branch 不一致 | `PROJECT_BRANCH_MISMATCH`；后续 change 检查可停止，但诊断不能伪造成功。 |
-| CLI-VAL-006 | P1 | 缺少 language 的旧配置 | 不被 language 阻断。 |
-
-## 15. `doctor`
+## 12. `doctor`
 
 | ID | P | 操作 | 预期 |
 |---|---:|---|---|
@@ -575,7 +504,7 @@ EOF
 | CLI-DOC-011 | P0 | state tools 仅 Codex，省略 `--tools` 运行 doctor | `data.tools.source="workspace-state"`；不能按 manifest 默认推导 Claude。 |
 | CLI-DOC-012 | P0 | Monitor 启用但 tools 不含 Codex | `MONITOR_CODEX_REQUIRED`。 |
 
-## 16. `monitor`
+## 13. `monitor`
 
 本节需要两个终端。
 
@@ -610,7 +539,7 @@ openspec-w monitor -p 43211
 | CLI-MON-007 | P1 | `openspec-w monitor -p 43212` | 短别名生效；服务监听 43212。 |
 | CLI-MON-008 | P1 | 在终端 A 按 Ctrl-C | 服务优雅退出，端口释放，退出码 0。 |
 
-## 17. `monitor report`
+## 14. `monitor report`
 
 重新启动 43211 Monitor 后，在终端 B 执行：
 
@@ -631,7 +560,7 @@ printf '%s\n' '{"hook_event_name":"UserPromptSubmit","session_id":"manual-sessio
 | CLI-MREP-007 | P1 | Monitor 未启动时发送合法事件 | 300ms 左右超时/失败开放；`action="skip"`、reason 为 monitor unavailable。 |
 | CLI-MREP-008 | P1 | 检查 report JSON stdout/stderr | stdout 只有标准信封，stderr 为空，适合 Hook 调用。 |
 
-## 18. `completion`
+## 15. `completion`
 
 | ID | P | 操作 | 预期 |
 |---|---:|---|---|
@@ -641,9 +570,9 @@ printf '%s\n' '{"hook_event_name":"UserPromptSubmit","session_id":"manual-sessio
 | CLI-COMP-004 | P0 | `openspec-w completion --shell fish --json` | `CLI_COMPLETION_SHELL_UNSUPPORTED`，列出 bash/zsh。 |
 | CLI-COMP-005 | P1 | `openspec-w completion --shell bash --json` | 标准信封；`data.shell="bash"`；脚本文本不额外写 stderr。 |
 
-## 19. 跨命令兼容矩阵
+## 16. 跨命令兼容矩阵
 
-### 19.1 旧配置缺少 language
+### 16.1 旧配置缺少 language
 
 对一个 schemaVersion 1、缺少 `workspace.language` 但 projects 有效的只读副本执行：
 
@@ -653,16 +582,14 @@ printf '%s\n' '{"hook_event_name":"UserPromptSubmit","session_id":"manual-sessio
 | `project show frontend-app --json` | 成功，不写配置。 |
 | `project verify --json` | 成功，不被 language 阻断。 |
 | `project inspect "$PROJECT_A" --json` | 成功且完全不依赖工作区。 |
-| `change validate "$CHANGE_NAME" --json` | 根据 change/project 内容判断，不被 language 阻断。 |
 | `context --json` | 成功。 |
 | `sync --json` | 成功，只写权限文件，不迁移 config。 |
-| `validate --json` | 成功或返回真实业务诊断。 |
 | `doctor --json` | 报 language 缺失，但保留其他有效域的诊断。 |
 | `language --json` | `WORKSPACE_LANGUAGE_MISSING`。 |
 | `update --json` | 显式执行兼容迁移。 |
 | `init --yes --json` | 显式执行兼容迁移。 |
 
-### 19.2 每个主要命令的输出协议
+### 16.2 每个主要命令的输出协议
 
 至少对以下命令各执行一次文本模式和 JSON 模式：
 
@@ -675,10 +602,8 @@ printf '%s\n' '{"hook_event_name":"UserPromptSubmit","session_id":"manual-sessio
 - `project list`
 - `project show`
 - `project verify`
-- `change validate`
 - `context`
 - `sync`
-- `validate`
 - `doctor`
 - `completion`
 - `help`
@@ -687,7 +612,7 @@ printf '%s\n' '{"hook_event_name":"UserPromptSubmit","session_id":"manual-sessio
 
 `monitor` 是长运行服务，使用 API 检查机器可读状态；`monitor --json` 应明确拒绝。
 
-## 20. 写操作最终状态核对
+## 17. 写操作最终状态核对
 
 每次 init/update/project 写操作后，至少检查：
 
@@ -695,7 +620,6 @@ printf '%s\n' '{"hook_event_name":"UserPromptSubmit","session_id":"manual-sessio
 find "$WS_ROOT/.openspec-workspace" -maxdepth 2 -type f -print
 openspec-w project list --json
 openspec-w project verify --json
-openspec-w validate --json
 openspec-w doctor --json
 ```
 
@@ -710,7 +634,7 @@ diff -u "$TEST_BASE/before.sha256" "$TEST_BASE/after.sha256"
 
 允许存在的差异必须能在命令结果中解释。若 JSON 的 `diagnostics[].effects` 声称已经恢复或保留某个效果，应与实际文件系统一致。
 
-## 21. 发布判定
+## 18. 发布判定
 
 满足以下条件才建议通过手工回归：
 
@@ -735,11 +659,11 @@ diff -u "$TEST_BASE/before.sha256" "$TEST_BASE/after.sha256"
 | init | 22 |  |  |  |
 | update/language | 20 |  |  |  |
 | project | 46 |  |  |  |
-| change/context | 18 |  |  |  |
-| sync/validate/doctor | 25 |  |  |  |
+| context | 5 |  |  |  |
+| sync/doctor | 18 |  |  |  |
 | monitor/report | 16 |  |  |  |
 | completion | 5 |  |  |  |
 | 发布包安装专项 | 10 |  |  |  |
-| **合计** | **180** |  |  |  |
+| **合计** | **160** |  |  |  |
 
 观察项不应计为 PASS；需要明确产品决策后转成正式通过或失败标准。

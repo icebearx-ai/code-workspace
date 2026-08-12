@@ -181,7 +181,6 @@ test("language update leaves existing project context unchanged", () => {
   const config = loadWorkspaceYaml(root);
   config.projects.push({
     name: "portal",
-    specPrefix: "portal",
     location: "/tmp/portal",
     branch: "main",
     type: "frontend",
@@ -324,7 +323,6 @@ test("project inspect is read-only and project add registers an explicit record"
     schemaVersion: 1,
     projects: [{
       name: "portal",
-      specPrefix: "portal",
       location: fs.realpathSync(repository),
       branch: "main",
       type: "frontend",
@@ -369,7 +367,7 @@ test("project add rejects incomplete records and keeps JSON errors machine-reada
   assert.match(output.diagnostics[0].message, /name/);
 });
 
-test("project add validates a batch before writing any project", () => {
+test("project add validates duplicate names across a batch before writing any project", () => {
   const parent = temporaryRoot();
   const workspace = path.join(parent, "workspace");
   fs.mkdirSync(workspace);
@@ -382,16 +380,14 @@ test("project add validates a batch before writing any project", () => {
     schemaVersion: 1,
     projects: [
       {
-        name: "frontend",
-        specPrefix: "shared",
+        name: "shared",
         location: fs.realpathSync(frontend),
         branch: "main",
         type: "frontend",
         context: "职责：前端。",
       },
       {
-        name: "backend",
-        specPrefix: "shared",
+        name: "shared",
         location: fs.realpathSync(backend),
         branch: "main",
         type: "backend",
@@ -402,7 +398,7 @@ test("project add validates a batch before writing any project", () => {
 
   const result = run(workspace, ["project", "add", "--projects-file", projectsFile, "--yes", "--json"]);
   assert.equal(result.status, 1);
-  assert(JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === "DUPLICATE_SPEC_PREFIX"));
+  assert(JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === "DUPLICATE_PROJECT_NAME"));
   const listed = run(workspace, ["project", "list", "--json"]);
   assert.deepEqual(jsonData(listed).projects, []);
 });

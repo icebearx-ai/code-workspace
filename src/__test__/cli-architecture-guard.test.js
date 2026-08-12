@@ -6,6 +6,7 @@ const yaml = require("js-yaml");
 
 const repositoryRoot = path.resolve(__dirname, "..", "..");
 const guardRoot = path.join(repositoryRoot, ".codex", "skills", "cli-architecture-guard");
+const { COMMANDS } = require("../cli/registry");
 const {
   inspectCommandSource,
   runChecks,
@@ -16,7 +17,7 @@ const {
 test("CLI architecture guard accepts the current command framework", () => {
   const result = runChecks(repositoryRoot);
   assert.deepEqual(result.problems, []);
-  assert(result.stats.commands >= 20);
+  assert.equal(result.stats.commands, COMMANDS.length);
   assert(result.stats.documentedReferences >= 20);
 });
 

@@ -51,6 +51,9 @@ test("semantic parser rejects unknown options, duplicates, and extra arguments",
   assert.throws(() => parse(argv("context", "--change", "add-health")), (error) =>
     error.code === "CLI_UNKNOWN_OPTION" && error.details.command === "context"
   );
+  assert.throws(() => parse(argv("project", "add", "/tmp/service", "--spec-prefix", "service")), (error) =>
+    error.code === "CLI_UNKNOWN_OPTION" && error.details.command === "project.add" && error.details.option === "spec-prefix"
+  );
 });
 
 test("semantic parser accepts targeted project verification with valid option ordering", () => {
@@ -58,19 +61,6 @@ test("semantic parser accepts targeted project verification with valid option or
   const after = parse(argv("project", "verify", "service", "--json"));
   assert.deepEqual({ args: before.args, options: before.options }, { args: ["service"], options: { json: true } });
   assert.deepEqual({ args: after.args, options: after.options }, { args: ["service"], options: { json: true } });
-});
-
-test("semantic parser accepts the change main-spec postcondition flag", () => {
-  const before = parse(argv("change", "validate", "--require-main-specs", "add-health", "--json"));
-  const after = parse(argv("change", "validate", "add-health", "--json", "--require-main-specs"));
-  assert.deepEqual({ args: before.args, options: before.options }, {
-    args: ["add-health"],
-    options: { "require-main-specs": true, json: true },
-  });
-  assert.deepEqual({ args: after.args, options: after.options }, {
-    args: ["add-health"],
-    options: { json: true, "require-main-specs": true },
-  });
 });
 
 test("semantic parser covers explicit boolean values, missing values, aliases, and -- paths", () => {
@@ -112,7 +102,6 @@ test("project projections read legacy configuration without requiring language o
     "  enable: false",
     "projects:",
     "  - name: portal",
-    "    specPrefix: portal",
     "    location: /tmp/portal",
     "    branch: main",
     "    type: frontend",
@@ -242,7 +231,6 @@ test("doctor retains valid projects when language is invalid", () => {
     "  enable: false",
     "projects:",
     "  - name: service",
-    "    specPrefix: service",
     `    location: ${repository}`,
     "    branch: stale",
     "    type: backend",
@@ -295,7 +283,6 @@ test("JSON writes require confirmation before changing files", () => {
     "  enable: false",
     "projects:",
     "  - name: service",
-    "    specPrefix: service",
     "    location: /tmp/service",
     "    branch: main",
     "    type: backend",
@@ -326,7 +313,6 @@ test("project sync-branch adopts the actual Git branch without touching permissi
     "  url: not-a-valid-monitor-url",
     "projects:",
     "  - name: service",
-    "    specPrefix: service",
     `    location: ${repository}`,
     "    branch: main",
     "    type: backend",
@@ -396,13 +382,11 @@ test("project verify targets one project without unrelated branch or config-doma
     "  url: not-a-valid-url",
     "projects:",
     "  - name: service",
-    "    specPrefix: service",
     `    location: ${service}`,
     "    branch: main",
     "    type: backend",
     "    context: service",
     "  - name: other",
-    "    specPrefix: other",
     `    location: ${other}`,
     "    branch: stale",
     "    type: backend",
@@ -440,66 +424,6 @@ test("project verify targets one project without unrelated branch or config-doma
   assert.equal(fs.readFileSync(configFile, "utf8"), content);
 });
 
-test("change validation isolates unrelated drift and verifies synchronized main specs on demand", () => {
-  const parent = temporaryRoot();
-  const root = path.join(parent, "workspace");
-  const service = path.join(parent, "service");
-  const other = path.join(parent, "other");
-  fs.mkdirSync(root);
-  fs.mkdirSync(service);
-  fs.mkdirSync(other);
-  spawnSync("git", ["init", "-b", "main"], { cwd: service, stdio: "ignore" });
-  spawnSync("git", ["init", "-b", "main"], { cwd: other, stdio: "ignore" });
-  writeConfig(root, [
-    "schemaVersion: 2",
-    "projects:",
-    "  - name: service",
-    "    specPrefix: svc",
-    `    location: ${service}`,
-    "    branch: main",
-    "    type: backend",
-    "    context: service",
-    "  - name: other",
-    "    specPrefix: other",
-    `    location: ${other}`,
-    "    branch: stale",
-    "    type: backend",
-    "    context: other",
-    "",
-  ].join("\n"));
-  const changeRoot = path.join(root, "openspec", "changes", "add-health");
-  fs.mkdirSync(path.join(changeRoot, "specs", "svc-health"), { recursive: true });
-  fs.writeFileSync(path.join(changeRoot, "proposal.md"), [
-    "## Affected Projects",
-    "- `service`: add health API",
-    "",
-    "## Capabilities",
-    "### New Capabilities",
-    "- Project: `service`; Capability: `svc-health`; Description: health endpoint",
-    "",
-    "### Modified Capabilities",
-  ].join("\n"));
-  fs.writeFileSync(path.join(changeRoot, "tasks.md"), "## 1. service: Implementation\n\n- [x] 1.1 Add API\n");
-  fs.writeFileSync(path.join(changeRoot, "specs", "svc-health", "spec.md"), "# Health\n");
-
-  const scoped = run(root, ["change", "validate", "add-health", "--json"]);
-  assert.equal(scoped.status, 0, scoped.stderr);
-  assert.equal(JSON.parse(scoped.stdout).diagnostics.some((entry) => entry.projectName === "other"), false);
-
-  const missing = run(root, ["change", "validate", "add-health", "--require-main-specs", "--json"]);
-  assert.equal(missing.status, 1);
-  assert.equal(JSON.parse(missing.stdout).diagnostics.some((entry) => entry.code === "MAIN_SPEC_MISSING_AFTER_SYNC"), true);
-
-  fs.mkdirSync(path.join(root, "openspec", "specs", "svc-health"), { recursive: true });
-  fs.writeFileSync(path.join(root, "openspec", "specs", "svc-health", "spec.md"), "# Health\n");
-  const verified = run(root, ["change", "validate", "--require-main-specs", "add-health", "--json"]);
-  assert.equal(verified.status, 0, verified.stderr);
-  assert.equal(JSON.parse(verified.stdout).data.requireMainSpecs, true);
-  const textResult = run(root, ["change", "validate", "add-health", "--require-main-specs"]);
-  assert.equal(textResult.status, 0, textResult.stderr);
-  assert.match(textResult.stdout, /synchronized main specs validation passed/);
-});
-
 test("unknown commands are diagnosed before workspace discovery", () => {
   const result = run(temporaryRoot(), ["unknown", "--json"]);
   assert.equal(result.status, 1);
@@ -508,6 +432,14 @@ test("unknown commands are diagnosed before workspace discovery", () => {
   assert.equal(envelope.command, null);
   assert.equal(diagnostic.code, "CLI_UNKNOWN_COMMAND");
   assert.doesNotMatch(diagnostic.message, /Workspace/);
+
+  const removed = run(temporaryRoot(), ["change", "validate", "example", "--json"]);
+  assert.equal(removed.status, 1);
+  assert.equal(JSON.parse(removed.stdout).diagnostics[0].code, "CLI_UNKNOWN_COMMAND");
+
+  const removedValidate = run(temporaryRoot(), ["validate", "--json"]);
+  assert.equal(removedValidate.status, 1);
+  assert.equal(JSON.parse(removedValidate.stdout).diagnostics[0].code, "CLI_UNKNOWN_COMMAND");
 });
 
 test("known-command parse failures preserve the command in the JSON envelope", () => {
@@ -532,7 +464,7 @@ test("legacy language absence does not block unrelated command matrix", () => {
     "",
   ].join("\n");
   writeConfig(root, content);
-  for (const args of [["project", "list"], ["project", "verify"], ["context"], ["validate"], ["sync"]]) {
+  for (const args of [["project", "list"], ["project", "verify"], ["context"], ["sync"]]) {
     const result = run(root, [...args, "--json"]);
     assert.equal(result.status, 0, `${args.join(" ")}: ${result.stdout} ${result.stderr}`);
     assert(!JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === "WORKSPACE_LANGUAGE_MISSING"));

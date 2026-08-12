@@ -13,7 +13,7 @@ For each supplied path:
 
 1. Run `openspec-workspace project inspect "<path>" --json`. Treat only its location, branch, manifest-file list, README-file list, and top-level entry list as CLI-verified facts.
 2. Inspect the repository read-only. Read only what is needed to understand it, starting with README files, root manifests, and relevant entry points or module directories. Do not modify the project repository.
-3. Produce a complete project record with `name`, kebab-case `specPrefix`, canonical `location`, current `branch`, a concise semantic `type`, and `context`.
+3. Produce a complete project record with `name`, canonical `location`, current `branch`, a concise semantic `type`, and `context`.
 4. Generate `context` as concise, stable project navigation for an AI that has not read the repository. Use exactly four semantic lines in this order: `responsibility`, `technologyStack`, `codeLocations`, and `projectBoundary`. Prefix each line with the corresponding label returned in `data.projectContext`; do not translate or replace those labels yourself. Write descriptions in the returned workspace `data.language`. Keep project names, paths, branches, technology names, identifiers, and code symbols unchanged. Prefer 150-400 Chinese characters or comparable English length. Do not include exhaustive dependencies, volatile command details, filler, or unsupported guesses.
 
 Present all completed records for confirmation. After confirmation, write them to a temporary JSON document with `schemaVersion: 1` and a non-empty `projects` array, then run `openspec-workspace project add --projects-file <temporary-json-file> --yes --json` followed by `openspec-workspace project verify --json`.

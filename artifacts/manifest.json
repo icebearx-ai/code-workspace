@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "cef40188e937516db937439387c1e574ebfaf7636201c827bfe231b242a05d30"
+      "sha256": "e9b5acdda5b62180b7c96f31fb5ac47c1269844ce8f25e4ede8e62b57cca332c"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "c4446f3e986498cc1e5943a96e3bfef7dd3b90942e9dd13d13f8fa22667df6c7"
+      "sha256": "f33a918c32c1b6bd638ac9fb37315cdffe2f54d551f7b59002ecadeab7c3285e"
     }
   ],
   "managedFiles": [
@@ -113,7 +113,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/claude/commands/opswx/add-projects.md",
-        "sha256": "cb7f2d0274f2e8387998fbf5d571f812578e99432b95c24eb3058c753f99774c"
+        "sha256": "3aba09315652437a97e0bcd85ebaf9921915f9a7bcc879a516eb887132f01592"
       },
       "provenance": {
         "kind": "template"
@@ -128,7 +128,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/codex/skills/openspec-workspace-add-projects/SKILL.md",
-        "sha256": "5c8d5a24fda52566eb06a24ea07f36cbb03ec47714b1bc633fee608c37b12841"
+        "sha256": "f5986871e0edf0993c250878fc53d657f675beb7ed4d2983b7573bc28c6a62d6"
       },
       "provenance": {
         "kind": "template"
@@ -143,7 +143,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/codex/skills/openspec-workspace-add-projects/SKILL.md",
-        "sha256": "5c8d5a24fda52566eb06a24ea07f36cbb03ec47714b1bc633fee608c37b12841"
+        "sha256": "f5986871e0edf0993c250878fc53d657f675beb7ed4d2983b7573bc28c6a62d6"
       },
       "provenance": {
         "kind": "template"

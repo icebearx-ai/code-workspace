@@ -16,10 +16,8 @@ const COMMAND_SUMMARIES = {
   "project list": "List local projects",
   "project show": "Show one local project",
   "project verify": "Validate all local projects or one selected project",
-  "change validate": "Validate a cross-project OpenSpec change",
   context: "Print workspace context",
   sync: "Synchronize Codex writable roots",
-  validate: "Validate projects, specs, and changes",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
 };
@@ -37,7 +35,7 @@ const COMMANDS = [
   { path: ["language"], args: [], workspace: "required", config: ["language"], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "inspect"], args: [{ name: "path", required: true }], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "add"], args: [{ name: "path", required: false }], workspace: "required", config: ["complete"], interaction: "required", effects: "planned-write", options: {
-    "project-file": { type: "string" }, "projects-file": { type: "string" }, name: { type: "string" }, "spec-prefix": { type: "string" }, type: { type: "string" },
+    "project-file": { type: "string" }, "projects-file": { type: "string" }, name: { type: "string" }, type: { type: "string" },
     context: { type: "string" }, "context-file": { type: "string" }, yes: { type: "boolean" },
   } },
   { path: ["project", "remove"], args: [{ name: "name", required: true }], workspace: "required", config: ["complete"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
@@ -45,12 +43,8 @@ const COMMANDS = [
   { path: ["project", "list"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "show"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { name: { type: "string" } } },
   { path: ["project", "verify"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
-  { path: ["change", "validate"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {
-    change: { type: "string" }, "require-main-specs": { type: "boolean" },
-  } },
   { path: ["context"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { project: { type: "string" } } },
   { path: ["sync"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "planned-write", options: {} },
-  { path: ["validate"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
   { path: ["completion"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: { shell: { type: "string" } } },
   { path: ["help"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },

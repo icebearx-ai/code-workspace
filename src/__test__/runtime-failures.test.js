@@ -190,7 +190,6 @@ test("update commits release metadata while preserving initialized workspace sta
   const config = loadConfig(root);
   const expectedProjects = [{
     name: "service",
-    specPrefix: "service",
     location: "/tmp/service",
     branch: "main",
     type: "backend",
@@ -299,7 +298,7 @@ test("project configuration restores config and permissions at each write bounda
   const baselinePermissions = fs.readFileSync(permissionsFile);
   const next = {
     ...config,
-    projects: [{ name: "service", specPrefix: "service", location: "/tmp/service", branch: "main", type: "backend", context: "service" }],
+    projects: [{ name: "service", location: "/tmp/service", branch: "main", type: "backend", context: "service" }],
   };
   for (const stageId of ["after-config-save", "after-permissions-sync"]) {
     let failure;
@@ -321,7 +320,6 @@ test("project branch synchronization rolls back its only workspace write", () =>
   const root = temporaryRoot();
   const project = {
     name: "service",
-    specPrefix: "service",
     location: "/tmp/service",
     branch: "main",
     type: "backend",

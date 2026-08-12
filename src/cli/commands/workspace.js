@@ -5,7 +5,7 @@ const { syncPermissions } = require("../../core/permissions");
 const { doctorWorkspace } = require("../../core/doctor");
 const { WorkspaceError } = require("../../core/errors");
 const { getLocale } = require("../../i18n");
-const { validateChange, validateProjects, validateWorkspace } = require("../../core/validation");
+const { validateProjects } = require("../../core/validation");
 const { fromDiagnostics, success } = require("../result");
 
 function executeLanguage(invocation) {
@@ -20,22 +20,9 @@ function executeContext(invocation) {
   if (options.project) projects = projects.filter((project) => project.name === options.project);
   const lines = ["# OpenSpec Workspace Context", "", `Workspace: ${root}`];
   for (const project of projects) {
-    lines.push("", `## ${project.name}`, "", `- Type: ${project.type}`, `- Location: ${project.location}`, `- Branch: ${project.branch}`, `- Spec prefix: ${project.specPrefix}`, "", project.context);
+    lines.push("", `## ${project.name}`, "", `- Type: ${project.type}`, `- Location: ${project.location}`, `- Branch: ${project.branch}`, "", project.context);
   }
   return success("context", { workspaceRoot: root, projects }, lines.join("\n"));
-}
-
-function executeChangeValidate(invocation) {
-  const name = invocation.args[0] || invocation.options.change;
-  const requireMainSpecs = invocation.options["require-main-specs"] === true;
-  const output = validateChange(invocation.root, invocation.config, name, { requireMainSpecs });
-  return fromDiagnostics("change.validate", output, { change: name, requireMainSpecs },
-    requireMainSpecs ? "OpenSpec change and synchronized main specs validation passed." : "OpenSpec change validation passed.");
-}
-
-function executeValidate(invocation) {
-  const output = validateWorkspace(invocation.root, invocation.config);
-  return fromDiagnostics("validate", output, null, "OpenSpec Workspace validation passed.");
 }
 
 function executeSync(invocation) {
@@ -67,11 +54,9 @@ function executeCompletion(invocation, commands) {
 }
 
 module.exports = {
-  executeChangeValidate,
   executeCompletion,
   executeContext,
   executeDoctor,
   executeLanguage,
   executeSync,
-  executeValidate,
 };

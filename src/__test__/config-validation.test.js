@@ -7,7 +7,7 @@ const test = require("node:test");
 
 const { configPath, loadConfig, saveConfig, updateProjectBranch } = require("../core/config");
 const { inspectProject } = require("../core/project");
-const { validateChange, validateProject, validateProjects } = require("../core/validation");
+const { validateProject, validateProjects } = require("../core/validation");
 
 function temporaryRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "openspec-workspace-test-"));
@@ -33,7 +33,6 @@ test("local config preserves unrestricted multiline context", () => {
     monitor: { enable: false, url: "http://127.0.0.1:3211" },
     projects: [{
       name: "example",
-      specPrefix: "example",
       location: "/tmp/example",
       branch: "main",
       type: "unusual-project-type",
@@ -43,6 +42,33 @@ test("local config preserves unrestricted multiline context", () => {
   saveConfig(root, config);
   assert.deepEqual(loadConfig(root), config);
   assert.match(fs.readFileSync(configPath(root), "utf8"), /context: \|-\n\s+职责：Example/);
+});
+
+test("legacy project specPrefix is ignored and removed on explicit save", () => {
+  const root = temporaryRoot();
+  const file = configPath(root);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, [
+    "schemaVersion: 2",
+    "workspace:",
+    "  name: legacy-prefix",
+    "  uuid: 123e4567-e89b-42d3-a456-426614174000",
+    "  language: en-US",
+    "monitor:",
+    "  enable: false",
+    "projects:",
+    "  - name: service",
+    "    specPrefix: legacy-service",
+    "    location: /tmp/service",
+    "    branch: main",
+    "    type: backend",
+    "    context: service",
+    "",
+  ].join("\n"));
+  const loaded = loadConfig(root);
+  assert.equal("specPrefix" in loaded.projects[0], false);
+  saveConfig(root, loaded);
+  assert.doesNotMatch(fs.readFileSync(file, "utf8"), /specPrefix/);
 });
 
 test("monitor configuration is loopback-only and canonical", () => {
@@ -82,7 +108,6 @@ test("targeted project branch updates preserve unrelated config domains and reje
     "  url: not-a-valid-monitor-url",
     "projects:",
     "  - name: service",
-    "    specPrefix: service",
     "    location: /tmp/service",
     "    branch: main",
     "    type: backend",
@@ -138,7 +163,6 @@ test("project validation accepts extended context and checks actual branches", (
   const repository = gitRepository(parent, "service", { "pom.xml": "<project><source>1.8</source><artifactId>spring-boot</artifactId></project>" });
   const project = {
     name: "service",
-    specPrefix: "service",
     location: fs.realpathSync(repository),
     branch: "main",
     type: "backend",
@@ -162,7 +186,6 @@ test("targeted project validation ignores unrelated runtime drift and retains se
   const otherRepository = gitRepository(parent, "other");
   const service = {
     name: "service",
-    specPrefix: "service",
     location: fs.realpathSync(serviceRepository),
     branch: "main",
     type: "backend",
@@ -170,7 +193,6 @@ test("targeted project validation ignores unrelated runtime drift and retains se
   };
   const other = {
     name: "other",
-    specPrefix: "other",
     location: fs.realpathSync(otherRepository),
     branch: "stale",
     type: "backend",
@@ -180,14 +202,6 @@ test("targeted project validation ignores unrelated runtime drift and retains se
   assert.deepEqual(validateProject(workspace, { schemaVersion: 2, projects: [service, other] }, "service").errors, []);
   assert(validateProject(workspace, { schemaVersion: 2, projects: [service, other] }, "other").diagnostics.some((entry) =>
     entry.code === "PROJECT_BRANCH_MISMATCH" && entry.projectName === "other"
-  ));
-
-  const duplicatePrefix = validateProject(workspace, {
-    schemaVersion: 2,
-    projects: [service, { ...other, specPrefix: "service" }],
-  }, "service");
-  assert(duplicatePrefix.diagnostics.some((entry) =>
-    entry.code === "DUPLICATE_SPEC_PREFIX" && entry.projects.includes("service")
   ));
 
   const duplicatePath = validateProject(workspace, {
@@ -216,88 +230,4 @@ test("targeted project validation ignores unrelated runtime drift and retains se
   assert(nested.diagnostics.some((entry) =>
     entry.code === "NESTED_PROJECT_PATH" && entry.projects.includes("service")
   ));
-});
-
-test("change validation enforces local project ownership and prefixed capabilities", () => {
-  const parent = temporaryRoot();
-  const workspace = path.join(parent, "workspace");
-  fs.mkdirSync(workspace);
-  const repository = gitRepository(parent, "service");
-  const project = {
-    name: "service",
-    specPrefix: "svc",
-    location: fs.realpathSync(repository),
-    branch: "main",
-    type: "backend",
-    context: "职责：健康检查服务。",
-  };
-  const changeRoot = path.join(workspace, "openspec", "changes", "add-health");
-  fs.mkdirSync(path.join(changeRoot, "specs", "svc-health"), { recursive: true });
-  fs.writeFileSync(path.join(changeRoot, "proposal.md"), [
-    "## Affected Projects",
-    "- `service`: add health API",
-    "",
-    "## Capabilities",
-    "### New Capabilities",
-    "- Project: `service`; Capability: `svc-health`; Description: health endpoint",
-    "",
-    "### Modified Capabilities",
-  ].join("\n"));
-  fs.writeFileSync(path.join(changeRoot, "tasks.md"), "## 1. service: Implementation\n\n- [ ] 1.1 Add API\n");
-  fs.writeFileSync(path.join(changeRoot, "specs", "svc-health", "spec.md"), "# Health\n");
-  const output = validateChange(workspace, { schemaVersion: 1, projects: [project] }, "add-health");
-  assert.deepEqual(output.errors, []);
-
-  const missingMain = validateChange(workspace, { schemaVersion: 1, projects: [project] }, "add-health", { requireMainSpecs: true });
-  assert(missingMain.diagnostics.some((entry) =>
-    entry.code === "MAIN_SPEC_MISSING_AFTER_SYNC" && entry.specId === "svc-health"
-  ));
-  fs.mkdirSync(path.join(workspace, "openspec", "specs", "svc-health"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, "openspec", "specs", "svc-health", "spec.md"), "# Health\n");
-  assert.deepEqual(
-    validateChange(workspace, { schemaVersion: 1, projects: [project] }, "add-health", { requireMainSpecs: true }).errors,
-    []
-  );
-});
-
-test("change validation ignores branch drift outside affected and task projects", () => {
-  const parent = temporaryRoot();
-  const workspace = path.join(parent, "workspace");
-  fs.mkdirSync(workspace);
-  const serviceRepository = gitRepository(parent, "service");
-  const otherRepository = gitRepository(parent, "other");
-  const service = {
-    name: "service",
-    specPrefix: "svc",
-    location: fs.realpathSync(serviceRepository),
-    branch: "main",
-    type: "backend",
-    context: "service",
-  };
-  const other = {
-    name: "other",
-    specPrefix: "other",
-    location: fs.realpathSync(otherRepository),
-    branch: "stale",
-    type: "backend",
-    context: "other",
-  };
-  const changeRoot = path.join(workspace, "openspec", "changes", "scoped-change");
-  fs.mkdirSync(path.join(changeRoot, "specs", "svc-health"), { recursive: true });
-  fs.writeFileSync(path.join(changeRoot, "proposal.md"), [
-    "## Affected Projects",
-    "- `service`: add health API",
-    "",
-    "## Capabilities",
-    "### New Capabilities",
-    "- Project: `service`; Capability: `svc-health`; Description: health endpoint",
-    "",
-    "### Modified Capabilities",
-  ].join("\n"));
-  fs.writeFileSync(path.join(changeRoot, "tasks.md"), "## 1. service: Implementation\n\n- [ ] 1.1 Add API\n");
-  fs.writeFileSync(path.join(changeRoot, "specs", "svc-health", "spec.md"), "# Health\n");
-
-  const output = validateChange(workspace, { schemaVersion: 2, projects: [service, other] }, "scoped-change");
-  assert.deepEqual(output.errors, []);
-  assert.equal(output.diagnostics.some((entry) => entry.projectName === "other"), false);
 });

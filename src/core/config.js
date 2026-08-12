@@ -115,7 +115,11 @@ function normalizeMonitor(value) {
 function normalizeProjects(value) {
   if (value == null) return [];
   if (!Array.isArray(value)) throw new WorkspaceError("PROJECT_REGISTRY_INVALID", "projects must be an array");
-  return value;
+  return value.map((project) => {
+    if (!project || typeof project !== "object" || Array.isArray(project)) return project;
+    const { specPrefix: _legacySpecPrefix, ...normalized } = project;
+    return normalized;
+  });
 }
 
 function configVersion(value) {

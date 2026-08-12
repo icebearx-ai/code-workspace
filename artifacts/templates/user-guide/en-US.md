@@ -82,13 +82,6 @@ openspec-w project verify
 openspec-w project verify <project-name>
 ```
 
-Existing local specification records remain available through read-only compatibility commands:
-
-```bash
-openspec-w change validate <change-name>
-openspec-w validate
-```
-
 Add `--json` when a query result is consumed by Codex or a script.
 
 ## Workspace skills

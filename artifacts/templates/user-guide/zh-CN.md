@@ -82,13 +82,6 @@ openspec-w project verify
 openspec-w project verify <project-name>
 ```
 
-对已有的本地规格记录仍可进行只读兼容校验：
-
-```bash
-openspec-w change validate <change-name>
-openspec-w validate
-```
-
 查询结果需要交给 Codex 或脚本处理时，可添加 `--json`。
 
 ## Workspace Skills

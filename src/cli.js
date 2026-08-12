@@ -10,13 +10,11 @@ const { executeMonitor, readStdinJson } = require("./cli/commands/monitor");
 const { executeProject } = require("./cli/commands/project");
 const { executeUpdate, updateWorkspace } = require("./cli/commands/update");
 const {
-  executeChangeValidate,
   executeCompletion,
   executeContext,
   executeDoctor,
   executeLanguage,
   executeSync,
-  executeValidate,
 } = require("./cli/commands/workspace");
 
 async function dispatch(invocation) {
@@ -27,8 +25,6 @@ async function dispatch(invocation) {
   if (key === "update") return executeUpdate(invocation);
   if (key === "language") return executeLanguage(invocation);
   if (key === "context") return executeContext(invocation);
-  if (key === "change validate") return executeChangeValidate(invocation);
-  if (key === "validate") return executeValidate(invocation);
   if (key === "sync") return executeSync(invocation);
   if (key === "doctor") return executeDoctor(invocation);
   if (key === "completion") return executeCompletion(invocation, topLevelCommands());

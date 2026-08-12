@@ -2,7 +2,7 @@
 
 OpenSpec Workspace 是面向 Claude Code 与 Codex 的本地多项目注册表和安全边界层，负责工作区身份、项目路径与分支、Agent 指令、可写目录权限、校验以及可选监控。
 
-它是独立工具。初始化和更新不会安装、检测、调用或管理其他 OpenSpec 软件包及可执行文件的版本。已有 `openspec/` 文件保持用户所有：Workspace 可以读取提案和规格以提供上下文与校验，但不会初始化或改写该目录。
+它是独立工具，不会安装、检测、调用或管理其他 OpenSpec 软件包及可执行文件的版本。已有 `openspec/` 文件保持用户所有，Workspace 不会读取或写入该目录。
 
 ## 环境要求
 
@@ -66,7 +66,7 @@ Codex 用户可对相同的显式路径调用 `$openspec-workspace-add-projects`
 openspec-workspace project add --projects-file projects.json --yes --json
 ```
 
-注册表保存项目名称、唯一规格前缀、真实路径、预期 Git 分支、类型和上下文。Workspace 不会根据对话猜测路径。
+注册表保存项目名称、真实路径、预期 Git 分支、类型和上下文。Workspace 不会根据对话猜测路径。
 
 ## 日常命令
 
@@ -77,22 +77,10 @@ openspec-workspace project verify payments --json
 openspec-workspace project sync-branch payments --yes --json
 openspec-workspace context --project payments --json
 openspec-workspace sync --json
-openspec-workspace validate --json
 openspec-workspace doctor --json
 ```
 
 `project sync-branch` 只记录仓库当前已检出的分支，不会切换 Git 分支。
-
-## 对已有记录的只读兼容
-
-存在 `openspec/changes/<name>/proposal.md` 时，Workspace 可以解析受影响项目并校验项目边界：
-
-```bash
-openspec-workspace change validate add-payment-retry --json
-openspec-workspace change validate add-payment-retry --require-main-specs --json
-```
-
-这些命令只读取已有记录；记录的创建、生命周期管理和归档不属于 Workspace 的职责。
 
 ## 更新与语言
 

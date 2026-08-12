@@ -11,7 +11,7 @@ const { validateProject, validateProjects } = require("../../core/validation");
 const { confirm } = require("../confirmation");
 const { fromDiagnostics, success } = require("../result");
 
-const PROJECT_FIELDS = ["name", "specPrefix", "location", "branch", "type", "context"];
+const PROJECT_FIELDS = ["name", "location", "branch", "type", "context"];
 
 function projectError(code, message, details = {}) {
   return new WorkspaceError(code, message, details);
@@ -19,7 +19,7 @@ function projectError(code, message, details = {}) {
 
 function assertNoProjectConflict(config, project) {
   const conflict = config.projects.find((current) =>
-    current.name === project.name || current.specPrefix === project.specPrefix || path.resolve(current.location) === project.location
+    current.name === project.name || path.resolve(current.location) === project.location
   );
   if (!conflict) return;
   if (PROJECT_FIELDS.every((field) => conflict[field] === project[field])) return "skip";
@@ -177,7 +177,6 @@ function projectRecordsFromInput(args, options) {
   const actual = inspectGitWorktree(location);
   return [normalizeProjectRecord({
     name: options.name,
-    specPrefix: options["spec-prefix"],
     location: actual.realPath,
     branch: actual.branch,
     type: options.type,

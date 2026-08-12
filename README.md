@@ -2,7 +2,7 @@
 
 OpenSpec Workspace is a local multi-project registry and safety layer for Claude Code and Codex. It manages workspace identity, project locations and branches, agent instructions, writable-root permissions, validation, and optional monitoring.
 
-It is standalone. Initialization and update do not install, detect, invoke, or version-manage another OpenSpec package or executable. Existing files under `openspec/` remain user-owned: Workspace may read proposals and specs for context and validation, but does not initialize or rewrite that directory.
+It is standalone. It does not install, detect, invoke, or version-manage another OpenSpec package or executable. Existing files under `openspec/` remain user-owned and are not read or written by Workspace.
 
 ## Requirements
 
@@ -66,7 +66,7 @@ Codex users can invoke `$openspec-workspace-add-projects` with the same explicit
 openspec-workspace project add --projects-file projects.json --yes --json
 ```
 
-The registry stores each project's name, unique spec prefix, real location, expected Git branch, type, and context. Workspace never guesses a path from a conversation.
+The registry stores each project's name, real location, expected Git branch, type, and context. Workspace never guesses a path from a conversation.
 
 ## Daily commands
 
@@ -77,22 +77,10 @@ openspec-workspace project verify payments --json
 openspec-workspace project sync-branch payments --yes --json
 openspec-workspace context --project payments --json
 openspec-workspace sync --json
-openspec-workspace validate --json
 openspec-workspace doctor --json
 ```
 
 `project sync-branch` records the branch already checked out in the repository; it never switches Git branches.
-
-## Read-only compatibility with existing records
-
-When an existing `openspec/changes/<name>/proposal.md` is present, Workspace can resolve affected projects and validate project boundaries:
-
-```bash
-openspec-workspace change validate add-payment-retry --json
-openspec-workspace change validate add-payment-retry --require-main-specs --json
-```
-
-These commands read existing records. Creation, lifecycle management, and archival of those records remain outside Workspace ownership.
 
 ## Update and language
 

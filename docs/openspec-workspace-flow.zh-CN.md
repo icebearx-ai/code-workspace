@@ -1,12 +1,11 @@
 # OpenSpec Workspace 执行流程
 
-本文描述 Level A 之后的职责边界：Workspace 管理多项目注册表和 Agent 安全集成；已有 `openspec/` 记录仅作为只读输入。
+本文描述 Workspace 的职责边界：管理多项目注册表和 Agent 安全集成，并与原生 OpenSpec 实现保持解耦。
 
 ## 核心原则
 
 - Workspace 不安装、检测或调用其他 OpenSpec CLI。
-- Workspace 不创建、更新或归档 `openspec/` 下的记录。
-- `openspec/` 中已有 proposal 与 spec 可用于上下文解析和一致性校验。
+- Workspace 不读取、创建、更新或归档 `openspec/` 下的记录。
 - Workspace 的写入范围是 `.openspec-workspace/`、Workspace 自有 Agent 集成、Codex hook 与权限配置。
 - 项目生产代码只允许在已注册项目的 `location` 中修改；Workspace CLI 自身不执行生产代码修改。
 
@@ -39,7 +38,7 @@ flowchart TD
 flowchart TD
     A[显式项目路径] --> I[project inspect 只读检查]
     I --> R[用户或 Skill 补全项目记录]
-    R --> V[批量校验名称、specPrefix、真实路径和 Git 分支]
+    R --> V[批量校验名称、真实路径和 Git 分支]
     V --> Q{确认写入?}
     Q -- 否 --> X[不修改]
     Q -- 是 --> W[原子更新 Workspace 配置]
@@ -57,26 +56,6 @@ openspec-workspace project verify "<project-name>" --json
 ```
 
 Claude Code 使用 `/opswx:add-projects`；Codex 使用 `$openspec-workspace-add-projects`。两者都要求用户给出显式路径，不得根据对话猜测。
-
-## 已有变更记录的只读流程
-
-```mermaid
-flowchart TD
-    C[已有 openspec/changes/name/proposal.md] --> P[解析 Affected Projects]
-    P --> L[与 Workspace 项目注册表匹配]
-    L --> V[只验证参与项目]
-    V --> B{项目分支匹配?}
-    B -- 否 --> E[PROJECT_BRANCH_MISMATCH]
-    B -- 是 --> X[返回受影响项目上下文]
-    X --> S[可选：验证主规格映射]
-```
-
-```bash
-openspec-workspace change validate "<change-name>" --json
-openspec-workspace change validate "<change-name>" --require-main-specs --json
-```
-
-这些命令不会改写 proposal、spec、tasks 或 archive。记录的创建和生命周期由用户选择的外部流程负责。
 
 ## 分支不一致恢复
 
@@ -102,7 +81,7 @@ openspec-workspace project sync-branch "<project-name>" --yes --json
 
 | 层次 | 负责内容 |
 | --- | --- |
-| Workspace CLI | 项目注册表、定向验证、只读 change/spec 解析、权限、Doctor、监控 |
+| Workspace CLI | 项目注册表、项目验证、权限、Doctor、监控 |
 | Workspace Agent 集成 | 显式添加项目、分支不一致恢复引导 |
 | 用户或外部工具 | `openspec/` 记录的创建、编辑、同步、归档和删除 |
 | 各项目仓库 | 生产代码、测试、构建和 Git 分支操作 |
@@ -113,4 +92,4 @@ openspec-workspace project sync-branch "<project-name>" --yes --json
 - 不得直接编辑 `.openspec-workspace/config.yaml`；通过 CLI 写入。
 - 不得把独立的 `openspec/` 存储隐式绑定到 Workspace。
 - Workspace 初始化、更新和 Doctor 不依赖其他 OpenSpec 包或可执行文件。
-- Workspace 不主动写入 `openspec/`。
+- Workspace 不读取或写入 `openspec/`。
