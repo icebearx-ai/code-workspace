@@ -6,7 +6,7 @@ Use the registry as the only source of truth for project locations, ownership, a
 
 ## Discover and Select a Project
 
-For tasks that read or modify project code, or create, validate, or apply project-owned OpenSpec artifacts, first run:
+For tasks that read or modify project code, first run:
 
 ```bash
 openspec-w project list --json
@@ -38,7 +38,7 @@ Do not begin project work unless the response has `ok: true`.
 
 ## Workspace Write Boundary
 
-The AI MUST NOT directly create, edit, move, or delete files under the workspace root outside `openspec/`.
+The AI MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root.
 
 In particular, do not directly modify:
 

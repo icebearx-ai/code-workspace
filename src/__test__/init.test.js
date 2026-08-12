@@ -233,7 +233,6 @@ test("non-interactive init migrates legacy state without consulting openspec fil
   const state = JSON.parse(fs.readFileSync(path.join(root, ".openspec-workspace", "state.json"), "utf8"));
   assert.equal(state.workspaceLanguage, undefined);
   assert.deepEqual(state.tools, []);
-  assert.equal(state.resources, undefined);
   assert.equal(fs.readFileSync(openspecFile, "utf8"), "schema: user-owned\nlanguage: intentionally-ignored\n");
 });
 

@@ -88,7 +88,6 @@ openspec-workspace doctor --json
 存在 `openspec/changes/<name>/proposal.md` 时，Workspace 可以解析受影响项目并校验项目边界：
 
 ```bash
-openspec-workspace context --change add-payment-retry --json
 openspec-workspace change validate add-payment-retry --json
 openspec-workspace change validate add-payment-retry --require-main-specs --json
 ```
@@ -103,7 +102,7 @@ openspec-workspace update --language en-US --json
 openspec-workspace language --json
 ```
 
-`update` 只刷新 Workspace 自有托管资产。遇到未知本地修改时，会在任何写入前终止批次；请先审查修改，或显式传入 `--force`。旧版本追踪过的原生工作流文件和 schema 副本，只有在记录的指纹证明内容未变时才会删除。对 `openspec/config.yaml` 的旧托管关系只会解除，不会修改该文件。
+`update` 只刷新 Workspace 自有托管资产。遇到未知本地修改时，会在任何写入前终止批次；请先审查修改，或显式传入 `--force`。
 
 ## 监控
 

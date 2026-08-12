@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "9ef4ec645167ff0558e9b1821696f28be1beaf617d813fcfcf8daa2b9f282f22"
+      "sha256": "cef40188e937516db937439387c1e574ebfaf7636201c827bfe231b242a05d30"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "fba167ea83419b6ba899bb9340b7a38fe2c9365ed5cb3ad844d21d9a9ee0d18d"
+      "sha256": "c4446f3e986498cc1e5943a96e3bfef7dd3b90942e9dd13d13f8fa22667df6c7"
     }
   ],
   "managedFiles": [
@@ -49,7 +49,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "c21e0d7e8f6ac79133cc44931037147ced1b737d475c0921c3eb9397408ed6b3"
+        "sha256": "17ea3f92a194b21f40c25ae7f5032462e467cad1f1feb952a74731d0a222e52d"
       },
       "render": {
         "variables": [
@@ -72,7 +72,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "c21e0d7e8f6ac79133cc44931037147ced1b737d475c0921c3eb9397408ed6b3"
+        "sha256": "17ea3f92a194b21f40c25ae7f5032462e467cad1f1feb952a74731d0a222e52d"
       },
       "render": {
         "variables": [

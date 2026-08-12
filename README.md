@@ -88,7 +88,6 @@ openspec-workspace doctor --json
 When an existing `openspec/changes/<name>/proposal.md` is present, Workspace can resolve affected projects and validate project boundaries:
 
 ```bash
-openspec-workspace context --change add-payment-retry --json
 openspec-workspace change validate add-payment-retry --json
 openspec-workspace change validate add-payment-retry --require-main-specs --json
 ```
@@ -103,7 +102,7 @@ openspec-workspace update --language zh-CN --json
 openspec-workspace language --json
 ```
 
-`update` refreshes only Workspace-owned managed assets. Unknown local edits stop the batch before writes; review them or pass `--force` explicitly. Older releases' tracked native workflow files and schema copies are removed only when their recorded fingerprint proves they are unchanged. Legacy ownership of `openspec/config.yaml` is forgotten without changing the file.
+`update` refreshes only Workspace-owned managed assets. Unknown local edits stop the batch before writes; review them or pass `--force` explicitly.
 
 ## Monitor
 

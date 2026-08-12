@@ -17,27 +17,10 @@ const OBSOLETE_ASSETS = [
   ".codex/skills/openspec-workspace-apply/SKILL.md",
   ".codex/skills/openspec-workspace-sync-specs/SKILL.md",
   ".codex/skills/openspec-workspace-archive/SKILL.md",
-  ".claude/commands/opsx/apply.md",
-  ".claude/commands/opsx/archive.md",
-  ".claude/commands/opsx/explore.md",
-  ".claude/commands/opsx/propose.md",
-  ".claude/skills/openspec-apply-change/SKILL.md",
-  ".claude/skills/openspec-archive-change/SKILL.md",
-  ".claude/skills/openspec-explore/SKILL.md",
-  ".claude/skills/openspec-propose/SKILL.md",
-  ".codex/skills/openspec-apply-change/SKILL.md",
-  ".codex/skills/openspec-archive-change/SKILL.md",
-  ".codex/skills/openspec-explore/SKILL.md",
-  ".codex/skills/openspec-propose/SKILL.md",
-  "openspec/schemas/workspace-workflow/schema.yaml",
-  "openspec/schemas/workspace-workflow/templates/design.md",
-  "openspec/schemas/workspace-workflow/templates/proposal.md",
-  "openspec/schemas/workspace-workflow/templates/spec.md",
-  "openspec/schemas/workspace-workflow/templates/tasks.md",
   "USER_GUIDE.zh-CN.md",
 ];
 
-const FORGOTTEN_ASSETS = ["openspec/config.yaml"];
+const FORGOTTEN_ASSETS = [];
 
 function selectedObsoleteAssets(tools) {
   void tools;

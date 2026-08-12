@@ -48,7 +48,7 @@ const COMMANDS = [
   { path: ["change", "validate"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {
     change: { type: "string" }, "require-main-specs": { type: "boolean" },
   } },
-  { path: ["context"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { project: { type: "string" }, change: { type: "string" } } },
+  { path: ["context"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { project: { type: "string" } } },
   { path: ["sync"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "planned-write", options: {} },
   { path: ["validate"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },

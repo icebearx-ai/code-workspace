@@ -48,6 +48,9 @@ test("semantic parser rejects unknown options, duplicates, and extra arguments",
   assert.throws(() => parse(argv("project", "list", "extra")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
   assert.throws(() => parse(argv("project", "list", "--json", "--json")), (error) => error.code === "CLI_DUPLICATE_OPTION");
   assert.throws(() => parse(argv("project", "verify", "service", "extra")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
+  assert.throws(() => parse(argv("context", "--change", "add-health")), (error) =>
+    error.code === "CLI_UNKNOWN_OPTION" && error.details.command === "context"
+  );
 });
 
 test("semantic parser accepts targeted project verification with valid option ordering", () => {

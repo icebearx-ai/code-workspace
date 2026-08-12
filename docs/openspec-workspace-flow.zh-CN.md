@@ -31,7 +31,7 @@ flowchart TD
     VERIFY --> COMMIT[提交新 release state]
 ```
 
-初始化和更新都不会创建 `openspec/`。若旧 state 曾记录原生工作流文件或 Workspace schema 副本，只有内容仍匹配安装指纹时才删除；`openspec/config.yaml` 仅解除旧托管关系，文件内容保持不变。
+初始化和更新都不会创建或修改 `openspec/`；该目录中的已有记录始终由用户或外部工具负责。
 
 ## 项目注册流程
 
@@ -72,7 +72,6 @@ flowchart TD
 ```
 
 ```bash
-openspec-workspace context --change "<change-name>" --json
 openspec-workspace change validate "<change-name>" --json
 openspec-workspace change validate "<change-name>" --require-main-specs --json
 ```

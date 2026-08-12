@@ -86,7 +86,6 @@ Existing local specification records remain available through read-only compatib
 
 ```bash
 openspec-w change validate <change-name>
-openspec-w context --change <change-name>
 openspec-w validate
 ```
 

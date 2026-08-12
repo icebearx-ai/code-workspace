@@ -1,7 +1,6 @@
 const path = require("node:path");
 
 const { loadInitManifest } = require("../../core/init");
-const { parseAffectedProjects } = require("../../core/markdown");
 const { syncPermissions } = require("../../core/permissions");
 const { doctorWorkspace } = require("../../core/doctor");
 const { WorkspaceError } = require("../../core/errors");
@@ -19,19 +18,11 @@ function executeContext(invocation) {
   const { config, options, root } = invocation;
   let projects = config.projects;
   if (options.project) projects = projects.filter((project) => project.name === options.project);
-  let change = null;
-  if (options.change) {
-    const proposal = path.join(root, "openspec", "changes", options.change, "proposal.md");
-    const affectedProjects = parseAffectedProjects(proposal);
-    change = { name: options.change, affectedProjects };
-    projects = projects.filter((project) => affectedProjects.includes(project.name));
-  }
   const lines = ["# OpenSpec Workspace Context", "", `Workspace: ${root}`];
-  if (change) lines.push(`Change: ${change.name}`, `Affected Projects: ${change.affectedProjects.join(", ")}`);
   for (const project of projects) {
     lines.push("", `## ${project.name}`, "", `- Type: ${project.type}`, `- Location: ${project.location}`, `- Branch: ${project.branch}`, `- Spec prefix: ${project.specPrefix}`, "", project.context);
   }
-  return success("context", { workspaceRoot: root, change, projects }, lines.join("\n"));
+  return success("context", { workspaceRoot: root, projects }, lines.join("\n"));
 }
 
 function executeChangeValidate(invocation) {

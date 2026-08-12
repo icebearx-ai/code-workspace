@@ -205,7 +205,6 @@ test("update commits release metadata while preserving initialized workspace sta
   delete previous.appliedManifestSha256;
   previous.workspaceLanguage = "zh-CN";
   previous.customState = { preserve: true };
-  previous.resources = { legacy: { preserve: true } };
   fs.writeFileSync(stateFile, `${JSON.stringify(previous, null, 2)}\n`);
 
   const manifest = loadInitManifest();
@@ -216,7 +215,6 @@ test("update commits release metadata while preserving initialized workspace sta
   assert.equal(state.status, "healthy");
   assert.equal(state.workspaceLanguage, undefined);
   assert.deepEqual(state.customState, { preserve: true });
-  assert.equal(state.resources, undefined);
   assert.deepEqual(state.tools, []);
   assert.deepEqual(state.managedFiles, expectedManagedFiles);
   assert.deepEqual(loadConfig(root).projects, expectedProjects);

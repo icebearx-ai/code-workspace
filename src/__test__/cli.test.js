@@ -118,7 +118,6 @@ test("init installs only workspace-owned integrations and does not create opensp
   const state = JSON.parse(fs.readFileSync(path.join(root, ".openspec-workspace", "state.json"), "utf8"));
   assert.equal(state.status, "healthy");
   assert.deepEqual(state.tools, ["claude", "codex"]);
-  assert.equal(state.resources, undefined);
   assert.equal(state.workspaceLanguage, undefined);
 });
 
@@ -347,6 +346,7 @@ test("project inspect is read-only and project add registers an explicit record"
   const context = run(workspace, ["context", "--json"]);
   assert.equal(context.status, 0, context.stderr);
   assert.equal(jsonData(context).projects[0].name, "portal");
+  assert.equal("change" in jsonData(context), false);
 
   assert.equal(run(workspace, ["project", "verify", "--json"]).status, 0);
   const sync = run(workspace, ["sync", "--json"]);
@@ -439,45 +439,6 @@ test("update leaves existing openspec records untouched", () => {
   assert.deepEqual(fs.readFileSync(configTarget), beforeConfig);
   assert.deepEqual(fs.readFileSync(specTarget), beforeSpec);
   assert(!jsonData(updated).managedFiles.some((entry) => entry.target.startsWith("openspec/")));
-});
-
-test("update removes unchanged native integration assets tracked by an earlier release", () => {
-  const root = temporaryRoot();
-  assert.equal(run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]).status, 0);
-  const relative = ".codex/skills/openspec-apply-change/SKILL.md";
-  const target = path.join(root, relative);
-  const content = "previously managed native integration\n";
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, content);
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
-  const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-  state.managedFiles[relative] = { installedSha256: createHash("sha256").update(content).digest("hex") };
-  fs.writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
-
-  const updated = run(root, ["update", "--tools", "codex", "--json"]);
-  assert.equal(updated.status, 0, updated.stderr);
-  assert(!fs.existsSync(target));
-  assert(jsonData(updated).obsoleteFiles.some((entry) => entry.target === relative && entry.action === "remove"));
-  assert.equal(JSON.parse(fs.readFileSync(stateFile, "utf8")).managedFiles[relative], undefined);
-});
-
-test("update forgets legacy ownership of openspec config without modifying the file", () => {
-  const root = temporaryRoot();
-  assert.equal(run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]).status, 0);
-  const target = path.join(root, "openspec", "config.yaml");
-  const content = "schema: user-owned\n";
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, content);
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
-  const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-  state.managedFiles["openspec/config.yaml"] = { installedSha256: "0".repeat(64) };
-  fs.writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
-
-  const updated = run(root, ["update", "--json"]);
-  assert.equal(updated.status, 0, updated.stderr);
-  assert.equal(fs.readFileSync(target, "utf8"), content);
-  assert(jsonData(updated).obsoleteFiles.some((entry) => entry.target === "openspec/config.yaml" && entry.action === "forget"));
-  assert.equal(JSON.parse(fs.readFileSync(stateFile, "utf8")).managedFiles["openspec/config.yaml"], undefined);
 });
 
 test("update removes obsolete workspace aliases tracked by an earlier release", () => {

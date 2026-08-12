@@ -150,7 +150,7 @@ test("one canonical template renders both workspace instructions with platform-s
     assert.match(content, /openspec-workspace-resolve-branch/);
     assert.match(content, /PROJECT_BRANCH_MISMATCH/);
     assert.match(content, /MUST NOT guess a project path/);
-    assert.match(content, /MUST NOT directly create, edit, move, or delete files under the workspace root outside `openspec\/`/);
+    assert.match(content, /MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root/);
     assert.doesNotMatch(content, /OpenSpec owns|Cross-project|Every capability|proposal|archive workflow/);
   }
   assert.match(claude, /\/opswx:add-projects \/absolute\/path\/to\/project/);

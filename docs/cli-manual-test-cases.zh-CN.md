@@ -533,11 +533,8 @@ EOF
 | CLI-CTX-001 | P0 | `openspec-w context` | 文本包含 workspace root、A、B 及其 context。 |
 | CLI-CTX-002 | P0 | `openspec-w context --json` | `data.workspaceRoot` 正确；`data.projects` 含 A、B。 |
 | CLI-CTX-003 | P1 | `openspec-w context --project frontend-app --json` | 只返回 A。 |
-| CLI-CTX-004 | P1 | `openspec-w context --change "$CHANGE_NAME" --json` | `data.change.affectedProjects` 含 A；projects 只含 A。 |
-| CLI-CTX-005 | P1 | 同时传 `--change` 和匹配的 `--project` | 返回交集。 |
-| CLI-CTX-006 | P2 | 使用不存在的 `--project` | 观察项：当前可能返回空成功；确认产品是否应改为 `PROJECT_NOT_FOUND`。 |
-| CLI-CTX-007 | P2 | 使用不存在的 `--change` | 观察项：确认是否应返回 `CHANGE_NOT_FOUND`，不能让自动化误以为 change 没有项目。 |
-| CLI-CTX-008 | P0 | 在缺少 language、monitor 非法但 projects 有效的配置副本运行 context | 仍成功，证明只依赖 projects 域。 |
+| CLI-CTX-004 | P2 | 使用不存在的 `--project` | 观察项：当前可能返回空成功；确认产品是否应改为 `PROJECT_NOT_FOUND`。 |
+| CLI-CTX-005 | P0 | 在缺少 language、monitor 非法但 projects 有效的配置副本运行 context | 仍成功，证明只依赖 projects 域。 |
 
 ## 13. `sync`
 
@@ -575,9 +572,8 @@ EOF
 | CLI-DOC-008 | P0 | schemaVersion `99` | `CONFIG_SCHEMA_VERSION_UNSUPPORTED`，不重写配置。 |
 | CLI-DOC-009 | P0 | 删除 state.json 或把 status 改为 unhealthy | `INIT_STATE_UNHEALTHY`。 |
 | CLI-DOC-010 | P1 | state 的 releaseVersion 与当前包不一致 | `INIT_RELEASE_OUTDATED`。 |
-| CLI-DOC-011 | P1 | state 含旧版 `resources` 字段 | update 清理旧字段；doctor 不检测任何外部 CLI 版本。 |
-| CLI-DOC-012 | P0 | state tools 仅 Codex，省略 `--tools` 运行 doctor | `data.tools.source="workspace-state"`；不能按 manifest 默认推导 Claude。 |
-| CLI-DOC-013 | P0 | Monitor 启用但 tools 不含 Codex | `MONITOR_CODEX_REQUIRED`。 |
+| CLI-DOC-011 | P0 | state tools 仅 Codex，省略 `--tools` 运行 doctor | `data.tools.source="workspace-state"`；不能按 manifest 默认推导 Claude。 |
+| CLI-DOC-012 | P0 | Monitor 启用但 tools 不含 Codex | `MONITOR_CODEX_REQUIRED`。 |
 
 ## 16. `monitor`
 
@@ -739,11 +735,11 @@ diff -u "$TEST_BASE/before.sha256" "$TEST_BASE/after.sha256"
 | init | 22 |  |  |  |
 | update/language | 20 |  |  |  |
 | project | 46 |  |  |  |
-| change/context | 20 |  |  |  |
+| change/context | 18 |  |  |  |
 | sync/validate/doctor | 25 |  |  |  |
 | monitor/report | 16 |  |  |  |
 | completion | 5 |  |  |  |
 | 发布包安装专项 | 10 |  |  |  |
-| **合计** | **182** |  |  |  |
+| **合计** | **180** |  |  |  |
 
 观察项不应计为 PASS；需要明确产品决策后转成正式通过或失败标准。

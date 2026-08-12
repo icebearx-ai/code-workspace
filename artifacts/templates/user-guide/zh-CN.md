@@ -86,7 +86,6 @@ openspec-w project verify <project-name>
 
 ```bash
 openspec-w change validate <change-name>
-openspec-w context --change <change-name>
 openspec-w validate
 ```
 

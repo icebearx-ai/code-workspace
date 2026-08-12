@@ -121,7 +121,6 @@ function commitInitializationState(root, manifest, options = {}) {
     appliedManifestSha256: sha256(fs.readFileSync(options.manifestFile || MANIFEST_FILE)),
     tools: options.tools || manifest.tools,
   };
-  delete state.resources;
   delete state.workspaceLanguage;
   saveState(root, state);
   return state;
@@ -142,7 +141,6 @@ function commitUpdateState(root, manifest, options = {}) {
     appliedManifestSha256: sha256(fs.readFileSync(options.manifestFile || MANIFEST_FILE)),
     ...(options.tools !== undefined ? { tools: options.tools } : {}),
   };
-  delete state.resources;
   if (options.removeLegacyWorkspaceLanguage === true) delete state.workspaceLanguage;
   saveState(root, state);
   return state;
