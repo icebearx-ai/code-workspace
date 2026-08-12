@@ -1,6 +1,6 @@
 # OpenSpec Workspace 发布包 CLI 真实环境手工验收用例
 
-本文用于在 npm 包发布后，使用 registry 中的真实发布包、真实全局安装路径以及机器上真实的 Node.js、npm、Git 和 OpenSpec 环境，对全部 CLI 契约进行一次完整黑盒验收。覆盖 19 条注册命令路径、3 个全局选项、文本/JSON 输出、交互确认、旧配置兼容、文件副作用和常见失败边界。
+本文用于在 npm 包发布后，使用 registry 中的真实发布包、真实全局安装路径以及机器上真实的 Node.js、npm 和 Git 环境，对全部 CLI 契约进行一次完整黑盒验收。覆盖 19 条注册命令路径、3 个全局选项、文本/JSON 输出、交互确认、旧配置兼容、文件副作用和常见失败边界。
 
 测试过程中不得从源码目录执行 `node bin/openspec-workspace.js`，不得使用 `npm install <本地源码路径>`，也不得临时覆盖 npm cache、prefix 或 PATH 来绕过实际部署环境。命令清单以发布包中的 CLI registry 为准。执行结果与本文不一致时，应记录实际退出码、stdout、stderr、诊断 code 和文件差异，不要直接修改预期结果来迁就当前实现。
 
@@ -31,7 +31,7 @@
 
 ## 2. 环境准备
 
-“真实环境”指真实操作系统、真实用户权限、真实 npm registry、真实全局安装目录以及真实 OpenSpec/Git 命令。它不意味着可以在业务工作区中执行破坏性测试。
+“真实环境”指真实操作系统、真实用户权限、真实 npm registry、真实全局安装目录以及真实 Git 命令。它不意味着可以在业务工作区中执行破坏性测试。
 
 测试分为两层：
 
@@ -45,7 +45,6 @@
 - Node.js `>=20.19.0`
 - npm
 - Git
-- OpenSpec `1.5.0`
 - `curl`
 - 推荐安装 `jq`
 - 至少两个空闲的本地端口，例如 `43211`、`43212`
@@ -64,13 +63,11 @@ uname -a
 node --version
 npm --version
 git --version
-openspec --version
 npm config get registry
 npm config get prefix
 npm root -g
 command -v node
 command -v npm
-command -v openspec || true
 command -v openspec-workspace || true
 command -v openspec-w || true
 npm list -g "$PACKAGE_NAME" --depth=0 || true
@@ -208,7 +205,7 @@ openspec-w doctor --json
 
 ### 2.6 创建专用验收路径和 Git 项目
 
-以下目录位于真实机器的临时区，但所有 Node/npm/OpenSpec/Git 命令、权限和网络环境都是真实的。
+以下目录位于真实机器的临时区，但所有 Node/npm/Git 命令、权限和网络环境都是真实的。
 
 ```sh
 export WS_ROOT="$TEST_BASE/workspace-main"
@@ -330,7 +327,7 @@ cd "$CASE_ROOT"
 | ID | P | 操作 | 预期 |
 |---|---:|---|---|
 | CLI-INIT-001 | P1 | `openspec-w init "$TEST_BASE/init-cancel"`，在 wizard 最终确认时取消 | 输出取消信息；无 `.openspec-workspace`、受管文件或新建目标文件。 |
-| CLI-INIT-002 | P0 | `openspec-w init "$TEST_BASE/init-interactive"`，完成 wizard，选择 en-US、Codex、关闭 Monitor | 成功；生成配置、state、OpenSpec 基线和 Codex 资产；配置值与选择一致。 |
+| CLI-INIT-002 | P0 | `openspec-w init "$TEST_BASE/init-interactive"`，完成 wizard，选择 en-US、Codex、关闭 Monitor | 成功；生成 Workspace 配置、state 和 Codex 资产；配置值与选择一致；不创建 `openspec/`。 |
 | CLI-INIT-003 | P0 | `mkdir "$TEST_BASE/init-default" && cd "$TEST_BASE/init-default" && openspec-w init --tools none --language en-US --yes --json` | 默认目标为当前目录；`data.root` 为当前目录。 |
 | CLI-INIT-004 | P0 | `openspec-w init --yes "$TEST_BASE/init-order-a" --tools none --language en-US --json` | `--yes` 不吞掉路径；目标目录正确。 |
 | CLI-INIT-005 | P0 | `openspec-w init "$TEST_BASE/init-order-b" --yes --tools none --language en-US --json` | 与上一用例语义一致。 |
@@ -344,7 +341,7 @@ cd "$CASE_ROOT"
 | CLI-INIT-013 | P0 | 使用 `--language fr-FR` | 失败；诊断为 `WORKSPACE_LANGUAGE_INVALID`；不提交工作区状态。 |
 | CLI-INIT-014 | P0 | 使用 `--tools vscode` | `CLI_INVALID_TOOLS`，包含 supported tools。 |
 | CLI-INIT-015 | P0 | 使用 `--monitor-url https://example.com:43211` | `MONITOR_CONFIG_INVALID`；只允许 HTTP loopback。 |
-| CLI-INIT-016 | P1 | 使用不受支持的 `--openspec-version 9.9.9` | 非 0；说明受支持版本；不得安装未知版本。记录实际稳定 code。 |
+| CLI-INIT-016 | P0 | 初始化前在目标中创建 `openspec/config.yaml` 和已有 spec，初始化后比较 hash | 初始化成功；已有内容完全不变；没有安装或执行外部 CLI。 |
 | CLI-INIT-017 | P0 | 对已经成功初始化的目录重复执行相同 init | UUID 不变；受管文件应为 skip/current；Doctor 仍健康。 |
 | CLI-INIT-018 | P0 | 修改一个受管文件后，不带 `--force` 重跑 init | 失败并保护本地修改；配置和其他受管文件不得部分更新。 |
 | CLI-INIT-019 | P0 | 在上一用例目录加 `--force` 重跑 | 成功覆盖未知修改；Doctor 恢复健康。 |
@@ -375,7 +372,7 @@ openspec-w doctor --json
 |---|---:|---|---|
 | CLI-UPD-001 | P0 | `openspec-w update --json` | 成功；标准信封；工具来自 `workspace-state`；无须 `--yes`。 |
 | CLI-UPD-002 | P1 | 再次执行相同 update | 幂等；大部分 managedFiles 为 skip/current。 |
-| CLI-UPD-003 | P0 | `openspec-w update --language zh-CN --json` | config 语言和派生的 OpenSpec context、USER_GUIDE 同步切换；项目 context 不改变。 |
+| CLI-UPD-003 | P0 | `openspec-w update --language zh-CN --json` | Workspace config 语言和 USER_GUIDE 同步切换；项目 context 与 `openspec/` 内容不改变。 |
 | CLI-UPD-004 | P0 | `openspec-w update --tools claude --json` | state tools 改为 Claude；Codex 专属受管资产被清理；Claude 资产存在。 |
 | CLI-UPD-005 | P0 | 再运行 `openspec-w update --json` | 延续 state 中的 Claude，不回退到 manifest 默认。 |
 | CLI-UPD-006 | P0 | 修改受管文件后执行 update，不带 `--force` | `MANAGED_FILE_UNKNOWN`；配置、state 和其他资产不发生部分变化。 |
@@ -383,10 +380,10 @@ openspec-w doctor --json
 | CLI-UPD-008 | P1 | `openspec-w update --tools none --json` | state tools 为空；清理工具专属资产；工具中立资产保留。 |
 | CLI-UPD-009 | P0 | `openspec-w update --tools vscode --json` | `CLI_INVALID_TOOLS`，无文件变化。 |
 | CLI-UPD-010 | P0 | `openspec-w update --language fr-FR --json` | 稳定语言错误，无文件变化。 |
-| CLI-UPD-011 | P1 | 在旧配置副本中删除 language，并提供一致的旧 state/OpenSpec language 后 update | 成功迁移；输出同时包含 Schema、language 和 state-cleanup 步骤。 |
-| CLI-UPD-012 | P0 | 制造旧 state 与 OpenSpec context 语言冲突后 update | `WORKSPACE_LANGUAGE_CONFLICT`；提示显式 `--language`；配置和 state 原样保留。 |
+| CLI-UPD-011 | P1 | 在旧配置副本中删除 language，并在旧 state 提供 `workspaceLanguage` 后 update | 成功迁移；输出同时包含 Schema、language 和 state-cleanup 步骤。 |
+| CLI-UPD-012 | P0 | 让已有 `openspec/config.yaml` 包含与 Workspace 不同的语言文本后 update | 更新成功；该文件不作为语言来源，也不被修改。 |
 | CLI-UPD-013 | P0 | 把 config schemaVersion 改为 `99` 后 update | `CONFIG_SCHEMA_VERSION_UNSUPPORTED`；不能重写未来版本配置。 |
-| CLI-UPD-014 | P1 | 删除临时副本中的一个 OpenSpec 必需目录后 update | 执行上游准备；只有后置条件完整时成功；失败时报告可能保留的上游输出。 |
+| CLI-UPD-014 | P1 | 在没有 `openspec/` 的临时副本中执行 update | 成功；不会补建该目录，也不会调用外部 CLI。 |
 
 ## 6. `language`
 
@@ -473,7 +470,7 @@ openspec-w project list --json
 | CLI-PREM-004 | P0 | 删除不存在项目 | `PROJECT_NOT_FOUND`。 |
 | CLI-PREM-005 | P0 | 制造权限配置冲突后删除项目 | `PROJECT_CONFIGURATION_UPDATE_FAILED`；删除操作回滚。 |
 
-## 10. 准备有效的 OpenSpec change fixture
+## 10. 准备已有 change 记录 fixture
 
 ```sh
 export CHANGE_NAME="manual-auth-change"
@@ -568,7 +565,7 @@ EOF
 
 | ID | P | 操作 | 预期 |
 |---|---:|---|---|
-| CLI-DOC-001 | P0 | `openspec-w doctor --json` | 健康工作区 `ok=true`；data 包含 projects、openspecVersion、tools、capabilities。 |
+| CLI-DOC-001 | P0 | `openspec-w doctor --json` | 健康工作区 `ok=true`；data 包含 projects、tools、capabilities，不包含任何外部 CLI 版本。 |
 | CLI-DOC-002 | P1 | 文本模式 doctor | 健康摘要写 stdout；warning 写 stderr。 |
 | CLI-DOC-003 | P0 | 修改一个受管文件 | `MANAGED_FILE_UNKNOWN` 或对应 outdated 诊断。 |
 | CLI-DOC-004 | P0 | 删除一个受管文件 | `MANAGED_FILE_MISSING`。 |
@@ -578,7 +575,7 @@ EOF
 | CLI-DOC-008 | P0 | schemaVersion `99` | `CONFIG_SCHEMA_VERSION_UNSUPPORTED`，不重写配置。 |
 | CLI-DOC-009 | P0 | 删除 state.json 或把 status 改为 unhealthy | `INIT_STATE_UNHEALTHY`。 |
 | CLI-DOC-010 | P1 | state 的 releaseVersion 与当前包不一致 | `INIT_RELEASE_OUTDATED`。 |
-| CLI-DOC-011 | P1 | state OpenSpec version 与实际命令不一致 | `INIT_OPENSPEC_STATE_MISMATCH`。 |
+| CLI-DOC-011 | P1 | state 含旧版 `resources` 字段 | update 清理旧字段；doctor 不检测任何外部 CLI 版本。 |
 | CLI-DOC-012 | P0 | state tools 仅 Codex，省略 `--tools` 运行 doctor | `data.tools.source="workspace-state"`；不能按 manifest 默认推导 Claude。 |
 | CLI-DOC-013 | P0 | Monitor 启用但 tools 不含 Codex | `MONITOR_CODEX_REQUIRED`。 |
 

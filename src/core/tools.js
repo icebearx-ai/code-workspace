@@ -24,11 +24,11 @@ function resolveWorkspaceTools(options = {}) {
   if (options.explicit !== undefined) {
     return { tools: normalizeTools(options.explicit, "cli"), source: "cli" };
   }
-  const persisted = options.state?.resources?.openspec?.tools;
+  const persisted = options.state?.tools;
   if (persisted !== undefined) {
     return { tools: normalizeTools(persisted, "workspace-state"), source: "workspace-state" };
   }
-  return { tools: normalizeTools(options.manifestTools || [], "manifest"), source: "manifest" };
+  return { tools: normalizeTools(options.manifestTools || SUPPORTED_TOOLS, "manifest"), source: "manifest" };
 }
 
 module.exports = { SUPPORTED_TOOLS, normalizeTools, resolveWorkspaceTools };

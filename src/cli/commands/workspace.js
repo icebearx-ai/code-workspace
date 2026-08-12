@@ -59,7 +59,6 @@ function executeDoctor(invocation) {
   const output = doctorWorkspace(invocation.root, loadInitManifest());
   return fromDiagnostics("doctor", output, {
     projects: output.config.projects.length,
-    openspecVersion: output.detectedOpenSpec.commandVersion,
     tools: output.toolSelection,
     capabilities: output.capabilities,
   }, `OpenSpec Workspace is healthy (${output.config.projects.length} local projects).`);

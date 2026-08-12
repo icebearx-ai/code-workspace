@@ -1,6 +1,6 @@
 const path = require("node:path");
 
-const { cleanupObsoleteAssets, ensureWorkspaceSchemaSelection, planObsoleteAssets } = require("../../core/assets");
+const { cleanupObsoleteAssets, planObsoleteAssets } = require("../../core/assets");
 const {
   configPath,
   loadConfig,
@@ -9,7 +9,7 @@ const {
   statePath,
 } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
-const { commitUpdateState, detectOpenSpec, loadInitManifest, prepareOpenSpec } = require("../../core/init");
+const { commitUpdateState, loadInitManifest } = require("../../core/init");
 const { workspaceGuide } = require("../../core/language");
 const { inspectManagedFiles, installManagedFiles, planManagedFiles } = require("../../core/managed-files");
 const { planWorkspaceMaintenance } = require("../../core/migration");
@@ -17,32 +17,6 @@ const { resolveWorkspaceTools } = require("../../core/tools");
 const { createFileTransaction } = require("../../core/transaction");
 const { success } = require("../result");
 const { migrationData } = require("./init");
-
-function verifyUpdateOpenSpec(root, manifest, state, options = {}) {
-  const expectedVersion = state.resources?.openspec?.version || null;
-  const detected = detectOpenSpec(manifest.resources.openspec, { root, run: options.run });
-  const activeVersion = detected.commandVersion;
-  const compatible = Boolean(
-    detected.globalVersion &&
-    activeVersion &&
-    detected.globalVersion === activeVersion &&
-    manifest.resources.openspec.supportedVersions.includes(activeVersion) &&
-    expectedVersion === activeVersion
-  );
-  if (!compatible) {
-    throw new WorkspaceError(
-      "UPDATE_OPENSPEC_REINITIALIZATION_REQUIRED",
-      "The active OpenSpec installation does not match this initialized workspace; update does not install or switch OpenSpec.",
-      {
-        expectedVersion,
-        detected,
-        supportedVersions: manifest.resources.openspec.supportedVersions,
-        remediation: `Re-run openspec-w init . --openspec-version ${manifest.resources.openspec.selectedVersion} --yes.`,
-      }
-    );
-  }
-  return detected;
-}
 
 function verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables) {
   const inspection = inspectManagedFiles(root, manifest, tools, capabilities, variables);
@@ -72,11 +46,10 @@ function updateWorkspace(root, options = {}) {
       { file: statePath(root), remediation: "Re-run openspec-w init . --yes before updating this workspace." }
     );
   }
-  verifyUpdateOpenSpec(root, manifest, initialState, options);
   const toolSelection = resolveWorkspaceTools({
     explicit: options.tools,
     state: initialState,
-    manifestTools: manifest.resources.openspec.tools,
+    manifestTools: manifest.tools,
   });
   const tools = toolSelection.tools;
   const migration = planWorkspaceMaintenance(root, {
@@ -113,16 +86,6 @@ function updateWorkspace(root, options = {}) {
     ...obsoletePlan.map((plan) => path.join(root, plan.target)),
   ]);
   try {
-    const preparation = prepareOpenSpec(root, manifest.resources.openspec, tools, { run: options.run });
-    if (preparation.action === "init") {
-      transaction.recordExternalEffect({
-        kind: "upstream-command-output",
-        command: "openspec init",
-        targets: preparation.missing.map((file) => path.relative(root, file)),
-        verified: preparation.verified === true,
-      });
-    }
-    options.injectFailure?.("after-preparation", preparation);
     const obsoleteFiles = cleanupObsoleteAssets(root, tools, { force: options.force === true });
     options.injectFailure?.("after-obsolete-cleanup", obsoleteFiles);
     const managedFiles = installManagedFiles(root, manifest, tools, {
@@ -133,18 +96,14 @@ function updateWorkspace(root, options = {}) {
     options.injectFailure?.("after-managed-install", managedFiles);
     saveConfig(root, nextConfig);
     options.injectFailure?.("after-config-save", nextConfig);
-    const schema = ensureWorkspaceSchemaSelection(root);
-    options.injectFailure?.("after-schema-verify", schema);
     verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables);
     const result = {
       language,
       tools: toolSelection,
       migration: migrationData(migration),
-      preparation,
       obsoleteFiles,
       managedFiles,
       forcedUnknown: managedPlan.plans.filter((plan) => plan.reason === "unknown").map((plan) => plan.entry.target),
-      schema,
     };
     options.injectFailure?.("after-verify", result);
     const state = commitUpdateState(root, manifest, {

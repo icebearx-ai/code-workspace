@@ -216,7 +216,7 @@ test("versionless configuration is projected read-only", () => {
 
 test("tool resolution uses cli, workspace state, then manifest precedence", () => {
   const manifestTools = ["claude", "codex"];
-  const state = { resources: { openspec: { tools: ["codex"] } } };
+  const state = { tools: ["codex"] };
   assert.deepEqual(resolveWorkspaceTools({ explicit: "none", state, manifestTools }), { tools: [], source: "cli" });
   assert.deepEqual(resolveWorkspaceTools({ state, manifestTools }), { tools: ["codex"], source: "workspace-state" });
   assert.deepEqual(resolveWorkspaceTools({ manifestTools }), { tools: manifestTools, source: "manifest" });
@@ -613,45 +613,4 @@ test("packaged skills and README files reference registered commands and options
   assert.match(addProjects, /data\.language/);
   assert.match(addProjects, /data\.projectContext/);
   assert.match(addProjects, /`schemaVersion`, `ok`, `command`, `data`, and `diagnostics`/);
-
-  const patchRoot = path.resolve(__dirname, "..", "..", "artifacts", "patches", "openspec", "1.5.0", "outputs");
-  const workflowFiles = (command, skill) => [
-    ["claude", "commands", "opsx", `${command}.md`],
-    ["claude", "skills", skill, "SKILL.md"],
-    ["codex", "skills", skill, "SKILL.md"],
-  ].map((segments) => fs.readFileSync(path.join(patchRoot, ...segments), "utf8"));
-  const workflows = {
-    apply: workflowFiles("apply", "openspec-apply-change"),
-    archive: workflowFiles("archive", "openspec-archive-change"),
-    explore: workflowFiles("explore", "openspec-explore"),
-    propose: workflowFiles("propose", "openspec-propose"),
-  };
-  for (const content of Object.values(workflows).flat()) {
-    assert.doesNotMatch(content, /git -C "<location>" switch/);
-    assert.doesNotMatch(content, /update only that project's `branch` field/);
-  }
-  for (const content of workflows.apply) {
-    assert.match(content, /planningHome\.kind: "repo"/);
-    assert.match(content, /context --change "<name>" --json/);
-    assert.match(content, /project verify "<project-name>" --json/);
-    assert.match(content, /openspec-workspace-resolve-branch/);
-  }
-  for (const content of workflows.archive) {
-    assert.match(content, /planningHome\.kind: "repo"/);
-    assert.match(content, /change validate "<name>" --require-main-specs --json/);
-    assert.doesNotMatch(content, /project verify --json/);
-  }
-  for (const content of workflows.explore) {
-    assert.match(content, /project list --json/);
-    assert.match(content, /project verify "<project-name>" --json/);
-    assert.match(content, /openspec-workspace-resolve-branch/);
-    assert.doesNotMatch(content, /project verify --json/);
-  }
-  for (const content of workflows.propose) {
-    assert.match(content, /planningHome\.kind: "repo"/);
-    assert.match(content, /project list --json/);
-    assert.match(content, /project verify "<project-name>" --json/);
-    assert.match(content, /untranslated protocol tokens/);
-    assert.doesNotMatch(content, /project verify --json/);
-  }
 });

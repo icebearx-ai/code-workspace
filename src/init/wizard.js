@@ -3,19 +3,15 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
 const { DEFAULT_MONITOR_URL, DEFAULT_WORKSPACE_NAME, configPath, loadConfig } = require("../core/config");
-const { detectOpenSpec } = require("../core/init");
 const { DEFAULT_WORKSPACE_LANGUAGE, SUPPORTED_LANGUAGES, resolveWorkspaceLanguage } = require("../core/language");
 const { createInitPlan } = require("./plan");
 const { createInteractiveUi } = require("./ui");
 
 async function collectInitPlan(root, manifest, options = {}) {
   const ui = options.ui || await createInteractiveUi(options);
-  const openspec = manifest.resources.openspec;
-  const detected = detectOpenSpec(openspec, { root, run: options.run });
   ui.intro();
   ui.note("Environment", [
     `Node.js ${options.nodeVersion || process.versions.node}`,
-    detected.commandVersion ? `OpenSpec ${detected.commandVersion} detected` : "OpenSpec not installed",
     `Target ${root}`,
   ]);
 
@@ -36,19 +32,6 @@ async function collectInitPlan(root, manifest, options = {}) {
     languageChoices,
     Math.max(0, languageChoices.findIndex((entry) => entry.value === existingLanguage))
   );
-  const versionChoices = openspec.supportedVersions.map((version) => ({
-    value: version,
-    label: [version, version === openspec.selectedVersion ? "Recommended" : "", version === detected.commandVersion ? "Installed" : ""].filter(Boolean).join(" · "),
-  }));
-  const requestedVersion = options.openspecVersion;
-  if (requestedVersion && !openspec.supportedVersions.includes(requestedVersion)) {
-    throw new Error(`Unsupported OpenSpec version ${requestedVersion}; choose ${openspec.supportedVersions.join(", ")}`);
-  }
-  const initialVersion = requestedVersion && openspec.supportedVersions.includes(requestedVersion)
-    ? openspec.supportedVersions.indexOf(requestedVersion)
-    : Math.max(0, openspec.supportedVersions.indexOf(openspec.selectedVersion));
-  const selectedVersion = requestedVersion || await ui.select("OpenSpec version", versionChoices, initialVersion);
-
   const toolChoices = [
     { value: "claude", label: "Claude Code" },
     { value: "codex", label: "Codex" },
@@ -65,13 +48,9 @@ async function collectInitPlan(root, manifest, options = {}) {
     url: options.monitorUrl || existing?.monitor?.url || DEFAULT_MONITOR_URL,
   };
   const workspace = existing?.workspace || { name, uuid: randomUUID() };
-  const plan = createInitPlan({ root, workspace, detected, selectedVersion, tools, monitor, language });
-  const transition = plan.openspec.action === "skip"
-    ? `${selectedVersion} · already installed`
-    : `${plan.openspec.detectedVersion || "not installed"} → ${selectedVersion} · global npm package`;
+  const plan = createInitPlan({ root, workspace, tools, monitor, language });
   ui.note("Ready to initialize", [
     `Workspace  ${workspace.name}`,
-    `OpenSpec   ${transition}`,
     `Language   ${language}`,
     `Tools      ${tools.length ? tools.join(", ") : "none"}`,
     `Monitor    ${monitor.enable ? monitor.url : "disabled"}`,

@@ -2,7 +2,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const { saveState } = require("../core/config");
@@ -13,55 +12,46 @@ const {
   installManagedFiles,
   loadManagedManifest,
 } = require("../core/managed-files");
-const { checkPatchSource } = require("../../scripts/check-patches");
 const { workspaceGuide } = require("../core/language");
 
 function baseline(tools = ["claude", "codex"]) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "managed-files-"));
-  const result = spawnSync("openspec", [
-    "init",
-    ".",
-    "--tools",
-    tools.join(","),
-    "--profile",
-    "core",
-  ], { cwd: root, encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
-  return root;
+  void tools;
+  return fs.mkdtempSync(path.join(os.tmpdir(), "managed-files-"));
 }
 
-test("templates and patch outputs share one idempotent managed-file mechanism", () => {
+test("workspace-owned templates use one idempotent managed-file mechanism", () => {
   const root = baseline();
   const manifest = loadInitManifest();
   const first = installManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(first.length, 26);
-  assert.equal(first.filter((entry) => entry.action === "write").length, 26);
+  assert.equal(first.length, 8);
+  assert.equal(first.filter((entry) => entry.action === "write").length, 8);
 
   const second = installManagedFiles(root, manifest, ["claude", "codex"]);
   assert.equal(second.filter((entry) => entry.action === "write").length, 0);
   const inspected = inspectManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(inspected.current.length, 26);
+  assert.equal(inspected.current.length, 8);
   assert.deepEqual(inspected.managedOld, []);
   assert.deepEqual(inspected.replaceable, []);
   assert.deepEqual(inspected.unknown, []);
   assert(inspected.files.some((entry) => entry.provenance.kind === "template"));
-  assert(inspected.files.some((entry) => entry.provenance.kind === "patch"));
+  assert(!inspected.files.some((entry) => entry.provenance.kind === "patch"));
 });
 
 test("managed-file planning prevents partial writes when one target is unknown", () => {
   const root = baseline();
   const manifest = loadInitManifest();
-  const firstTarget = path.join(root, ".claude", "commands", "opsx", "apply.md");
-  const firstBaseline = fs.readFileSync(firstTarget, "utf8");
-  const unknownTarget = path.join(root, ".codex", "skills", "openspec-propose", "SKILL.md");
+  installManagedFiles(root, manifest, ["claude", "codex"]);
+  const firstTarget = path.join(root, ".claude", "commands", "opswx", "add-projects.md");
+  fs.unlinkSync(firstTarget);
+  const unknownTarget = path.join(root, ".codex", "skills", "openspec-workspace-add-projects", "SKILL.md");
   fs.appendFileSync(unknownTarget, "\nunknown local edit\n");
 
   assert.throws(
     () => installManagedFiles(root, manifest, ["claude", "codex"]),
     /Managed file contains unknown changes/
   );
-  assert.equal(fs.readFileSync(firstTarget, "utf8"), firstBaseline);
-  assert(!fs.existsSync(path.join(root, ".codex", "skills", "openspec-workspace-add-projects", "SKILL.md")));
+  assert(!fs.existsSync(firstTarget));
+  assert.match(fs.readFileSync(unknownTarget, "utf8"), /unknown local edit/);
 });
 
 test("a previous installed fingerprint is a safe generic upgrade input", () => {
@@ -88,11 +78,11 @@ test("a previous installed fingerprint is a safe generic upgrade input", () => {
   assert.equal(sha256(fs.readFileSync(target)), entry.desired.sha256);
 });
 
-test("managed files respect selected tools while tool-neutral schema files remain managed", () => {
+test("managed files respect selected tools while the user guide remains tool-neutral", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const result = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(result.length, 14);
+  assert.equal(result.length, 4);
   assert(!result.some((entry) => entry.target.startsWith(".claude/")));
   assert(!result.some((entry) => entry.target === "CLAUDE.md"));
   assert(result.some((entry) => entry.target === "AGENTS.md"));
@@ -100,7 +90,7 @@ test("managed files respect selected tools while tool-neutral schema files remai
   assert(result.some((entry) => entry.target === ".codex/skills/openspec-workspace-resolve-branch/SKILL.md"));
   assert(result.some((entry) => entry.target === "USER_GUIDE.md"));
   assert(!result.some((entry) => entry.target === "USER_GUIDE.zh-CN.md"));
-  assert(result.some((entry) => entry.target === "openspec/schemas/workspace-workflow/schema.yaml"));
+  assert(!result.some((entry) => entry.target.startsWith("openspec/")));
 });
 
 test("changing the selected tools removes previously managed tool assets", () => {
@@ -130,11 +120,11 @@ test("Codex monitor hooks are capability-gated and idempotent", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const disabled = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(disabled.length, 14);
+  assert.equal(disabled.length, 4);
   assert(!fs.existsSync(path.join(root, ".codex", "hooks.json")));
 
   const enabled = installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] });
-  assert.equal(enabled.length, 15);
+  assert.equal(enabled.length, 5);
   assert.equal(enabled.find((entry) => entry.target === ".codex/hooks.json").action, "write");
   const repeated = installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] });
   assert.equal(repeated.find((entry) => entry.target === ".codex/hooks.json").action, "skip");
@@ -192,40 +182,6 @@ test("manifest-owned render values must be declared strings", () => {
   } finally {
     fs.unlinkSync(file);
   }
-});
-
-test("compiled patch outputs match the reviewed patch and generated OpenSpec baseline", () => {
-  const manifest = loadInitManifest();
-  assert.deepEqual(
-    manifest.sources.filter((source) => source.kind === "patch").map((source) => checkPatchSource(manifest, source)),
-    [12, 1]
-  );
-});
-
-test("compiled OpenSpec workflows preserve Workspace safety boundaries", () => {
-  const root = path.resolve(__dirname, "..", "..", "artifacts", "patches", "openspec", "1.5.0", "outputs");
-  const files = [
-    ["claude", "commands", "opsx", "apply.md"],
-    ["claude", "commands", "opsx", "archive.md"],
-    ["claude", "commands", "opsx", "explore.md"],
-    ["claude", "commands", "opsx", "propose.md"],
-    ["claude", "skills", "openspec-apply-change", "SKILL.md"],
-    ["claude", "skills", "openspec-archive-change", "SKILL.md"],
-    ["claude", "skills", "openspec-explore", "SKILL.md"],
-    ["claude", "skills", "openspec-propose", "SKILL.md"],
-    ["codex", "skills", "openspec-apply-change", "SKILL.md"],
-    ["codex", "skills", "openspec-archive-change", "SKILL.md"],
-    ["codex", "skills", "openspec-explore", "SKILL.md"],
-    ["codex", "skills", "openspec-propose", "SKILL.md"],
-  ];
-  const contents = files.map((segments) => fs.readFileSync(path.join(root, ...segments), "utf8"));
-  for (const content of contents) {
-    assert.doesNotMatch(content, /git -C "<location>" switch/);
-    assert.doesNotMatch(content, /update only that project's `branch` field/);
-  }
-  assert(contents.filter((content) => /openspec-workspace-resolve-branch/.test(content)).length >= 9);
-  assert(contents.filter((content) => /planningHome\.kind: "repo"/.test(content)).length >= 9);
-  assert(contents.filter((content) => /change validate "<name>" --require-main-specs --json/.test(content)).length === 3);
 });
 
 test("the unified manifest rejects passive source fingerprint changes before installation", () => {

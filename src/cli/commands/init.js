@@ -4,7 +4,6 @@ const { loadState } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const { compareVersions, loadInitManifest, minimumFromRange, runCommand } = require("../../core/init");
 const { initializeWorkspace } = require("../../core/initializer");
-const { workspaceGuide } = require("../../core/language");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { collectInitPlan } = require("../../init/wizard");
 const { success } = require("../result");
@@ -45,7 +44,7 @@ async function executeInit(invocation) {
   const resolvedTools = resolveWorkspaceTools({
     explicit: options.tools,
     state: existingState,
-    manifestTools: manifest.resources.openspec.tools,
+    manifestTools: manifest.tools,
   });
   const interactive = !options.json && !options.yes && process.stdin.isTTY && process.stdout.isTTY;
   let plan = null;
@@ -55,7 +54,6 @@ async function executeInit(invocation) {
         run,
         tools: options.tools !== undefined ? resolvedTools.tools : undefined,
         initialTools: resolvedTools.tools,
-        openspecVersion: options["openspec-version"],
         workspaceName: options["workspace-name"],
         monitor: options.monitor === true ? true : options["no-monitor"] === true ? false : undefined,
         monitorUrl: options["monitor-url"],
@@ -70,13 +68,11 @@ async function executeInit(invocation) {
   }
   const tools = plan?.tools || resolvedTools.tools;
   const toolSelection = { tools, source: plan ? (options.tools !== undefined ? "cli" : "interactive") : resolvedTools.source };
-  const requestedVersion = plan?.openspec.selectedVersion || options["openspec-version"] || (options.yes ? manifest.resources.openspec.selectedVersion : undefined);
   const result = await initializeWorkspace(root, {
     run,
     tools,
     force: options.force === true,
     yes: plan ? true : options.yes === true,
-    openspecVersion: requestedVersion,
     workspaceName: plan?.workspace.name || options["workspace-name"],
     workspaceUuid: plan?.workspace.uuid,
     monitor: plan?.monitor.enable ?? (options.monitor === true ? true : options["no-monitor"] === true ? false : undefined),
@@ -90,12 +86,9 @@ async function executeInit(invocation) {
     root: result.root,
     releaseVersion: result.manifest.releaseVersion,
     nodeVersion: result.nodeVersion,
-    openspec: result.openspecResult,
     dependencies: result.dependencies,
-    preparation: result.openSpecPreparation,
     obsoleteFiles: result.obsoleteFiles,
     managedFiles: result.managedFiles,
-    schema: result.schema,
     localConfig: result.localConfig,
     workspace: result.workspaceConfig.workspace,
     monitor: result.workspaceConfig.monitor,

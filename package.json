@@ -1,7 +1,7 @@
 {
   "name": "@icebearx-ai/openspec-workspace",
   "version": "0.1.0-beta.11",
-  "description": "OpenSpec extension for local multi-project and cross-project AI coding workflows",
+  "description": "Local multi-project registry and safety layer for AI coding workspaces",
   "author": "icebearx-ai",
   "license": "MIT",
   "main": "src/index.js",
@@ -32,19 +32,14 @@
   },
   "scripts": {
     "test": "node --test src/__test__/*.test.js",
-    "check": "npm test && npm run cli:architecture-check && npm run patches:check && npm run pack:check",
+    "check": "npm test && npm run cli:architecture-check && npm run pack:check",
     "cli:architecture-check": "node scripts/check-cli-architecture.js",
-    "patches:build": "node scripts/build-patches.js",
     "pack:check": "npm pack --dry-run",
-    "patches:check": "node scripts/check-patches.js",
     "cli": "node bin/openspec-workspace.js",
     "prepublishOnly": "npm run check"
   },
   "dependencies": {
     "@clack/prompts": "^1.7.0",
     "js-yaml": "^5.2.2"
-  },
-  "devDependencies": {
-    "diff": "^9.0.0"
   }
 }

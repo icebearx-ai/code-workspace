@@ -3,7 +3,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const readline = require("node:readline/promises");
 
-const { cleanupObsoleteAssets, ensureWorkspaceSchemaSelection, OBSOLETE_ASSETS } = require("./assets");
+const { cleanupObsoleteAssets, OBSOLETE_ASSETS } = require("./assets");
 const {
   DEFAULT_MONITOR_URL,
   DEFAULT_WORKSPACE_NAME,
@@ -19,11 +19,9 @@ const {
   MANIFEST_FILE,
   commitInitializationState,
   compareVersions,
-  ensureOpenSpec,
   installWorkspaceDependencies,
   loadInitManifest,
   minimumFromRange,
-  prepareOpenSpec,
   runCommand,
 } = require("./init");
 const { syncPermissions } = require("./permissions");
@@ -36,12 +34,9 @@ const { validateProjects } = require("./validation");
 const INITIALIZATION_STAGE_IDS = Object.freeze({
   "Configure workspace identity": "configure-workspace",
   "Validate manifest": "validate-manifest",
-  "Check OpenSpec": "check-openspec",
   "Install workspace dependencies": "install-dependencies",
-  "Prepare OpenSpec initialization": "prepare-openspec",
   "Remove obsolete managed files": "cleanup-obsolete",
   "Install managed files": "install-managed-files",
-  "Select OpenSpec Workspace schema": "verify-schema",
   "Prepare local workspace configuration": "save-config",
   "Synchronize Codex workspace permissions": "sync-permissions",
   "Run strict workspace doctor": "strict-doctor",
@@ -123,19 +118,6 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     throw new Error(`Node ${minimumNode} or newer is required; found ${nodeVersion}`);
   }
 
-  const openspecResult = await stage("Check OpenSpec", () => ensureOpenSpec(manifest.resources.openspec, {
-    root,
-    run,
-    yes: options.yes,
-    openspecVersion: options.openspecVersion,
-    interactive: options.interactive,
-    input: options.input,
-    output: options.output,
-  }));
-  if (openspecResult.action === "install") {
-    options.transaction?.recordExternalEffect({ kind: "global-package", name: "OpenSpec", version: openspecResult.version, verified: true });
-  }
-
   const dependencies = await stage("Install workspace dependencies", () =>
     installWorkspaceDependencies(root, { run })
   );
@@ -145,18 +127,6 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
       name: "workspace dependencies",
       targets: dependencies.retainedPaths,
       verified: dependencies.verified === true,
-    });
-  }
-
-  const openSpecPreparation = await stage("Prepare OpenSpec initialization", () =>
-    prepareOpenSpec(root, manifest.resources.openspec, options.tools, { run })
-  );
-  if (openSpecPreparation.action === "init") {
-    options.transaction?.recordExternalEffect({
-      kind: "upstream-command-output",
-      command: "openspec init",
-      targets: openSpecPreparation.missing.map((file) => path.relative(root, file)),
-      verified: openSpecPreparation.verified === true,
     });
   }
 
@@ -170,10 +140,6 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
       capabilities,
       variables: { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) },
     })
-  );
-
-  const schema = await stage("Select OpenSpec Workspace schema", () =>
-    ensureWorkspaceSchemaSelection(root)
   );
 
   const localConfig = await stage("Prepare local workspace configuration", () => {
@@ -207,9 +173,7 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   const state = await stage("Commit local initialization state", () =>
     commitInitializationState(root, manifest, {
       manifestFile: options.manifestFile || MANIFEST_FILE,
-      openspecVersion: openspecResult.version,
       tools: options.tools,
-      profile: manifest.resources.openspec.profile,
       language,
     })
   );
@@ -226,12 +190,9 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     nodeVersion,
     language,
     migration,
-    openspecResult,
     dependencies,
-    openSpecPreparation,
     obsoleteFiles,
     managedFiles,
-    schema,
     localConfig,
     workspaceConfig: config,
     permissions,

@@ -2,7 +2,6 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const { loadConfig, saveConfig } = require("../core/config");
@@ -20,23 +19,13 @@ function temporaryRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "openspec-runtime-failure-"));
 }
 
-function detectionRun() {
-  return (command, args) => {
-    if (command === "npm" && args[0] === "list") {
-      return { status: 0, stdout: JSON.stringify({ dependencies: { "@fission-ai/openspec": { version: "1.5.0" } } }) };
-    }
-    if (command === "openspec" && args[0] === "--version") return { status: 0, stdout: "1.5.0" };
-    throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
-  };
+function forbiddenRun(command, args = []) {
+  throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
 }
 
-function prepareBaseline(root, language = "zh-CN") {
+function prepareBaseline(root) {
   fs.mkdirSync(path.join(root, "openspec", "specs"), { recursive: true });
-  fs.mkdirSync(path.join(root, "openspec", "changes", "archive"), { recursive: true });
-  const desired = fs.readFileSync(
-    path.resolve(__dirname, "..", "..", "artifacts", "patches", "openspec", "1.5.0", "outputs", "openspec", "config.yaml"),
-    "utf8"
-  ).replace("{{WORKSPACE_LANGUAGE}}", language);
+  const desired = "schema: user-owned\n";
   fs.writeFileSync(path.join(root, "openspec", "config.yaml"), desired);
   return desired;
 }
@@ -50,9 +39,7 @@ test("init restores tracked workspace state after every stable stage", async () 
       nodeVersion: "24.0.0",
       tools: [],
       interactive: false,
-      openspecVersion: "1.5.0",
-      yes: true,
-      run: detectionRun(),
+      run: forbiddenRun,
       injectFailure: (current) => {
         if (current === stageId) throw new Error(`injected ${stageId}`);
       },
@@ -75,9 +62,7 @@ test("update restores config, state, and managed files after each apply stage", 
     nodeVersion: "24.0.0",
     tools: [],
     interactive: false,
-    openspecVersion: "1.5.0",
-    yes: true,
-    run: detectionRun(),
+    run: forbiddenRun,
     language: "zh-CN",
   });
   const stateFile = path.join(root, ".openspec-workspace", "state.json");
@@ -93,12 +78,10 @@ test("update restores config, state, and managed files after each apply stage", 
   ];
   const baseline = new Map(files.map((file) => [file, fs.readFileSync(file)]));
   const stages = [
-    "after-preparation",
     "after-obsolete-cleanup",
     "after-managed-install",
     "after-config-save",
     "after-state-save",
-    "after-schema-verify",
     "after-verify",
   ];
   for (const stageId of stages) {
@@ -106,7 +89,7 @@ test("update restores config, state, and managed files after each apply stage", 
     assert.throws(() => updateWorkspace(root, {
       tools: "none",
       language: "en-US",
-      run: detectionRun(),
+      run: forbiddenRun,
       injectFailure: (current) => {
         if (current === stageId) throw new Error(`injected ${stageId}`);
       },
@@ -122,20 +105,11 @@ test("update restores config, state, and managed files after each apply stage", 
 test("update rolls back the AGENT.md to AGENTS.md migration as one transaction", async () => {
   const root = temporaryRoot();
   prepareBaseline(root);
-  const nativeRoot = temporaryRoot();
-  const generated = spawnSync("openspec", ["init", ".", "--tools", "codex", "--profile", "core"], {
-    cwd: nativeRoot,
-    encoding: "utf8",
-  });
-  assert.equal(generated.status, 0, generated.stderr);
-  fs.cpSync(path.join(nativeRoot, ".codex"), path.join(root, ".codex"), { recursive: true });
   await initializeWorkspace(root, {
     nodeVersion: "24.0.0",
     tools: ["codex"],
     interactive: false,
-    openspecVersion: "1.5.0",
-    yes: true,
-    run: detectionRun(),
+    run: forbiddenRun,
     language: "zh-CN",
   });
   const stateFile = path.join(root, ".openspec-workspace", "state.json");
@@ -154,7 +128,7 @@ test("update rolls back the AGENT.md to AGENTS.md migration as one transaction",
   let failure;
   assert.throws(() => updateWorkspace(root, {
     tools: "codex",
-    run: detectionRun(),
+    run: forbiddenRun,
     injectFailure: (stage) => {
       if (stage === "after-managed-install") throw new Error("injected migration failure");
     },
@@ -175,9 +149,7 @@ test("update verifies managed-file postconditions before committing release stat
     nodeVersion: "24.0.0",
     tools: [],
     interactive: false,
-    openspecVersion: "1.5.0",
-    yes: true,
-    run: detectionRun(),
+    run: forbiddenRun,
     language: "zh-CN",
   });
   const files = [
@@ -192,7 +164,7 @@ test("update verifies managed-file postconditions before committing release stat
   assert.throws(() => updateWorkspace(root, {
     tools: "none",
     language: "en-US",
-    run: detectionRun(),
+    run: forbiddenRun,
     injectFailure: (stage) => {
       if (stage === "after-managed-install" && !injected) {
         injected = true;
@@ -211,9 +183,7 @@ test("update commits release metadata while preserving initialized workspace sta
     nodeVersion: "24.0.0",
     tools: [],
     interactive: false,
-    openspecVersion: "1.5.0",
-    yes: true,
-    run: detectionRun(),
+    run: forbiddenRun,
     language: "zh-CN",
   });
 
@@ -235,21 +205,19 @@ test("update commits release metadata while preserving initialized workspace sta
   delete previous.appliedManifestSha256;
   previous.workspaceLanguage = "zh-CN";
   previous.customState = { preserve: true };
-  previous.resources.other = { preserve: true };
+  previous.resources = { legacy: { preserve: true } };
   fs.writeFileSync(stateFile, `${JSON.stringify(previous, null, 2)}\n`);
 
   const manifest = loadInitManifest();
-  const result = updateWorkspace(root, { run: detectionRun() });
+  const result = updateWorkspace(root, { run: forbiddenRun });
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   assert.equal(state.appliedReleaseVersion, manifest.releaseVersion);
   assert.equal(state.appliedManifestSha256, sha256(fs.readFileSync(MANIFEST_FILE)));
   assert.equal(state.status, "healthy");
   assert.equal(state.workspaceLanguage, undefined);
   assert.deepEqual(state.customState, { preserve: true });
-  assert.deepEqual(state.resources.other, { preserve: true });
-  assert.equal(state.resources.openspec.version, "1.5.0");
-  assert.equal(state.resources.openspec.profile, manifest.resources.openspec.profile);
-  assert.deepEqual(state.resources.openspec.tools, []);
+  assert.equal(state.resources, undefined);
+  assert.deepEqual(state.tools, []);
   assert.deepEqual(state.managedFiles, expectedManagedFiles);
   assert.deepEqual(loadConfig(root).projects, expectedProjects);
   assert.equal(loadConfig(root).workspace.uuid, config.workspace.uuid);
@@ -257,7 +225,7 @@ test("update commits release metadata while preserving initialized workspace sta
   assert.deepEqual(result.tools, { tools: [], source: "workspace-state" });
 
   const committed = fs.readFileSync(stateFile);
-  updateWorkspace(root, { run: detectionRun() });
+  updateWorkspace(root, { run: forbiddenRun });
   assert.deepEqual(fs.readFileSync(stateFile), committed);
 });
 
@@ -268,9 +236,7 @@ test("update clears the release mismatch reported by doctor", async () => {
     nodeVersion: "24.0.0",
     tools: [],
     interactive: false,
-    openspecVersion: "1.5.0",
-    yes: true,
-    run: detectionRun(),
+    run: forbiddenRun,
     language: "zh-CN",
   });
   const stateFile = path.join(root, ".openspec-workspace", "state.json");
@@ -280,11 +246,11 @@ test("update clears the release mismatch reported by doctor", async () => {
   fs.writeFileSync(stateFile, `${JSON.stringify(previous, null, 2)}\n`);
 
   const manifest = loadInitManifest();
-  const before = doctorWorkspace(root, manifest, { run: detectionRun() });
+  const before = doctorWorkspace(root, manifest, { run: forbiddenRun });
   assert(before.diagnostics.some((entry) => entry.code === "INIT_RELEASE_OUTDATED"));
 
-  updateWorkspace(root, { run: detectionRun() });
-  const after = doctorWorkspace(root, manifest, { run: detectionRun() });
+  updateWorkspace(root, { run: forbiddenRun });
+  const after = doctorWorkspace(root, manifest, { run: forbiddenRun });
   assert.equal(after.diagnostics.some((entry) => entry.code === "INIT_RELEASE_OUTDATED"), false);
   assert.deepEqual(after.errors, []);
 });
@@ -296,9 +262,7 @@ test("update never manufactures a healthy state and rejects missing initializati
     nodeVersion: "24.0.0",
     tools: [],
     interactive: false,
-    openspecVersion: "1.5.0",
-    yes: true,
-    run: detectionRun(),
+    run: forbiddenRun,
     language: "zh-CN",
   });
   const stateFile = path.join(root, ".openspec-workspace", "state.json");
@@ -307,49 +271,17 @@ test("update never manufactures a healthy state and rejects missing initializati
   unhealthy.appliedReleaseVersion = "0.1.0-beta.10";
   fs.writeFileSync(stateFile, `${JSON.stringify(unhealthy, null, 2)}\n`);
 
-  updateWorkspace(root, { run: detectionRun() });
+  updateWorkspace(root, { run: forbiddenRun });
   const updated = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   assert.equal(updated.status, "needs-repair");
   assert.equal(updated.appliedReleaseVersion, loadInitManifest().releaseVersion);
 
   fs.unlinkSync(stateFile);
   assert.throws(
-    () => updateWorkspace(root, { run: detectionRun() }),
+    () => updateWorkspace(root, { run: forbiddenRun }),
     (error) => error.code === "UPDATE_STATE_MISSING" && /openspec-w init/.test(error.details.remediation)
   );
   assert.equal(fs.existsSync(stateFile), false);
-});
-
-test("update requires init when the active OpenSpec version no longer matches state", async () => {
-  const root = temporaryRoot();
-  prepareBaseline(root);
-  await initializeWorkspace(root, {
-    nodeVersion: "24.0.0",
-    tools: [],
-    interactive: false,
-    openspecVersion: "1.5.0",
-    yes: true,
-    run: detectionRun(),
-    language: "zh-CN",
-  });
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
-  const stateBefore = fs.readFileSync(stateFile);
-  const configFile = path.join(root, ".openspec-workspace", "config.yaml");
-  const configBefore = fs.readFileSync(configFile);
-  const mismatchedRun = (command, args) => {
-    if (command === "npm" && args[0] === "list") {
-      return { status: 0, stdout: JSON.stringify({ dependencies: { "@fission-ai/openspec": { version: "1.4.0" } } }) };
-    }
-    if (command === "openspec" && args[0] === "--version") return { status: 0, stdout: "1.4.0" };
-    throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
-  };
-
-  assert.throws(
-    () => updateWorkspace(root, { run: mismatchedRun }),
-    (error) => error.code === "UPDATE_OPENSPEC_REINITIALIZATION_REQUIRED" && /openspec-w init/.test(error.details.remediation)
-  );
-  assert.deepEqual(fs.readFileSync(stateFile), stateBefore);
-  assert.deepEqual(fs.readFileSync(configFile), configBefore);
 });
 
 test("project configuration restores config and permissions at each write boundary", () => {

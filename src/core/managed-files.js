@@ -70,9 +70,8 @@ function loadManagedManifest(file = MANIFEST_FILE) {
   if (manifest.releaseVersion !== packageJson.version) {
     throw new Error(`Manifest release ${manifest.releaseVersion} does not match package ${packageJson.version}`);
   }
-  const openspec = manifest.resources?.openspec;
-  if (!openspec || !Array.isArray(openspec.supportedVersions) || !openspec.supportedVersions.includes(openspec.selectedVersion)) {
-    throw new Error("Managed files manifest contains an invalid OpenSpec resource");
+  if (!Array.isArray(manifest.tools) || manifest.tools.length === 0 || manifest.tools.some((tool) => !["claude", "codex"].includes(tool))) {
+    throw new Error("Managed files manifest contains invalid default tools");
   }
   if (!Array.isArray(manifest.managedFiles) || manifest.managedFiles.length === 0) {
     throw new Error("Managed files manifest contains no managed files");
@@ -80,7 +79,7 @@ function loadManagedManifest(file = MANIFEST_FILE) {
 
   const sourceIds = new Set();
   for (const source of manifest.sources || []) {
-    if (!source.id || sourceIds.has(source.id) || !["patch", "asset"].includes(source.kind) || !source.path || !/^[a-f0-9]{64}$/.test(source.sha256 || "")) {
+    if (!source.id || sourceIds.has(source.id) || source.kind !== "asset" || !source.path || !/^[a-f0-9]{64}$/.test(source.sha256 || "")) {
       throw new Error(`Invalid or duplicate artifact source: ${source.id || "<missing>"}`);
     }
     sourceIds.add(source.id);
