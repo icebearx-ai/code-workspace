@@ -2,10 +2,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const yaml = require("js-yaml");
 
-const { configPath, loadConfigProjection, saveConfig, updateProjectBranch } = require("../../core/config");
+const { configPath, loadConfigProjection, updateProjectBranch } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
-const { syncPermissions } = require("../../core/permissions");
+const { formatPermissionPlan, planPermissionChanges } = require("../../core/permissions");
 const { inspectGitWorktree, inspectProject } = require("../../core/project");
+const { applyProjectConfiguration, projectPermissionTools } = require("../../core/project-configuration");
 const { createFileTransaction } = require("../../core/transaction");
 const { validateProject, validateProjects } = require("../../core/validation");
 const { confirm } = require("../confirmation");
@@ -24,25 +25,6 @@ function assertNoProjectConflict(config, project) {
   if (!conflict) return;
   if (PROJECT_FIELDS.every((field) => conflict[field] === project[field])) return "skip";
   throw projectError("PROJECT_CONFLICT", `Project conflicts with existing local entry: ${conflict.name}`, { project: project.name, conflict: conflict.name });
-}
-
-function applyProjectConfiguration(root, nextConfig, options = {}) {
-  const transaction = createFileTransaction([configPath(root), path.join(root, ".codex", "config.toml")]);
-  try {
-    (options.saveConfig || saveConfig)(root, nextConfig);
-    options.injectFailure?.("after-config-save");
-    const permissions = (options.syncPermissions || syncPermissions)(root, nextConfig.projects);
-    options.injectFailure?.("after-permissions-sync");
-    transaction.commit();
-    return permissions;
-  } catch (error) {
-    transaction.rollback(error);
-    throw new WorkspaceError(
-      "PROJECT_CONFIGURATION_UPDATE_FAILED",
-      `Project configuration update rolled back: ${error.message}`,
-      { ...(error.details || {}), cause: error.code || error.name }
-    );
-  }
 }
 
 function planProjectBranchSync(config, name, options = {}) {
@@ -258,22 +240,34 @@ async function executeProject(invocation) {
     const next = { ...config, projects: planned };
     const output = validateProjects(root, next);
     if (output.errors.length > 0) return fromDiagnostics(command, output, { projects: additions, skipped });
+    const toolSelection = projectPermissionTools(root, options);
+    const permissionPlan = planPermissionChanges({
+      root,
+      tools: toolSelection.tools,
+      grants: additions.map((project) => project.location),
+    }, options.dependencies);
     const names = additions.map((project) => project.name).join(", ");
-    if (!(await confirm(`Add local project${additions.length === 1 ? "" : "s"} ${names}?`, options))) {
+    if (!(await confirm(`Add local project${additions.length === 1 ? "" : "s"} ${names}?\n${formatPermissionPlan(permissionPlan)}`, options))) {
       throw projectError("CLI_CANCELLED", "Project addition cancelled.");
     }
-    const permissions = applyProjectConfiguration(root, next, options.dependencies);
-    return success(command, { action: "add", project: additions.length === 1 ? additions[0] : null, projects: additions, skipped, permissions },
+    const permissions = applyProjectConfiguration(root, next, permissionPlan, options.dependencies);
+    return success(command, { action: "add", project: additions.length === 1 ? additions[0] : null, projects: additions, skipped, permissions, toolSelection },
       [...additions.map((project) => `Added local project: ${project.name}`), ...skipped.map((project) => `Project already current: ${project.name}`)].join("\n"));
   }
   if (action === "remove") {
     const name = args[0];
     const existing = config.projects.find((entry) => entry.name === name);
     if (!existing) throw projectError("PROJECT_NOT_FOUND", `Unknown local project: ${name}`, { project: name });
-    if (!(await confirm(`Remove local project ${name}?`, options))) throw projectError("CLI_CANCELLED", "Project removal cancelled.");
     const next = { ...config, projects: config.projects.filter((entry) => entry.name !== name) };
-    const permissions = applyProjectConfiguration(root, next, options.dependencies);
-    return success(command, { action: "remove", project: existing, permissions }, `Removed local project: ${name}`);
+    const toolSelection = projectPermissionTools(root, options);
+    const permissionPlan = planPermissionChanges({
+      root,
+      tools: toolSelection.tools,
+      revokes: [existing.location],
+    }, options.dependencies);
+    if (!(await confirm(`Remove local project ${name}?\n${formatPermissionPlan(permissionPlan)}`, options))) throw projectError("CLI_CANCELLED", "Project removal cancelled.");
+    const permissions = applyProjectConfiguration(root, next, permissionPlan, options.dependencies);
+    return success(command, { action: "remove", project: existing, permissions, toolSelection }, `Removed local project: ${name}`);
   }
   throw projectError("CLI_UNKNOWN_COMMAND", `Unknown project command: ${action || "<missing>"}`);
 }
@@ -286,4 +280,5 @@ module.exports = {
   normalizeProjectRecord,
   planProjectBranchSync,
   projectRecordsFromInput,
+  projectPermissionTools,
 };

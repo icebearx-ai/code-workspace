@@ -74,13 +74,15 @@ code-w doctor
 # Update all managed files
 code-w update
 
-# Synchronize Codex writable project roots
-code-w sync
+# Apply Agent project directory authorization
+code-w permissions apply --yes
 
 # Validate local projects
 code-w project verify
 code-w project verify <project-name>
 ```
+
+Directory access is authorized by the user. Code Workspace shows the requested changes, applies and verifies them, and reports the result. `permissions apply` grants missing registered-project access without revoking additional directories. Ordinary `update` does not change authorization.
 
 Add `--json` when a query result is consumed by Codex or a script.
 

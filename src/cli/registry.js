@@ -16,7 +16,7 @@ const COMMAND_SUMMARIES = {
   "project list": "List local projects",
   "project show": "Show one local project",
   "project verify": "Validate all local projects or one selected project",
-  sync: "Synchronize Codex writable roots",
+  "permissions apply": "Apply registered project directory authorization",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
 };
@@ -42,7 +42,9 @@ const COMMANDS = [
   { path: ["project", "list"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "show"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { name: { type: "string" } } },
   { path: ["project", "verify"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
-  { path: ["sync"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "planned-write", options: {} },
+  { path: ["permissions", "apply"], args: [], workspace: "required", config: ["projects"], interaction: "required", effects: "planned-write", options: {
+    tools: { type: "string" }, yes: { type: "boolean" },
+  } },
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
   { path: ["completion"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: { shell: { type: "string" } } },
   { path: ["help"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },

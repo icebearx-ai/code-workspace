@@ -73,11 +73,13 @@ code-workspace project list --json
 code-workspace project show payments --json
 code-workspace project verify payments --json
 code-workspace project sync-branch payments --yes --json
-code-workspace sync --json
+code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
 `project sync-branch` 只记录仓库当前已检出的分支，不会切换 Git 分支。
+
+`permissions apply` 会展示选中 Agent 工具的完整授权计划，在需要修改时要求确认，实施并验证请求的授权，并按工具报告结果。Agent 目录访问仍属于用户授权。该命令只补齐已注册项目缺失的访问权限，不撤销额外目录；如需撤销，请使用 `project remove` 或显式编辑 Agent 设置。
 
 ## 更新与语言
 
@@ -87,7 +89,7 @@ code-workspace update --language en-US --json
 code-workspace language --json
 ```
 
-`update` 只刷新 Workspace 自有托管资产。遇到未知本地修改时，会在任何写入前终止批次；请先审查修改，或显式传入 `--force`。
+`update` 只刷新 Workspace 自有托管资产，绝不会修改 Agent 目录授权。遇到未知本地修改时，会在任何写入前终止批次；请先审查修改，或显式传入 `--force`。
 
 ## 监控
 

@@ -7,12 +7,12 @@ const { executeCompletion } = require("./cli/commands/completion");
 const { executeHelp, executeVersion } = require("./cli/commands/help");
 const { executeInit } = require("./cli/commands/init");
 const { executeMonitor, readStdinJson } = require("./cli/commands/monitor");
+const { executePermissions } = require("./cli/commands/permissions");
 const { executeProject } = require("./cli/commands/project");
 const { executeUpdate, updateWorkspace } = require("./cli/commands/update");
 const {
   executeDoctor,
   executeLanguage,
-  executeSync,
 } = require("./cli/commands/workspace");
 
 async function dispatch(invocation) {
@@ -22,7 +22,7 @@ async function dispatch(invocation) {
   if (key.startsWith("project ")) return executeProject(invocation);
   if (key === "update") return executeUpdate(invocation);
   if (key === "language") return executeLanguage(invocation);
-  if (key === "sync") return executeSync(invocation);
+  if (key === "permissions apply") return executePermissions(invocation);
   if (key === "doctor") return executeDoctor(invocation);
   if (key === "completion") return executeCompletion(invocation);
   if (key === "help") return executeHelp();

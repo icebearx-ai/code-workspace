@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "f6d7c322fb7df88e633341aa8688a9a7fcf933ef262f7450bf1567859ab7a628"
+      "sha256": "5bbc431f79b2a6c22bbdec8f9070274c386293204ca6a6fb3f26a7391ed016c7"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "a2533406b72b20454f0330adacaaaeb540914491e152bb2cbecd79834cbb26ff"
+      "sha256": "2e104f9a7108a88bf49589f4ed9f8daaad5b3abffa8d62581d8fcee501fe32e0"
     }
   ],
   "managedFiles": [
@@ -113,7 +113,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/claude/commands/code-workspace/add-projects.md",
-        "sha256": "1725d61a23be74660c929d1fee07179db1a6fe0c021ea2d9873ccde9402dbcd6"
+        "sha256": "7cd5a47c88185d276c0c4c38e18577e009e5e6d4ed99062554ff116b7e8d1812"
       },
       "provenance": {
         "kind": "template"
@@ -128,7 +128,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/codex/skills/code-workspace-add-projects/SKILL.md",
-        "sha256": "d79a56fd93d850e7dff37d445e624c822bccb89977c762750fc68ce3a37e78cf"
+        "sha256": "f95847b00c93c2dd287247e226fecd6953286064dfde99b8ede830d181ef276f"
       },
       "provenance": {
         "kind": "template"
@@ -143,7 +143,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/codex/skills/code-workspace-add-projects/SKILL.md",
-        "sha256": "d79a56fd93d850e7dff37d445e624c822bccb89977c762750fc68ce3a37e78cf"
+        "sha256": "f95847b00c93c2dd287247e226fecd6953286064dfde99b8ede830d181ef276f"
       },
       "provenance": {
         "kind": "template"

@@ -74,13 +74,15 @@ code-w doctor
 # 更新所有托管文件
 code-w update
 
-# 同步 Codex 可写项目根目录
-code-w sync
+# 应用 Agent 项目目录授权
+code-w permissions apply --yes
 
 # 校验本地项目
 code-w project verify
 code-w project verify <project-name>
 ```
+
+目录访问由用户授权。Code Workspace 负责展示请求的变更、实施并验证变更，以及报告结果。`permissions apply` 只补齐已注册项目缺失的授权，不撤销额外目录。普通 `update` 不会改变授权。
 
 查询结果需要交给 Codex 或脚本处理时，可添加 `--json`。
 

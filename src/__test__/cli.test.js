@@ -52,7 +52,7 @@ test("init installs only workspace-owned integrations and does not create opensp
     "Remove obsolete managed files",
     "Install managed files",
     "Prepare local workspace configuration",
-    "Synchronize Codex workspace permissions",
+    "Apply Agent workspace permissions",
     "Run strict workspace doctor",
     "Commit local initialization state",
     "Verify local initialization state",
@@ -342,9 +342,10 @@ test("project inspect is read-only and project add registers an explicit record"
   assert.equal(jsonData(listed).projects.length, 1);
 
   assert.equal(run(workspace, ["project", "verify", "--json"]).status, 0);
-  const sync = run(workspace, ["sync", "--json"]);
-  assert.equal(sync.status, 0, sync.stderr);
-  assert.match(fs.readFileSync(path.join(workspace, ".codex", "config.toml"), "utf8"), /workspace-permissions:code-workspace/);
+  const applied = run(workspace, ["permissions", "apply", "--tools", "claude", "--yes", "--json"]);
+  assert.equal(applied.status, 0, applied.stderr);
+  const claudeSettings = JSON.parse(fs.readFileSync(path.join(workspace, ".claude", "settings.local.json"), "utf8"));
+  assert.deepEqual(claudeSettings.permissions.additionalDirectories, [fs.realpathSync(repository)]);
 });
 
 test("project add rejects incomplete records and keeps JSON errors machine-readable", () => {

@@ -73,11 +73,13 @@ code-workspace project list --json
 code-workspace project show payments --json
 code-workspace project verify payments --json
 code-workspace project sync-branch payments --yes --json
-code-workspace sync --json
+code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
 `project sync-branch` records the branch already checked out in the repository; it never switches Git branches.
+
+`permissions apply` shows the complete authorization plan for the selected Agent tools, requires confirmation when changes are needed, applies and verifies the requested grants, and reports the result per tool. Agent directory access remains a user authorization. The command adds missing registered-project access but does not revoke additional directories; use `project remove` or edit the Agent settings explicitly to revoke access.
 
 ## Update and language
 
@@ -87,7 +89,7 @@ code-workspace update --language zh-CN --json
 code-workspace language --json
 ```
 
-`update` refreshes only Workspace-owned managed assets. Unknown local edits stop the batch before writes; review them or pass `--force` explicitly.
+`update` refreshes only Workspace-owned managed assets and never changes Agent directory authorization. Unknown local edits stop the batch before writes; review them or pass `--force` explicitly.
 
 ## Monitor
 

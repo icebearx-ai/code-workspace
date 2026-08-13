@@ -6,6 +6,7 @@ const { DEFAULT_MONITOR_URL, DEFAULT_WORKSPACE_NAME, configPath, loadConfig } = 
 const { DEFAULT_WORKSPACE_LANGUAGE, SUPPORTED_LANGUAGES, resolveWorkspaceLanguage } = require("../core/language");
 const { createInitPlan } = require("./plan");
 const { createInteractiveUi } = require("./ui");
+const { formatPermissionPlan, planPermissionChanges } = require("../core/permissions");
 
 async function collectInitPlan(root, manifest, options = {}) {
   const ui = options.ui || await createInteractiveUi(options);
@@ -55,6 +56,14 @@ async function collectInitPlan(root, manifest, options = {}) {
     `Tools      ${tools.length ? tools.join(", ") : "none"}`,
     `Monitor    ${monitor.enable ? monitor.url : "disabled"}`,
   ]);
+  if (existing?.projects?.length) {
+    const permissionPlan = planPermissionChanges({
+      root,
+      tools,
+      grants: existing.projects.map((project) => project.location),
+    });
+    ui.note("Agent authorization", formatPermissionPlan(permissionPlan).split("\n"));
+  }
   if (!await ui.confirm("Continue?", true)) {
     (ui.cancel || ui.close)("Initialization cancelled. No changes were made.");
     const error = new Error("Initialization cancelled. No changes were made.");

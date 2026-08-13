@@ -1,11 +1,8 @@
-const fs = require("node:fs");
-const path = require("node:path");
-
 const { CURRENT_CONFIG_VERSION, inspectConfigDomains, loadState } = require("./config");
 const { add, result } = require("./diagnostics");
 const { inspectManagedFiles } = require("./managed-files");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
-const { START: PERMISSIONS_START } = require("./permissions");
+const { inspectProjectPermissions } = require("./permissions");
 const { validateProjects } = require("./validation");
 const { resolveWorkspaceTools } = require("./tools");
 
@@ -75,9 +72,20 @@ function doctorWorkspace(root, manifest, options = {}) {
     add(output, "error", "MANAGED_FILE_MANIFEST_INVALID", error.message);
   }
   if (inspection.projects.valid && config.projects.length > 0) {
-    const codexConfig = path.join(root, ".codex", "config.toml");
-    if (!fs.existsSync(codexConfig) || !fs.readFileSync(codexConfig, "utf8").includes(PERMISSIONS_START)) {
-      add(output, "error", "WORKSPACE_PERMISSIONS_MISSING", "Codex writable roots have not been synchronized.");
+    try {
+      output.permissionInspection = inspectProjectPermissions({ root, tools, projects: config.projects });
+      for (const tool of output.permissionInspection) {
+        for (const directory of tool.missing) {
+          add(output, "error", "WORKSPACE_PERMISSION_MISSING", `Registered project directory is not authorized for ${tool.tool}: ${directory}`, {
+            tool: tool.tool,
+            directory,
+            file: tool.target,
+            remediation: "Review and run code-w permissions apply --yes.",
+          });
+        }
+      }
+    } catch (error) {
+      add(output, "error", error.code || "WORKSPACE_PERMISSION_INSPECTION_FAILED", error.message, error.details || {});
     }
   }
 
@@ -100,6 +108,7 @@ function doctorWorkspace(root, manifest, options = {}) {
     language,
     configInspection: inspection,
     managedFiles: output.managedFileInspection?.files || [],
+    permissions: output.permissionInspection || [],
   };
 }
 

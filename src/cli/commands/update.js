@@ -13,6 +13,7 @@ const { commitUpdateState, loadInitManifest } = require("../../core/init");
 const { workspaceGuide } = require("../../core/language");
 const { inspectManagedFiles, installManagedFiles, planManagedFiles } = require("../../core/managed-files");
 const { planWorkspaceMaintenance } = require("../../core/migration");
+const { inspectProjectPermissions } = require("../../core/permissions");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { createFileTransaction } = require("../../core/transaction");
 const { success } = require("../result");
@@ -104,7 +105,24 @@ function updateWorkspace(root, options = {}) {
       obsoleteFiles,
       managedFiles,
       forcedUnknown: managedPlan.plans.filter((plan) => plan.reason === "unknown").map((plan) => plan.entry.target),
+      diagnostics: [],
     };
+    const previousTools = new Set(initialState.tools || []);
+    const addedTools = tools.filter((tool) => !previousTools.has(tool));
+    if (addedTools.length > 0 && nextConfig.projects.length > 0) {
+      for (const inspection of inspectProjectPermissions({ root, tools: addedTools, projects: nextConfig.projects })) {
+        if (inspection.missing.length === 0) continue;
+        result.diagnostics.push({
+          code: "WORKSPACE_PERMISSION_APPLY_REQUIRED",
+          severity: "warning",
+          message: `${inspection.tool} is selected but lacks authorization for ${inspection.missing.length} registered project director${inspection.missing.length === 1 ? "y" : "ies"}.`,
+          tool: inspection.tool,
+          directories: inspection.missing,
+          file: inspection.target,
+          remediation: "Review and run code-w permissions apply --yes.",
+        });
+      }
+    }
     options.injectFailure?.("after-verify", result);
     const state = commitUpdateState(root, manifest, {
       tools,
@@ -122,7 +140,7 @@ function updateWorkspace(root, options = {}) {
 function executeUpdate(invocation) {
   const result = updateWorkspace(invocation.root, invocation.options);
   const written = result.managedFiles.filter((entry) => entry.action === "write").length;
-  return success("update", result, `Updated Code Workspace assets (${written} written). Tools: ${result.tools.tools.join(", ") || "none"} (${result.tools.source}).`);
+  return success("update", result, `Updated Code Workspace assets (${written} written). Tools: ${result.tools.tools.join(", ") || "none"} (${result.tools.source}).`, result.diagnostics);
 }
 
 module.exports = { executeUpdate, updateWorkspace };

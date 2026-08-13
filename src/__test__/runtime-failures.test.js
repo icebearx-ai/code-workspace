@@ -9,8 +9,9 @@ const { doctorWorkspace } = require("../core/doctor");
 const { sha256 } = require("../core/fs");
 const { MANIFEST_FILE, loadInitManifest } = require("../core/init");
 const { INITIALIZATION_STAGE_IDS, initializeWorkspace } = require("../core/initializer");
-const { syncPermissions } = require("../core/permissions");
-const { applyProjectBranchSync, applyProjectConfiguration } = require("../cli/commands/project");
+const { applyPermissionPlan, planPermissionChanges } = require("../core/permissions");
+const { applyProjectBranchSync } = require("../cli/commands/project");
+const { applyProjectConfiguration } = require("../core/project-configuration");
 const { updateWorkspace } = require("../cli/commands/update");
 const { failure } = require("../cli/result");
 const { renderResult } = require("../cli/renderer");
@@ -290,17 +291,21 @@ test("project configuration restores config and permissions at each write bounda
     projects: [],
   };
   saveConfig(root, config);
-  const permissionsFile = path.join(root, ".codex", "config.toml");
-  fs.mkdirSync(path.dirname(permissionsFile), { recursive: true });
-  fs.writeFileSync(permissionsFile, "# user configuration\n");
+  const codexPermissionsFile = path.join(root, ".codex", "config.toml");
+  const claudePermissionsFile = path.join(root, ".claude", "settings.local.json");
+  fs.mkdirSync(path.dirname(codexPermissionsFile), { recursive: true });
+  fs.mkdirSync(path.dirname(claudePermissionsFile), { recursive: true });
+  fs.writeFileSync(codexPermissionsFile, "# user configuration\n");
+  fs.writeFileSync(claudePermissionsFile, '{"user":true}\n');
   const configFile = path.join(root, ".code-workspace", "config.yaml");
   const baselineConfig = fs.readFileSync(configFile);
-  const baselinePermissions = fs.readFileSync(permissionsFile);
+  const baselineCodexPermissions = fs.readFileSync(codexPermissionsFile);
+  const baselineClaudePermissions = fs.readFileSync(claudePermissionsFile);
   const next = {
     ...config,
     projects: [{ name: "service", location: "/tmp/service", branch: "main", type: "backend", context: "service" }],
   };
-  for (const stageId of ["after-config-save", "after-permissions-sync"]) {
+  for (const stageId of ["after-config-save", "after-claude-permission-write", "after-claude-permission-verify", "after-codex-permission-write", "after-codex-permission-verify", "after-permissions-sync"]) {
     let failure;
     assert.throws(() => applyProjectConfiguration(root, next, {
       injectFailure: (current) => {
@@ -312,7 +317,8 @@ test("project configuration restores config and permissions at each write bounda
     });
     assert.equal(failure.details.workspaceRolledBack, true, stageId);
     assert.deepEqual(fs.readFileSync(configFile), baselineConfig, stageId);
-    assert.deepEqual(fs.readFileSync(permissionsFile), baselinePermissions, stageId);
+    assert.deepEqual(fs.readFileSync(codexPermissionsFile), baselineCodexPermissions, stageId);
+    assert.deepEqual(fs.readFileSync(claudePermissionsFile), baselineClaudePermissions, stageId);
   }
 });
 
@@ -368,33 +374,34 @@ test("project branch synchronization rolls back its only workspace write", () =>
   assert.deepEqual(fs.readFileSync(permissionsFile), baselinePermissions);
 });
 
-test("permission synchronization verifies its single atomic write with a stable JSON failure", () => {
+test("permission application verifies its atomic write with a stable JSON failure", () => {
   const root = temporaryRoot();
+  const plan = planPermissionChanges({ root, tools: ["codex"], grants: ["/tmp/service"] });
   let verificationError;
-  assert.throws(() => syncPermissions(root, [], {
+  assert.throws(() => applyPermissionPlan(plan, {
     atomicWrite: (file, content) => {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, content.replace("# END workspace-permissions:code-workspace", "# corrupted managed block"));
     },
   }), (error) => {
     verificationError = error;
-    return error.code === "WORKSPACE_PERMISSIONS_VERIFY_FAILED";
+    return error.code === "WORKSPACE_PERMISSION_VERIFY_FAILED";
   });
-  assert.match(verificationError.details.remediation, /code-w sync/);
+  assert.match(verificationError.details.remediation, /permissions apply/);
 
   let stdout = "";
   let stderr = "";
   const previousExitCode = process.exitCode;
   process.exitCode = 0;
   try {
-    renderResult(failure(verificationError, "sync"), {
+    renderResult(failure(verificationError, "permissions.apply"), {
       json: true,
       stdout: { write: (value) => { stdout += value; } },
       stderr: { write: (value) => { stderr += value; } },
     });
     const envelope = JSON.parse(stdout);
-    assert.equal(envelope.command, "sync");
-    assert.equal(envelope.diagnostics[0].code, "WORKSPACE_PERMISSIONS_VERIFY_FAILED");
+    assert.equal(envelope.command, "permissions.apply");
+    assert.equal(envelope.diagnostics[0].code, "WORKSPACE_PERMISSION_VERIFY_FAILED");
     assert.equal(stderr, "");
     assert.equal(process.exitCode, 1);
   } finally {

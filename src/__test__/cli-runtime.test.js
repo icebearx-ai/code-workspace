@@ -40,6 +40,10 @@ test("semantic parser accepts global JSON ordering and short port alias", () => 
   assert.equal(parse(argv("--json", "project", "list")).options.json, true);
   assert.equal(parse(argv("project", "list", "--json")).options.json, true);
   assert.equal(parse(argv("monitor", "-p", "8080")).options.port, "8080");
+  assert.deepEqual(parse(argv("permissions", "apply", "--tools", "claude,codex", "--yes")).options, {
+    tools: "claude,codex",
+    yes: true,
+  });
 });
 
 test("semantic parser rejects unknown options, duplicates, and extra arguments", () => {
@@ -103,12 +107,18 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /report/);
     assert.match(script, /--projects-file/);
     assert.match(script, /--shell/);
+    assert.match(script, /permissions/);
+    assert.match(script, /apply/);
   }
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
   const projectList = spec.commands.find((entry) => entry.path.join(" ") === "project list");
   const projectAdd = spec.commands.find((entry) => entry.path.join(" ") === "project add");
   assert(!projectList.options.includes("--projects-file"));
   assert(projectAdd.options.includes("--projects-file"));
+  const permissionsApply = spec.commands.find((entry) => entry.path.join(" ") === "permissions apply");
+  assert(permissionsApply.options.includes("--tools"));
+  assert(permissionsApply.options.includes("--yes"));
+  assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("sync"));
 });
 
 test("completion returns the generated script in text and JSON modes", () => {
@@ -137,6 +147,7 @@ test("removed context command is rejected before workspace discovery", () => {
 test("documentation references are validated by the real semantic parser", () => {
   assert.equal(validateCommandReference('project inspect "<path>" --json').valid, true);
   assert.equal(validateCommandReference('project sync-branch "<name>" --yes --json').valid, true);
+  assert.equal(validateCommandReference("permissions apply --tools claude,codex --yes --json").valid, true);
   assert.equal(validateCommandReference("update --tools").valid, false);
   assert.match(validateCommandReference("update --froce").reason, /CLI_UNKNOWN_OPTION/);
 });
@@ -514,7 +525,7 @@ test("legacy language absence does not block unrelated command matrix", () => {
     "",
   ].join("\n");
   writeConfig(root, content);
-  for (const args of [["project", "list"], ["project", "verify"], ["sync"]]) {
+  for (const args of [["project", "list"], ["project", "verify"], ["permissions", "apply"]]) {
     const result = run(root, [...args, "--json"]);
     assert.equal(result.status, 0, `${args.join(" ")}: ${result.stdout} ${result.stderr}`);
     assert(!JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === "WORKSPACE_LANGUAGE_MISSING"));

@@ -1,5 +1,5 @@
 ---
-description: When explicitly invoked with one or more project paths, inspect Git worktrees read-only, generate concise project context, register the completed local records, and synchronize writable roots.
+description: When explicitly invoked with one or more project paths, inspect Git worktrees read-only, generate concise project context, register the completed local records, and apply Agent directory authorization.
 argument-hint: "<project path> [additional project paths]"
 ---
 
@@ -18,6 +18,6 @@ For each supplied path:
 
 Present all completed records for confirmation. After confirmation, write them to a temporary JSON document with `schemaVersion: 1` and a non-empty `projects` array, then run `code-workspace project add --projects-file <temporary-json-file> --yes --json` followed by `code-workspace project verify --json`.
 
-Do not hand-edit `.code-workspace/config.yaml` or permission files. Completion requires successful registration, permission synchronization, and project verification.
+Do not hand-edit `.code-workspace/config.yaml` or permission files. Completion requires successful registration, authorization application, and project verification.
 
 $ARGUMENTS

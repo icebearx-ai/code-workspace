@@ -109,7 +109,7 @@ async function executeInit(invocation) {
   if (result.workspaceConfig.monitor.enable) {
     lines.push(`Codex monitoring reports to ${result.workspaceConfig.monitor.url}. Review and trust the project hooks with \`/hooks\` in Codex.`);
   }
-  if (result.localConfig.action === "write" || result.permissions.writableRoots === 0) {
+  if (result.localConfig.action === "write" || result.permissions.action === "skip") {
     lines.push(tools.length > 0
       ? "Add local projects with the `code-workspace-add-projects` skill."
       : "Add local projects with `code-workspace project inspect`, then register a complete project record.");

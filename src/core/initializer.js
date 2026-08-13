@@ -24,7 +24,7 @@ const {
   minimumFromRange,
   runCommand,
 } = require("./init");
-const { syncPermissions } = require("./permissions");
+const { applyPermissionPlan, permissionTargets, planPermissionChanges } = require("./permissions");
 const { installManagedFiles } = require("./managed-files");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { planWorkspaceMaintenance } = require("./migration");
@@ -38,7 +38,7 @@ const INITIALIZATION_STAGE_IDS = Object.freeze({
   "Remove obsolete managed files": "cleanup-obsolete",
   "Install managed files": "install-managed-files",
   "Prepare local workspace configuration": "save-config",
-  "Synchronize Codex workspace permissions": "sync-permissions",
+  "Apply Agent workspace permissions": "apply-permissions",
   "Run strict workspace doctor": "strict-doctor",
   "Commit local initialization state": "commit-state",
   "Verify local initialization state": "final-verify",
@@ -154,9 +154,13 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   if (projects.errors.length > 0) {
     throw new Error(`Local project verification failed: ${projects.errors.join("; ")}`);
   }
-  const permissions = await stage("Synchronize Codex workspace permissions", () => {
-    if (config.projects.length === 0) return { action: "skip", writableRoots: 0, reason: "no local projects configured" };
-    return syncPermissions(root, config.projects);
+  const permissions = await stage("Apply Agent workspace permissions", () => {
+    const permissionPlan = planPermissionChanges({
+      root,
+      tools: options.tools,
+      grants: config.projects.map((project) => project.location),
+    });
+    return applyPermissionPlan(permissionPlan, { transaction: options.transaction });
   });
 
   await stage("Run strict workspace doctor", () => {
@@ -211,6 +215,7 @@ async function initializeWorkspace(rootInput, options = {}) {
     configPath(root),
     path.join(root, ".gitignore"),
     path.join(root, ".codex", "config.toml"),
+    ...permissionTargets(root, options.tools),
     ...manifest.managedFiles.map((entry) => path.join(root, entry.target)),
     ...OBSOLETE_ASSETS.map((target) => path.join(root, target)),
   ];

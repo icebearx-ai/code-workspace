@@ -1,6 +1,6 @@
 ---
 name: code-workspace-add-projects
-description: When explicitly invoked with one or more project paths, inspect Git worktrees read-only, generate concise AI project context, register the completed records locally, and synchronize Codex writable roots.
+description: When explicitly invoked with one or more project paths, inspect Git worktrees read-only, generate concise AI project context, register the completed records locally, and apply Agent directory authorization.
 ---
 
 # Add local projects
@@ -25,4 +25,4 @@ code-workspace project add --projects-file <temporary-json-file> --yes --json
 code-workspace project verify --json
 ```
 
-Do not hand-edit `.code-workspace/config.yaml` or permission files. Completion requires successful registration, permission synchronization, and project verification.
+Do not hand-edit `.code-workspace/config.yaml` or permission files. Completion requires successful registration, authorization application, and project verification.
