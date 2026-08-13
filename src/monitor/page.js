@@ -20,7 +20,7 @@ const PAGE_TEMPLATE = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>OpenSpec Workspace Monitor</title>
+  <title>Code Workspace Monitor</title>
   <style>
     :root{--ink:#080b0c;--panel:#101516;--panel2:#151b1c;--line:#293233;--muted:#819091;--paper:#e8efeb;--lime:#c7ff43;--amber:#ffbf47;--red:#ff6b5d;--cyan:#54d9d0;--r:12px}
     *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--ink);color:var(--paper)}body{font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;background-image:linear-gradient(rgba(255,255,255,.022) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.022) 1px,transparent 1px);background-size:32px 32px}
@@ -48,10 +48,10 @@ const PAGE_TEMPLATE = `<!doctype html>
     </section>
   </main>
   <script>
-    const SOUND_KEY='openspec-monitor-sound';
-    const LANGUAGE_KEY='openspec-monitor-language';
-    const ALERT_KEY='openspec-monitor-workspace-alerts';
-    const LEGACY_INBOX_KEY='openspec-monitor-signal-inbox';
+    const SOUND_KEY='code-workspace-monitor-sound';
+    const LANGUAGE_KEY='code-workspace-monitor-language';
+    const ALERT_KEY='code-workspace-monitor-workspace-alerts';
+    const LEGACY_INBOX_KEY='code-workspace-monitor-signal-inbox';
     const SOUND_FILES={'approval.requested':'/assets/request_tip.mp3','turn.stopped':'/assets/session_finish.mp3'};
     const MESSAGES=__MONITOR_MESSAGES__;
     const DEFAULT_LANGUAGE=__DEFAULT_MONITOR_LANGUAGE__;

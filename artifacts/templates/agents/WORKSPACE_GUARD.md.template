@@ -1,6 +1,6 @@
 # Workspace Context
 
-This directory is an OpenSpec workspace for multiple independent software projects. The workspace is not a project and is not the default location for production code.
+This directory is a Code Workspace for multiple independent software projects. The workspace is not a project and is not the default location for production code.
 
 Use the registry as the only source of truth for project locations, ownership, and registered branches.
 
@@ -9,7 +9,7 @@ Use the registry as the only source of truth for project locations, ownership, a
 For tasks that read or modify project code, first run:
 
 ```bash
-openspec-w project list --json
+code-w project list --json
 ```
 
 Read every record in `data.projects`. Select the responsible project from its `name`, `type`, and `context`, then use its absolute `location` as the project root.
@@ -27,12 +27,12 @@ Meta, help, or workspace-tool maintenance tasks that do not depend on registered
 After selecting `<project.name>`, run:
 
 ```bash
-openspec-w project verify "<project.name>" --json
+code-w project verify "<project.name>" --json
 ```
 
 Do not begin project work unless the response has `ok: true`.
 
-- On `PROJECT_BRANCH_MISMATCH`, stop project work and invoke the installed `openspec-workspace-resolve-branch` Skill for that project.
+- On `PROJECT_BRANCH_MISMATCH`, stop project work and invoke the installed `code-workspace-resolve-branch` Skill for that project.
 - For any other failure, explain the diagnostics and do not repair or guess registry information without explicit user direction.
 - Do not reuse branch-dependent project context after a mismatch is resolved; list and verify the project again.
 
@@ -42,11 +42,11 @@ The AI MUST NOT directly create, edit, move, or delete Workspace-owned files und
 
 In particular, do not directly modify:
 
-- `.openspec-workspace/config.yaml` or `.openspec-workspace/state.json`
+- `.code-workspace/config.yaml` or `.code-workspace/state.json`
 - `.codex/config.toml`
 - `CLAUDE.md`, `AGENTS.md`, or other managed workspace files
 
-Change workspace registry information only through an approved `openspec-w` command. The CLI owns validation, confirmation, atomic persistence, postconditions, rollback, and structured output.
+Change workspace registry information only through an approved `code-w` command. The CLI owns validation, confirmation, atomic persistence, postconditions, rollback, and structured output.
 
 This boundary does not prevent user-requested changes inside the selected external `project.location`.
 

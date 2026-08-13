@@ -14,7 +14,7 @@ async function createInteractiveUi(options = {}) {
 
   return {
     intro() {
-      clack.intro("OpenSpec Workspace setup", common);
+      clack.intro("Code Workspace setup", common);
     },
     note(title, lines) {
       clack.note(lines.join("\n"), title, common);

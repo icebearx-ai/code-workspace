@@ -12,11 +12,6 @@ const OBSOLETE_ASSETS = [
   ".claude/commands/opsxw/apply.md",
   ".claude/commands/opsxw/sync-specs.md",
   ".claude/commands/opsxw/archive.md",
-  ".codex/skills/openspec-workspace-explore/SKILL.md",
-  ".codex/skills/openspec-workspace-propose/SKILL.md",
-  ".codex/skills/openspec-workspace-apply/SKILL.md",
-  ".codex/skills/openspec-workspace-sync-specs/SKILL.md",
-  ".codex/skills/openspec-workspace-archive/SKILL.md",
   "USER_GUIDE.zh-CN.md",
 ];
 

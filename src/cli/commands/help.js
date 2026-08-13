@@ -22,7 +22,7 @@ function helpText() {
     .join("\n");
   const globalOptions = Object.entries(GLOBAL_OPTIONS).map(([name, definition]) => optionUsage(name, definition)).join(", ");
   const languages = SUPPORTED_LANGUAGES.map((entry) => entry.value).join("|");
-  return `OpenSpec Workspace ${packageJson.version}\n\nUsage: openspec-workspace [command] [options]\n\nCommands:\n${commands}\n\nCommand options:\n${commandOptions}\n\nWorkspace languages: ${languages}\nGlobal options: ${globalOptions}`;
+  return `Code Workspace ${packageJson.version}\n\nUsage: code-workspace [command] [options]\n\nCommands:\n${commands}\n\nCommand options:\n${commandOptions}\n\nWorkspace languages: ${languages}\nGlobal options: ${globalOptions}`;
 }
 
 function executeHelp() {

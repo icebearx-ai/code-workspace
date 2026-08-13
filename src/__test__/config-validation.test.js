@@ -10,7 +10,7 @@ const { inspectProject } = require("../core/project");
 const { validateProject, validateProjects } = require("../core/validation");
 
 function temporaryRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "openspec-workspace-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "code-workspace-test-"));
 }
 
 function gitRepository(parent, name, files = {}) {

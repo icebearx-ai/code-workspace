@@ -3,7 +3,6 @@ const path = require("node:path");
 const { loadInitManifest } = require("../../core/init");
 const { syncPermissions } = require("../../core/permissions");
 const { doctorWorkspace } = require("../../core/doctor");
-const { WorkspaceError } = require("../../core/errors");
 const { getLocale } = require("../../i18n");
 const { validateProjects } = require("../../core/validation");
 const { fromDiagnostics, success } = require("../result");
@@ -12,17 +11,6 @@ function executeLanguage(invocation) {
   const language = invocation.config.workspace.language;
   const locale = getLocale(language);
   return success("language", { language, label: locale.label, projectContext: locale.projectContext }, language);
-}
-
-function executeContext(invocation) {
-  const { config, options, root } = invocation;
-  let projects = config.projects;
-  if (options.project) projects = projects.filter((project) => project.name === options.project);
-  const lines = ["# OpenSpec Workspace Context", "", `Workspace: ${root}`];
-  for (const project of projects) {
-    lines.push("", `## ${project.name}`, "", `- Type: ${project.type}`, `- Location: ${project.location}`, `- Branch: ${project.branch}`, "", project.context);
-  }
-  return success("context", { workspaceRoot: root, projects }, lines.join("\n"));
 }
 
 function executeSync(invocation) {
@@ -39,23 +27,10 @@ function executeDoctor(invocation) {
     projects: output.config.projects.length,
     tools: output.toolSelection,
     capabilities: output.capabilities,
-  }, `OpenSpec Workspace is healthy (${output.config.projects.length} local projects).`);
-}
-
-function executeCompletion(invocation, commands) {
-  const shell = invocation.options.shell || "zsh";
-  if (shell === "bash") {
-    return success("completion", { shell }, `_openspec_workspace() {\n  local current="\${COMP_WORDS[COMP_CWORD]}"\n  COMPREPLY=( $(compgen -W "${commands.join(" ")}" -- "$current") )\n}\ncomplete -F _openspec_workspace openspec-workspace openspec-w`);
-  }
-  if (shell === "zsh") {
-    return success("completion", { shell }, `#compdef openspec-workspace openspec-w\n_arguments '1:command:(${commands.join(" ")})' '*::arg:->args'`);
-  }
-  throw new WorkspaceError("CLI_COMPLETION_SHELL_UNSUPPORTED", `Unsupported completion shell: ${shell}`, { actual: shell, supported: ["bash", "zsh"] });
+  }, `Code Workspace is healthy (${output.config.projects.length} local projects).`);
 }
 
 module.exports = {
-  executeCompletion,
-  executeContext,
   executeDoctor,
   executeLanguage,
   executeSync,

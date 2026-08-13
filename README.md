@@ -1,8 +1,6 @@
-# OpenSpec Workspace
+# Code Workspace
 
-OpenSpec Workspace is a local multi-project registry and safety layer for Claude Code and Codex. It manages workspace identity, project locations and branches, agent instructions, writable-root permissions, validation, and optional monitoring.
-
-It is standalone. It does not install, detect, invoke, or version-manage another OpenSpec package or executable. Existing files under `openspec/` remain user-owned and are not read or written by Workspace.
+Code Workspace is a local multi-project registry and safety layer for Claude Code and Codex. It manages workspace identity, project locations and branches, agent instructions, writable-root permissions, validation, and optional monitoring.
 
 ## Requirements
 
@@ -12,23 +10,23 @@ It is standalone. It does not install, detect, invoke, or version-manage another
 ## Install
 
 ```bash
-npm install -g @icebearx-ai/openspec-workspace
+npm install -g @icebearx-ai/code-workspace
 ```
 
-The package provides `openspec-workspace` and the shorter alias `openspec-w`.
+The package provides `code-workspace` and the shorter alias `code-w`.
 
 ## Initialize
 
 Interactive initialization:
 
 ```bash
-openspec-workspace init .
+code-workspace init .
 ```
 
 Non-interactive initialization:
 
 ```bash
-openspec-workspace init . \
+code-workspace init . \
   --tools claude,codex \
   --language en-US \
   --yes
@@ -38,10 +36,10 @@ Use `--tools claude`, `--tools codex`, or `--tools none` to override the default
 
 Initialization writes only Workspace-owned state and integrations:
 
-- `.openspec-workspace/config.yaml` and `.openspec-workspace/state.json`
+- `.code-workspace/config.yaml` and `.code-workspace/state.json`
 - `USER_GUIDE.md`
 - `CLAUDE.md` and/or `AGENTS.md`
-- Workspace-specific commands and skills whose names start with `openspec-workspace-` or use the `/opswx` namespace
+- Workspace-specific commands and skills whose names start with `code-workspace-` or use the `/code-workspace` namespace
 - `.codex/hooks.json` when monitoring is enabled
 
 It does not create `openspec/`, install native `/opsx` commands, or install native `openspec-*` skills.
@@ -51,19 +49,19 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 Inspecting a repository is read-only:
 
 ```bash
-openspec-workspace project inspect /absolute/path/to/project --json
+code-workspace project inspect /absolute/path/to/project --json
 ```
 
 Claude Code users can invoke:
 
 ```text
-/opswx:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
+/code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
-Codex users can invoke `$openspec-workspace-add-projects` with the same explicit paths. For low-level automation, prepare a complete project record and run:
+Codex users can invoke `$code-workspace-add-projects` with the same explicit paths. For low-level automation, prepare a complete project record and run:
 
 ```bash
-openspec-workspace project add --projects-file projects.json --yes --json
+code-workspace project add --projects-file projects.json --yes --json
 ```
 
 The registry stores each project's name, real location, expected Git branch, type, and context. Workspace never guesses a path from a conversation.
@@ -71,13 +69,12 @@ The registry stores each project's name, real location, expected Git branch, typ
 ## Daily commands
 
 ```bash
-openspec-workspace project list --json
-openspec-workspace project show payments --json
-openspec-workspace project verify payments --json
-openspec-workspace project sync-branch payments --yes --json
-openspec-workspace context --project payments --json
-openspec-workspace sync --json
-openspec-workspace doctor --json
+code-workspace project list --json
+code-workspace project show payments --json
+code-workspace project verify payments --json
+code-workspace project sync-branch payments --yes --json
+code-workspace sync --json
+code-workspace doctor --json
 ```
 
 `project sync-branch` records the branch already checked out in the repository; it never switches Git branches.
@@ -85,9 +82,9 @@ openspec-workspace doctor --json
 ## Update and language
 
 ```bash
-openspec-workspace update --json
-openspec-workspace update --language zh-CN --json
-openspec-workspace language --json
+code-workspace update --json
+code-workspace update --language zh-CN --json
+code-workspace language --json
 ```
 
 `update` refreshes only Workspace-owned managed assets. Unknown local edits stop the batch before writes; review them or pass `--force` explicitly.
@@ -95,7 +92,7 @@ openspec-workspace language --json
 ## Monitor
 
 ```bash
-openspec-workspace monitor --port 3211
+code-workspace monitor --port 3211
 ```
 
 The monitor binds to loopback, combines events from multiple initialized workspaces, and keeps hook reporting failure-open. Review and trust project hooks in Codex before relying on reports.
@@ -103,9 +100,11 @@ The monitor binds to loopback, combines events from multiple initialized workspa
 ## Completion
 
 ```bash
-openspec-workspace completion --shell zsh
-openspec-workspace completion --shell bash
+code-workspace completion --shell zsh
+code-workspace completion --shell bash
 ```
+
+`completion` prints a script generated from the full command registry, including subcommands and command-specific options. It does not install the script or modify shell configuration. With `--json`, the script is returned in `data.script`.
 
 ## Development
 

@@ -1,5 +1,5 @@
 src/__test__/
-.openspec-workspace/
+.code-workspace/
 .codex/
 .claude/
 openspec/

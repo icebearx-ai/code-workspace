@@ -36,7 +36,7 @@ function doctorWorkspace(root, manifest, options = {}) {
   }
 
   if (inspection.identity.valid && !config.workspace) {
-    add(output, "error", "WORKSPACE_IDENTITY_MISSING", "Local workspace name and UUID are missing. Re-run `openspec-w init .` to generate them.");
+    add(output, "error", "WORKSPACE_IDENTITY_MISSING", "Local workspace name and UUID are missing. Re-run `code-w init .` to generate them.");
   }
 
   const toolSelection = options.toolSelection || resolveWorkspaceTools({

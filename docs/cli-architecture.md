@@ -1,6 +1,6 @@
 # CLI Architecture Contract
 
-This document defines the CLI architecture contract for OpenSpec Workspace.
+This document defines the CLI architecture contract for Code Workspace.
 
 ## 1. Command declaration
 

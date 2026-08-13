@@ -3,7 +3,7 @@ module.exports = {
   label: "English",
   default: true,
   messages: {
-    title: "OpenSpec Workspace Monitor",
+    title: "Code Workspace Monitor",
     eyebrow: "Local runtime center",
     language: "Language",
     summary: "Monitor summary",

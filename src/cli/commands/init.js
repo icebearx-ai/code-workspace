@@ -101,7 +101,7 @@ async function executeInit(invocation) {
     stages: result.stages.map((stage) => stage.name),
   };
   const lines = [
-    "OpenSpec Workspace is ready.",
+    "Code Workspace is ready.",
     `Workspace: ${result.workspaceConfig.workspace.name} (${result.workspaceConfig.workspace.uuid})`,
     `Language: ${result.language}`,
     `Tools: ${tools.length ? tools.join(", ") : "none"} (${toolSelection.source})`,
@@ -111,8 +111,8 @@ async function executeInit(invocation) {
   }
   if (result.localConfig.action === "write" || result.permissions.writableRoots === 0) {
     lines.push(tools.length > 0
-      ? "Add local projects with the `openspec-workspace-add-projects` skill."
-      : "Add local projects with `openspec-workspace project inspect`, then register a complete project record.");
+      ? "Add local projects with the `code-workspace-add-projects` skill."
+      : "Add local projects with `code-workspace project inspect`, then register a complete project record.");
   }
   return success("init", data, lines.join("\n"));
 }

@@ -1,4 +1,4 @@
-# OpenSpec Workspace 执行流程
+# Code Workspace 执行流程
 
 本文描述 Workspace 的职责边界：管理多项目注册表和 Agent 安全集成，并与原生 OpenSpec 实现保持解耦。
 
@@ -6,7 +6,7 @@
 
 - Workspace 不安装、检测或调用其他 OpenSpec CLI。
 - Workspace 不读取、创建、更新或归档 `openspec/` 下的记录。
-- Workspace 的写入范围是 `.openspec-workspace/`、Workspace 自有 Agent 集成、Codex hook 与权限配置。
+- Workspace 的写入范围是 `.code-workspace/`、Workspace 自有 Agent 集成、Codex hook 与权限配置。
 - 项目生产代码只允许在已注册项目的 `location` 中修改；Workspace CLI 自身不执行生产代码修改。
 
 ## 初始化和维护流程
@@ -49,13 +49,13 @@ flowchart TD
 关键命令：
 
 ```bash
-openspec-workspace project inspect /absolute/path/to/project --json
-openspec-workspace project add --projects-file projects.json --yes --json
-openspec-workspace project list --json
-openspec-workspace project verify "<project-name>" --json
+code-workspace project inspect /absolute/path/to/project --json
+code-workspace project add --projects-file projects.json --yes --json
+code-workspace project list --json
+code-workspace project verify "<project-name>" --json
 ```
 
-Claude Code 使用 `/opswx:add-projects`；Codex 使用 `$openspec-workspace-add-projects`。两者都要求用户给出显式路径，不得根据对话猜测。
+Claude Code 使用 `/code-workspace:add-projects`；Codex 使用 `$code-workspace-add-projects`。两者都要求用户给出显式路径，不得根据对话猜测。
 
 ## 分支不一致恢复
 
@@ -67,12 +67,12 @@ flowchart LR
     C -->|自行切换或修复| MANUAL[人工处理 Git]
     CLI --> V[project verify]
     MANUAL --> V
-    V -->|通过| CONTINUE[刷新 context 后继续]
+    V -->|通过| CONTINUE[重新获取项目记录后继续]
     V -->|失败| STOP[保持停止]
 ```
 
 ```bash
-openspec-workspace project sync-branch "<project-name>" --yes --json
+code-workspace project sync-branch "<project-name>" --yes --json
 ```
 
 `project sync-branch` 只接受仓库当前分支并更新注册表，不执行 `git switch`。
@@ -89,7 +89,7 @@ openspec-workspace project sync-branch "<project-name>" --yes --json
 ## 不变量
 
 - 不得猜测项目路径、项目归属或分支。
-- 不得直接编辑 `.openspec-workspace/config.yaml`；通过 CLI 写入。
+- 不得直接编辑 `.code-workspace/config.yaml`；通过 CLI 写入。
 - 不得把独立的 `openspec/` 存储隐式绑定到 Workspace。
 - Workspace 初始化、更新和 Doctor 不依赖其他 OpenSpec 包或可执行文件。
 - Workspace 不读取或写入 `openspec/`。

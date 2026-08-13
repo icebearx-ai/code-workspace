@@ -13,7 +13,7 @@ const { createInitPlan } = require("../init/plan");
 const { collectInitPlan } = require("../init/wizard");
 
 function temporaryRoot() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "openspec-workspace-init-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "code-workspace-init-"));
 }
 
 test("init manifest describes only workspace-owned assets", () => {
@@ -66,7 +66,7 @@ test("interactive init collects and confirms a complete workspace plan before wr
   assert.deepEqual(plan.tools, ["codex"]);
   assert.equal(plan.monitor.enable, true);
   assert(calls.includes("Ready to initialize"));
-  assert(!fs.existsSync(path.join(root, ".openspec-workspace")));
+  assert(!fs.existsSync(path.join(root, ".code-workspace")));
 });
 
 test("interactive init offers independent Claude Code and Codex selections", async () => {
@@ -95,8 +95,8 @@ test("interactive init offers independent Claude Code and Codex selections", asy
 
 test("interactive init reads a v1 workspace through the legacy language compatibility path", async () => {
   const root = temporaryRoot();
-  fs.mkdirSync(path.join(root, ".openspec-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".openspec-workspace", "config.yaml"), [
+  fs.mkdirSync(path.join(root, ".code-workspace"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".code-workspace", "config.yaml"), [
     "schemaVersion: 1",
     "workspace:",
     "  name: legacy-interactive",
@@ -106,7 +106,7 @@ test("interactive init reads a v1 workspace through the legacy language compatib
     "projects: []",
     "",
   ].join("\n"));
-  fs.writeFileSync(path.join(root, ".openspec-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, ".code-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
   const ui = {
     intro() {},
     note() {},
@@ -198,7 +198,7 @@ test("initializer rejects unsupported Node versions before mutating the target",
     initializeWorkspace(root, { nodeVersion: "18.0.0", tools: [], interactive: false }),
     /Node 20\.19\.0 or newer/
   );
-  assert(!fs.existsSync(path.join(root, ".openspec-workspace")));
+  assert(!fs.existsSync(path.join(root, ".code-workspace")));
 });
 
 test("non-interactive init migrates legacy state without consulting openspec files", async () => {
@@ -206,8 +206,8 @@ test("non-interactive init migrates legacy state without consulting openspec fil
   const openspecFile = path.join(root, "openspec", "config.yaml");
   fs.mkdirSync(path.dirname(openspecFile), { recursive: true });
   fs.writeFileSync(openspecFile, "schema: user-owned\nlanguage: intentionally-ignored\n");
-  fs.mkdirSync(path.join(root, ".openspec-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".openspec-workspace", "config.yaml"), [
+  fs.mkdirSync(path.join(root, ".code-workspace"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".code-workspace", "config.yaml"), [
     "workspace:",
     "  name: legacy-yes",
     "  uuid: 123e4567-e89b-42d3-a456-426614174000",
@@ -216,7 +216,7 @@ test("non-interactive init migrates legacy state without consulting openspec fil
     "projects: []",
     "",
   ].join("\n"));
-  fs.writeFileSync(path.join(root, ".openspec-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, ".code-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
 
   const result = await initializeWorkspace(root, {
     nodeVersion: "24.0.0",
@@ -227,10 +227,10 @@ test("non-interactive init migrates legacy state without consulting openspec fil
   assert.equal(result.migration.schema.fromVersion, 0);
   assert.equal(result.migration.language.source, "legacy-state");
   assert(result.migration.steps.some((step) => step.kind === "workspace-language"));
-  const config = yaml.load(fs.readFileSync(path.join(root, ".openspec-workspace", "config.yaml"), "utf8"));
+  const config = yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"));
   assert.equal(config.schemaVersion, 2);
   assert.equal(config.workspace.language, "zh-CN");
-  const state = JSON.parse(fs.readFileSync(path.join(root, ".openspec-workspace", "state.json"), "utf8"));
+  const state = JSON.parse(fs.readFileSync(path.join(root, ".code-workspace", "state.json"), "utf8"));
   assert.equal(state.workspaceLanguage, undefined);
   assert.deepEqual(state.tools, []);
   assert.equal(fs.readFileSync(openspecFile, "utf8"), "schema: user-owned\nlanguage: intentionally-ignored\n");
@@ -265,7 +265,7 @@ test("initializer rolls back workspace-owned files after a local stage failure",
     }
   );
   assert.equal(fs.existsSync(path.join(root, "USER_GUIDE.md")), false);
-  assert.equal(fs.existsSync(path.join(root, ".openspec-workspace")), false);
+  assert.equal(fs.existsSync(path.join(root, ".code-workspace")), false);
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
   assert.equal(failure.details.workspaceRolledBack, true);
   assert.equal(failure.details.externalEffects, undefined);

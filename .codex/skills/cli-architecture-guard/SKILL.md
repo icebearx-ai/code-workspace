@@ -1,6 +1,6 @@
 ---
 name: cli-architecture-guard
-description: Guard the OpenSpec Workspace CLI architecture when adding, removing, reviewing, or modifying commands, options, parsing, routing, configuration domains, JSON results, errors, confirmation, transactions, verification, rollback, or documented CLI examples. Use this skill for every change under src/cli or to core services used by CLI commands, even when the user does not explicitly request an architecture review.
+description: Guard the Code Workspace CLI architecture when adding, removing, reviewing, or modifying commands, options, parsing, routing, configuration domains, JSON results, errors, confirmation, transactions, verification, rollback, or documented CLI examples. Use this skill for every change under src/cli or to core services used by CLI commands, even when the user does not explicitly request an architecture review.
 ---
 
 # CLI Architecture Guard
@@ -40,7 +40,7 @@ arguments:
 options:
   yes: boolean
 writes:
-  - .openspec-workspace/config.yaml
+  - .code-workspace/config.yaml
 verification:
   - persisted state matches the requested state
 rollback:

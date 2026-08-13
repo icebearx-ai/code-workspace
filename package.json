@@ -1,6 +1,6 @@
 {
-  "name": "@icebearx-ai/openspec-workspace",
-  "version": "0.1.0-beta.11",
+  "name": "@icebearx-ai/code-workspace",
+  "version": "0.1.0-beta.0",
   "description": "Local multi-project registry and safety layer for AI coding workspaces",
   "author": "icebearx-ai",
   "license": "MIT",
@@ -8,9 +8,12 @@
   "exports": {
     ".": "./src/index.js"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
-    "openspec-workspace": "bin/openspec-workspace.js",
-    "openspec-w": "bin/openspec-workspace.js"
+    "code-workspace": "bin/code-workspace.js",
+    "code-w": "bin/code-workspace.js"
   },
   "files": [
     "assets",
@@ -35,7 +38,7 @@
     "check": "npm test && npm run cli:architecture-check && npm run pack:check",
     "cli:architecture-check": "node scripts/check-cli-architecture.js",
     "pack:check": "npm pack --dry-run",
-    "cli": "node bin/openspec-workspace.js",
+    "cli": "node bin/code-workspace.js",
     "prepublishOnly": "npm run check"
   },
   "dependencies": {

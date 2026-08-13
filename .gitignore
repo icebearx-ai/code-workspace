@@ -3,8 +3,8 @@
 coverage
 *.tgz
 
-# OpenSpec Workspace local project registry and managed state
-/.openspec-workspace/
+# Code Workspace local project registry and managed state
+/.code-workspace/
 
 # 本机 Codex 配置
 /.codex/config.toml

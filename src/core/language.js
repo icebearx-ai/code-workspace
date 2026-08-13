@@ -68,7 +68,7 @@ function resolveWorkspaceLanguageSelection(root, options = {}) {
   }
   if (options.defaultLanguage === false) {
     throw new WorkspaceError("WORKSPACE_LANGUAGE_MISSING", "Workspace language is not configured.", {
-      remediation: `Re-run openspec-w init . --language <${SUPPORTED_LANGUAGES.map((entry) => entry.value).join("|")}>.`,
+      remediation: `Re-run code-w init . --language <${SUPPORTED_LANGUAGES.map((entry) => entry.value).join("|")}>.`,
     });
   }
   return {

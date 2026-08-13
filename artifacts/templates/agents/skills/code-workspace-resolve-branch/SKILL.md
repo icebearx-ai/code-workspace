@@ -1,6 +1,6 @@
 ---
-name: openspec-workspace-resolve-branch
-description: Resolve an OpenSpec Workspace `PROJECT_BRANCH_MISMATCH` safely. Use when targeted project verification shows that a registered project's configured branch differs from the Git worktree branch, before reading or modifying project code.
+name: code-workspace-resolve-branch
+description: Resolve a Code Workspace `PROJECT_BRANCH_MISMATCH` safely. Use when targeted project verification shows that a registered project's configured branch differs from the Git worktree branch, before reading or modifying project code.
 ---
 
 # Resolve a Workspace Project Branch
@@ -9,7 +9,7 @@ Resolve only the named registered project. Do not continue project work while th
 
 ## Inspect
 
-1. Run `openspec-w project show "<project.name>" --json` and retain its registered `location` and `branch`.
+1. Run `code-w project show "<project.name>" --json` and retain its registered `location` and `branch`.
 2. In `project.location`, inspect the current branch with `git branch --show-current`, worktree changes with `git status --short`, and whether the registered branch exists with `git show-ref --verify --quiet "refs/heads/<registered-branch>"`.
 3. Report the project name, location, registered branch, actual branch, worktree status, and registered-branch existence. Do not infer missing values.
 
@@ -34,8 +34,8 @@ Do not mutate Git or workspace state until the user explicitly chooses an option
 
 ### Accept the actual branch
 
-- Do not edit `.openspec-workspace/config.yaml` directly.
-- After explicit authorization, run `openspec-w project sync-branch "<project.name>" --yes --json` from the workspace.
+- Do not edit `.code-workspace/config.yaml` directly.
+- After explicit authorization, run `code-w project sync-branch "<project.name>" --yes --json` from the workspace.
 - Treat a non-success result as unresolved and stop.
 
 ### Manual resolution
@@ -48,8 +48,8 @@ Do not mutate Git or workspace state until the user explicitly chooses an option
 After any option completes, invalidate cached branch-dependent context, then run:
 
 ```bash
-openspec-w project list --json
-openspec-w project verify "<project.name>" --json
+code-w project list --json
+code-w project verify "<project.name>" --json
 ```
 
 Resume project work only when targeted verification returns `ok: true`.

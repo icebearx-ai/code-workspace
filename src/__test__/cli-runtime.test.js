@@ -6,22 +6,23 @@ const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const { parse } = require("../cli/parser");
-const { COMMANDS, commandHelpRows, getCommand, topLevelCommands, validateCommandReference } = require("../cli/registry");
+const { buildCompletionSpec, renderBashCompletion, renderZshCompletion } = require("../cli/commands/completion");
+const { COMMANDS, commandHelpRows, getCommand, validateCommandReference } = require("../cli/registry");
 const { CURRENT_CONFIG_VERSION, loadConfigProjection, planConfigMigration } = require("../core/config");
 const { resolveWorkspaceTools } = require("../core/tools");
 const { createFileTransaction } = require("../core/transaction");
 const { planWorkspaceMaintenance } = require("../core/migration");
 
-const argv = (...args) => [process.execPath, "openspec-workspace", ...args];
-const cli = path.resolve(__dirname, "..", "..", "bin", "openspec-workspace.js");
+const argv = (...args) => [process.execPath, "code-workspace", ...args];
+const cli = path.resolve(__dirname, "..", "..", "bin", "code-workspace.js");
 
 function temporaryRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "openspec-cli-runtime-"));
 }
 
 function writeConfig(root, content) {
-  fs.mkdirSync(path.join(root, ".openspec-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".openspec-workspace", "config.yaml"), content);
+  fs.mkdirSync(path.join(root, ".code-workspace"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".code-workspace", "config.yaml"), content);
 }
 
 function run(root, args) {
@@ -48,9 +49,7 @@ test("semantic parser rejects unknown options, duplicates, and extra arguments",
   assert.throws(() => parse(argv("project", "list", "extra")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
   assert.throws(() => parse(argv("project", "list", "--json", "--json")), (error) => error.code === "CLI_DUPLICATE_OPTION");
   assert.throws(() => parse(argv("project", "verify", "service", "extra")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
-  assert.throws(() => parse(argv("context", "--change", "add-health")), (error) =>
-    error.code === "CLI_UNKNOWN_OPTION" && error.details.command === "context"
-  );
+  assert.throws(() => parse(argv("context", "--change", "add-health")), (error) => error.code === "CLI_UNKNOWN_COMMAND");
   assert.throws(() => parse(argv("project", "add", "/tmp/service", "--spec-prefix", "service")), (error) =>
     error.code === "CLI_UNKNOWN_OPTION" && error.details.command === "project.add" && error.details.option === "spec-prefix"
   );
@@ -81,7 +80,58 @@ test("registry is the source for help and completion command paths", () => {
     const path = usage.replace(/\s+\[.*$/, "").replace(/\s+<.*$/, "").split(" ");
     assert(getCommand(path), usage);
   }
-  assert.deepEqual(new Set(topLevelCommands()), new Set(COMMANDS.map((command) => command.path[0]).filter((name) => !["help", "version"].includes(name))));
+  const spec = buildCompletionSpec();
+  assert.deepEqual(
+    new Set(spec.children.find((entry) => entry.path.length === 0).values),
+    new Set(COMMANDS.map((command) => command.path[0]))
+  );
+  assert.deepEqual(
+    new Set(spec.children.find((entry) => entry.path.join(" ") === "project").values),
+    new Set(COMMANDS.filter((command) => command.path[0] === "project").map((command) => command.path[1]))
+  );
+});
+
+test("completion scripts include subcommands and command-specific options", () => {
+  const spec = buildCompletionSpec();
+  const bash = renderBashCompletion(spec);
+  const zsh = renderZshCompletion(spec);
+  for (const script of [bash, zsh]) {
+    for (const subcommand of ["inspect", "add", "remove", "sync-branch", "list", "show", "verify"]) {
+      assert.match(script, new RegExp(`['\"]?${subcommand}['\"]?`));
+    }
+    assert.match(script, /monitor/);
+    assert.match(script, /report/);
+    assert.match(script, /--projects-file/);
+    assert.match(script, /--shell/);
+  }
+  assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
+  const projectList = spec.commands.find((entry) => entry.path.join(" ") === "project list");
+  const projectAdd = spec.commands.find((entry) => entry.path.join(" ") === "project add");
+  assert(!projectList.options.includes("--projects-file"));
+  assert(projectAdd.options.includes("--projects-file"));
+});
+
+test("completion returns the generated script in text and JSON modes", () => {
+  const bash = run(os.tmpdir(), ["completion", "--shell", "bash"]);
+  assert.equal(bash.status, 0, bash.stderr);
+  assert.match(bash.stdout, /complete -F _code_workspace code-workspace code-w/);
+  assert.match(bash.stdout, /inspect add remove sync-branch list show verify/);
+
+  const zsh = run(os.tmpdir(), ["completion", "--shell", "zsh", "--json"]);
+  assert.equal(zsh.status, 0, zsh.stderr);
+  const envelope = JSON.parse(zsh.stdout);
+  assert.equal(envelope.command, "completion");
+  assert.equal(envelope.data.shell, "zsh");
+  assert.match(envelope.data.script, /#compdef code-workspace code-w/);
+  assert.match(envelope.data.script, /--shell/);
+});
+
+test("removed context command is rejected before workspace discovery", () => {
+  const result = run(os.tmpdir(), ["context", "--json"]);
+  assert.equal(result.status, 1);
+  const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.command, null);
+  assert.equal(envelope.diagnostics[0].code, "CLI_UNKNOWN_COMMAND");
 });
 
 test("documentation references are validated by the real semantic parser", () => {
@@ -109,7 +159,7 @@ test("project projections read legacy configuration without requiring language o
     "",
   ].join("\n");
   writeConfig(root, content);
-  const file = path.join(root, ".openspec-workspace", "config.yaml");
+  const file = path.join(root, ".code-workspace", "config.yaml");
   assert.equal(run(root, ["project", "list"]).status, 0);
   assert.equal(run(root, ["project", "show", "portal", "--json"]).status, 0);
   assert.equal(fs.readFileSync(file, "utf8"), content);
@@ -150,7 +200,7 @@ test("future configuration versions fail without rewriting the document", () => 
   const result = run(root, ["project", "list", "--json"]);
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).diagnostics[0].code, "CONFIG_SCHEMA_VERSION_UNSUPPORTED");
-  assert.equal(fs.readFileSync(path.join(root, ".openspec-workspace", "config.yaml"), "utf8"), content);
+  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), content);
 });
 
 test("configuration migration registry plans v0 and v1 upgrades without mutating inputs", () => {
@@ -179,7 +229,7 @@ test("maintenance migration plan combines schema and legacy language actions wit
     "",
   ].join("\n");
   writeConfig(root, content);
-  fs.writeFileSync(path.join(root, ".openspec-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, ".code-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
   const plan = planWorkspaceMaintenance(root, { allowLegacy: true, defaultLanguage: false });
   assert.equal(plan.schema.fromVersion, 1);
   assert.equal(plan.schema.toVersion, CURRENT_CONFIG_VERSION);
@@ -189,11 +239,11 @@ test("maintenance migration plan combines schema and legacy language actions wit
   assert(plan.steps.some((step) => step.kind === "workspace-language"));
   assert(plan.steps.some((step) => step.kind === "state-cleanup"));
   assert.deepEqual(plan.writeTargets.sort(), [
-    path.join(root, ".openspec-workspace", "config.yaml"),
-    path.join(root, ".openspec-workspace", "state.json"),
+    path.join(root, ".code-workspace", "config.yaml"),
+    path.join(root, ".code-workspace", "state.json"),
   ].sort());
-  assert.equal(fs.readFileSync(path.join(root, ".openspec-workspace", "config.yaml"), "utf8"), content);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".openspec-workspace", "state.json"), "utf8")).workspaceLanguage, "zh-CN");
+  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), content);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".code-workspace", "state.json"), "utf8")).workspaceLanguage, "zh-CN");
 });
 
 test("versionless configuration is projected read-only", () => {
@@ -203,7 +253,7 @@ test("versionless configuration is projected read-only", () => {
   const result = run(root, ["project", "list", "--json"]);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).data.projects.length, 0);
-  assert.equal(fs.readFileSync(path.join(root, ".openspec-workspace", "config.yaml"), "utf8"), content);
+  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), content);
 });
 
 test("tool resolution uses cli, workspace state, then manifest precedence", () => {
@@ -258,7 +308,7 @@ test("registered JSON commands use one stable envelope", () => {
     "projects: []",
     "",
   ].join("\n"));
-  for (const args of [["language", "--json"], ["project", "list", "--json"], ["context", "--json"]]) {
+  for (const args of [["language", "--json"], ["project", "list", "--json"], ["completion", "--json"]]) {
     const result = run(root, args);
     assert.equal(result.status, 0, result.stderr);
     const envelope = JSON.parse(result.stdout);
@@ -293,7 +343,7 @@ test("JSON writes require confirmation before changing files", () => {
   const result = run(root, ["project", "remove", "service", "--json"]);
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).diagnostics[0].code, "CLI_CONFIRMATION_REQUIRED");
-  assert.equal(fs.readFileSync(path.join(root, ".openspec-workspace", "config.yaml"), "utf8"), content);
+  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), content);
 });
 
 test("project sync-branch adopts the actual Git branch without touching permission files", () => {
@@ -330,7 +380,7 @@ test("project sync-branch adopts the actual Git branch without touching permissi
   assert.equal(mismatch.configuredBranch, "main");
   assert.equal(mismatch.actualBranch, "feature/sync");
 
-  const configFile = path.join(root, ".openspec-workspace", "config.yaml");
+  const configFile = path.join(root, ".code-workspace", "config.yaml");
   const configBefore = fs.readFileSync(configFile);
   const permissionsBefore = fs.readFileSync(permissionsFile);
   const unconfirmed = run(root, ["project", "sync-branch", "service", "--json"]);
@@ -394,7 +444,7 @@ test("project verify targets one project without unrelated branch or config-doma
     "",
   ].join("\n");
   writeConfig(root, content);
-  const configFile = path.join(root, ".openspec-workspace", "config.yaml");
+  const configFile = path.join(root, ".code-workspace", "config.yaml");
 
   const selected = run(root, ["project", "verify", "service", "--json"]);
   assert.equal(selected.status, 0, selected.stderr);
@@ -464,12 +514,12 @@ test("legacy language absence does not block unrelated command matrix", () => {
     "",
   ].join("\n");
   writeConfig(root, content);
-  for (const args of [["project", "list"], ["project", "verify"], ["context"], ["sync"]]) {
+  for (const args of [["project", "list"], ["project", "verify"], ["sync"]]) {
     const result = run(root, [...args, "--json"]);
     assert.equal(result.status, 0, `${args.join(" ")}: ${result.stdout} ${result.stderr}`);
     assert(!JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === "WORKSPACE_LANGUAGE_MISSING"));
   }
-  assert.equal(fs.readFileSync(path.join(root, ".openspec-workspace", "config.yaml"), "utf8"), content);
+  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), content);
 });
 
 test("project inspection is workspace-independent", () => {
@@ -526,10 +576,10 @@ test("packaged skills and README files reference registered commands and options
     const content = fs.readFileSync(file, "utf8").replace(/\\\n\s*/g, " ");
     const references = [];
     for (const line of content.split("\n")) {
-      if (/^\s*openspec-(?:workspace|w)\s+/.test(line)) {
-        references.push(line.trim().replace(/^openspec-(?:workspace|w)\s+/, ""));
+      if (/^\s*code-(?:workspace|w)\s+/.test(line)) {
+        references.push(line.trim().replace(/^code-(?:workspace|w)\s+/, ""));
       }
-      for (const match of line.matchAll(/`openspec-(?:workspace|w)\s+([^`]+)`/g)) {
+      for (const match of line.matchAll(/`code-(?:workspace|w)\s+([^`]+)`/g)) {
         references.push(match[1]);
       }
     }
@@ -542,7 +592,7 @@ test("packaged skills and README files reference registered commands and options
   }
   assert(checked >= 20, `expected at least 20 command references, found ${checked}`);
   const addProjects = fs.readFileSync(
-    path.resolve(__dirname, "..", "..", "artifacts", "templates", "codex", "skills", "openspec-workspace-add-projects", "SKILL.md"),
+    path.resolve(__dirname, "..", "..", "artifacts", "templates", "codex", "skills", "code-workspace-add-projects", "SKILL.md"),
     "utf8"
   );
   assert.match(addProjects, /data\.language/);

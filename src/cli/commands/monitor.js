@@ -35,13 +35,13 @@ async function executeMonitor(invocation) {
     if (error.code === "EADDRINUSE") {
       throw new WorkspaceError("MONITOR_PORT_IN_USE", `Monitor port 127.0.0.1:${port} is already in use.`, {
         port,
-        remediation: `Start another port with openspec-w monitor -p 8080, then update monitor.url.`,
+        remediation: `Start another port with code-w monitor -p 8080, then update monitor.url.`,
       });
     }
     throw error;
   }
   const text = [
-    `OpenSpec Workspace Monitor listening on http://${monitor.host}:${monitor.port}`,
+    `Code Workspace Monitor listening on http://${monitor.host}:${monitor.port}`,
     `Dashboard: http://${monitor.host}:${monitor.port}/`,
     `Workspaces report to http://${monitor.host}:${monitor.port}/api/v1/events`,
   ].join("\n");

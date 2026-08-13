@@ -132,7 +132,7 @@ function commitUpdateState(root, manifest, options = {}) {
     throw new WorkspaceError(
       "UPDATE_STATE_MISSING",
       "Local initialization state is missing; update can only commit an existing workspace state.",
-      { remediation: "Re-run openspec-w init . --yes before updating this workspace." }
+      { remediation: "Re-run code-w init . --yes before updating this workspace." }
     );
   }
   const state = {

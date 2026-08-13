@@ -30,9 +30,9 @@ const config = { workspace, monitor: { enable: true, url: "http://127.0.0.1:3211
 
 test("monitor dashboard is self-contained and consumes snapshot plus SSE APIs", () => {
   const page = renderMonitorPage();
-  assert.match(page, /OpenSpec Workspace Monitor/);
+  assert.match(page, /Code Workspace Monitor/);
   assert.match(page, /language-select/);
-  assert.match(page, /openspec-monitor-language/);
+  assert.match(page, /code-workspace-monitor-language/);
   assert.match(page, /"en-US"/);
   assert.match(page, /"zh-CN"/);
   assert.doesNotMatch(page, /__MONITOR_MESSAGES__|__DEFAULT_MONITOR_LANGUAGE__/);
@@ -72,8 +72,8 @@ test("monitor dashboard is self-contained and consumes snapshot plus SSE APIs", 
   assert.match(page, /method:'DELETE'/);
   assert.match(page, /localStorage\.getItem\(SOUND_KEY\)!=='off'/);
   assert.match(page, /setAttribute\('aria-pressed',String\(state\.soundEnabled\)\)/);
-  assert.match(page, /ALERT_KEY='openspec-monitor-workspace-alerts'/);
-  assert.match(page, /LEGACY_INBOX_KEY='openspec-monitor-signal-inbox'/);
+  assert.match(page, /ALERT_KEY='code-workspace-monitor-workspace-alerts'/);
+  assert.match(page, /LEGACY_INBOX_KEY='code-workspace-monitor-signal-inbox'/);
   assert.match(page, /function restoreAlerts\(\)/);
   assert.match(page, /\/assets\/request_tip\.mp3/);
   assert.match(page, /\/assets\/session_finish\.mp3/);

@@ -30,7 +30,7 @@ function verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variable
     throw new WorkspaceError(
       "UPDATE_POSTCONDITION_FAILED",
       `Updated managed files failed verification: ${incomplete.map((entry) => `${entry.target} (${entry.state})`).join(", ")}`,
-      { files: incomplete, remediation: "Run openspec-w doctor --json, review the reported files, and retry update." }
+      { files: incomplete, remediation: "Run code-w doctor --json, review the reported files, and retry update." }
     );
   }
   return inspection;
@@ -43,7 +43,7 @@ function updateWorkspace(root, options = {}) {
     throw new WorkspaceError(
       "UPDATE_STATE_MISSING",
       "Local initialization state is missing; update can only run on an initialized workspace.",
-      { file: statePath(root), remediation: "Re-run openspec-w init . --yes before updating this workspace." }
+      { file: statePath(root), remediation: "Re-run code-w init . --yes before updating this workspace." }
     );
   }
   const toolSelection = resolveWorkspaceTools({
@@ -74,7 +74,7 @@ function updateWorkspace(root, options = {}) {
   } catch (error) {
     if (options.language && /unknown changes/.test(error.message)) {
       throw new WorkspaceError("MANAGED_FILE_UNKNOWN", `${error.message}. No configuration or artifacts were changed.`, {
-        remediation: `Review the file or re-run openspec-w update --language ${language} --force.`,
+        remediation: `Review the file or re-run code-w update --language ${language} --force.`,
       });
     }
     throw error;
@@ -122,7 +122,7 @@ function updateWorkspace(root, options = {}) {
 function executeUpdate(invocation) {
   const result = updateWorkspace(invocation.root, invocation.options);
   const written = result.managedFiles.filter((entry) => entry.action === "write").length;
-  return success("update", result, `Updated OpenSpec Workspace assets (${written} written). Tools: ${result.tools.tools.join(", ") || "none"} (${result.tools.source}).`);
+  return success("update", result, `Updated Code Workspace assets (${written} written). Tools: ${result.tools.tools.join(", ") || "none"} (${result.tools.source}).`);
 }
 
 module.exports = { executeUpdate, updateWorkspace };

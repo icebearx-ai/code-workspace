@@ -49,7 +49,7 @@ test("init restores tracked workspace state after every stable stage", async () 
     });
     assert.equal(failure.details.workspaceRolledBack, true, stageId);
     assert.equal(fs.readFileSync(path.join(root, "openspec", "config.yaml"), "utf8"), baseline, stageId);
-    assert.equal(fs.existsSync(path.join(root, ".openspec-workspace")), false, stageId);
+    assert.equal(fs.existsSync(path.join(root, ".code-workspace")), false, stageId);
     assert.equal(fs.existsSync(path.join(root, "USER_GUIDE.md")), false, stageId);
     assert.equal(fs.existsSync(path.join(root, "openspec", "schemas")), false, stageId);
   }
@@ -65,13 +65,13 @@ test("update restores config, state, and managed files after each apply stage", 
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
+  const stateFile = path.join(root, ".code-workspace", "state.json");
   const previousReleaseState = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   previousReleaseState.appliedReleaseVersion = "0.1.0-beta.10";
   previousReleaseState.appliedManifestSha256 = "beta.10-manifest";
   fs.writeFileSync(stateFile, `${JSON.stringify(previousReleaseState, null, 2)}\n`);
   const files = [
-    path.join(root, ".openspec-workspace", "config.yaml"),
+    path.join(root, ".code-workspace", "config.yaml"),
     stateFile,
     path.join(root, "USER_GUIDE.md"),
     path.join(root, "openspec", "config.yaml"),
@@ -112,7 +112,7 @@ test("update rolls back the AGENT.md to AGENTS.md migration as one transaction",
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
+  const stateFile = path.join(root, ".code-workspace", "state.json");
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   const legacyContent = Buffer.from("legacy managed Codex instructions\n");
   delete state.managedFiles["AGENTS.md"];
@@ -153,8 +153,8 @@ test("update verifies managed-file postconditions before committing release stat
     language: "zh-CN",
   });
   const files = [
-    path.join(root, ".openspec-workspace", "config.yaml"),
-    path.join(root, ".openspec-workspace", "state.json"),
+    path.join(root, ".code-workspace", "config.yaml"),
+    path.join(root, ".code-workspace", "state.json"),
     path.join(root, "USER_GUIDE.md"),
     path.join(root, "openspec", "config.yaml"),
   ];
@@ -197,7 +197,7 @@ test("update commits release metadata while preserving initialized workspace sta
   }];
   saveConfig(root, { ...config, projects: expectedProjects });
 
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
+  const stateFile = path.join(root, ".code-workspace", "state.json");
   const previous = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   const expectedManagedFiles = structuredClone(previous.managedFiles);
   previous.appliedReleaseVersion = "0.1.0-beta.10";
@@ -236,7 +236,7 @@ test("update clears the release mismatch reported by doctor", async () => {
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
+  const stateFile = path.join(root, ".code-workspace", "state.json");
   const previous = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   previous.appliedReleaseVersion = "0.1.0-beta.10";
   previous.appliedManifestSha256 = "beta.10-manifest";
@@ -262,7 +262,7 @@ test("update never manufactures a healthy state and rejects missing initializati
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".openspec-workspace", "state.json");
+  const stateFile = path.join(root, ".code-workspace", "state.json");
   const unhealthy = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   unhealthy.status = "needs-repair";
   unhealthy.appliedReleaseVersion = "0.1.0-beta.10";
@@ -276,7 +276,7 @@ test("update never manufactures a healthy state and rejects missing initializati
   fs.unlinkSync(stateFile);
   assert.throws(
     () => updateWorkspace(root, { run: forbiddenRun }),
-    (error) => error.code === "UPDATE_STATE_MISSING" && /openspec-w init/.test(error.details.remediation)
+    (error) => error.code === "UPDATE_STATE_MISSING" && /code-w init/.test(error.details.remediation)
   );
   assert.equal(fs.existsSync(stateFile), false);
 });
@@ -293,7 +293,7 @@ test("project configuration restores config and permissions at each write bounda
   const permissionsFile = path.join(root, ".codex", "config.toml");
   fs.mkdirSync(path.dirname(permissionsFile), { recursive: true });
   fs.writeFileSync(permissionsFile, "# user configuration\n");
-  const configFile = path.join(root, ".openspec-workspace", "config.yaml");
+  const configFile = path.join(root, ".code-workspace", "config.yaml");
   const baselineConfig = fs.readFileSync(configFile);
   const baselinePermissions = fs.readFileSync(permissionsFile);
   const next = {
@@ -332,7 +332,7 @@ test("project branch synchronization rolls back its only workspace write", () =>
     projects: [project],
   };
   saveConfig(root, config);
-  const configFile = path.join(root, ".openspec-workspace", "config.yaml");
+  const configFile = path.join(root, ".code-workspace", "config.yaml");
   const permissionsFile = path.join(root, ".codex", "config.toml");
   fs.mkdirSync(path.dirname(permissionsFile), { recursive: true });
   fs.writeFileSync(permissionsFile, "# untouched permissions\n");
@@ -374,13 +374,13 @@ test("permission synchronization verifies its single atomic write with a stable 
   assert.throws(() => syncPermissions(root, [], {
     atomicWrite: (file, content) => {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, content.replace("# END workspace-permissions:openspec-workspace", "# corrupted managed block"));
+      fs.writeFileSync(file, content.replace("# END workspace-permissions:code-workspace", "# corrupted managed block"));
     },
   }), (error) => {
     verificationError = error;
     return error.code === "WORKSPACE_PERMISSIONS_VERIFY_FAILED";
   });
-  assert.match(verificationError.details.remediation, /openspec-w sync/);
+  assert.match(verificationError.details.remediation, /code-w sync/);
 
   let stdout = "";
   let stderr = "";

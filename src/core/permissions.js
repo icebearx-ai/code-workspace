@@ -4,8 +4,8 @@ const path = require("node:path");
 const { atomicWrite } = require("./fs");
 const { WorkspaceError } = require("./errors");
 
-const START = "# BEGIN workspace-permissions:openspec-workspace";
-const END = "# END workspace-permissions:openspec-workspace";
+const START = "# BEGIN workspace-permissions:code-workspace";
+const END = "# END workspace-permissions:code-workspace";
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -57,14 +57,14 @@ function syncPermissions(root, projects, options = {}) {
     throw new WorkspaceError("WORKSPACE_PERMISSIONS_VERIFY_FAILED", `Cannot verify synchronized Codex permissions: ${error.message}`, {
       file,
       cause: error.code || error.name,
-      remediation: "Re-run openspec-w sync after checking write access to .codex/config.toml.",
+      remediation: "Re-run code-w sync after checking write access to .codex/config.toml.",
     });
   }
   if (actual !== normalized || !actual.includes(START) || !actual.includes(END)) {
     throw new WorkspaceError("WORKSPACE_PERMISSIONS_VERIFY_FAILED", "Synchronized Codex permissions did not match the planned managed block.", {
       file,
       writableRoots: projects.length,
-      remediation: "Inspect .codex/config.toml and re-run openspec-w sync.",
+      remediation: "Inspect .codex/config.toml and re-run code-w sync.",
     });
   }
   return { action: "write", file, writableRoots: projects.length };

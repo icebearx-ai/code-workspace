@@ -16,7 +16,6 @@ const COMMAND_SUMMARIES = {
   "project list": "List local projects",
   "project show": "Show one local project",
   "project verify": "Validate all local projects or one selected project",
-  context: "Print workspace context",
   sync: "Synchronize Codex writable roots",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
@@ -43,7 +42,6 @@ const COMMANDS = [
   { path: ["project", "list"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "show"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { name: { type: "string" } } },
   { path: ["project", "verify"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
-  { path: ["context"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { project: { type: "string" } } },
   { path: ["sync"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "planned-write", options: {} },
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
   { path: ["completion"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: { shell: { type: "string" } } },
@@ -55,10 +53,6 @@ const byPath = new Map(COMMANDS.map((command) => [command.path.join(" "), Object
 
 function getCommand(path) {
   return byPath.get(Array.isArray(path) ? path.join(" ") : String(path || "")) || null;
-}
-
-function topLevelCommands() {
-  return [...new Set(COMMANDS.map((command) => command.path[0]).filter((name) => !["help", "version"].includes(name)))];
 }
 
 function commandHelpRows() {
@@ -82,7 +76,7 @@ function validateCommandReference(reference) {
   if (tokens.length === 0) return { valid: false, reason: "empty command reference" };
   const normalized = tokens.map((token) => /^<[^>]+>$/.test(token) ? "placeholder" : token);
   try {
-    const parsed = require("./parser").parse([process.execPath, "openspec-workspace", ...normalized]);
+    const parsed = require("./parser").parse([process.execPath, "code-workspace", ...normalized]);
     return {
       valid: true,
       command: parsed.command,
@@ -94,4 +88,4 @@ function validateCommandReference(reference) {
   }
 }
 
-module.exports = { COMMANDS: Object.freeze(COMMANDS), GLOBAL_OPTIONS: Object.freeze(GLOBAL_OPTIONS), commandHelpRows, getCommand, topLevelCommands, validateCommandReference };
+module.exports = { COMMANDS: Object.freeze(COMMANDS), GLOBAL_OPTIONS: Object.freeze(GLOBAL_OPTIONS), commandHelpRows, getCommand, validateCommandReference };

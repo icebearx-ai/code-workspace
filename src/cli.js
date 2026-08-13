@@ -2,16 +2,14 @@ const { loadConfigProjection, requireWorkspaceRoot } = require("./core/config");
 const { normalizeTools } = require("./core/tools");
 const { WorkspaceError } = require("./core/errors");
 const { parse } = require("./cli/parser");
-const { topLevelCommands } = require("./cli/registry");
 const { failure } = require("./cli/result");
+const { executeCompletion } = require("./cli/commands/completion");
 const { executeHelp, executeVersion } = require("./cli/commands/help");
 const { executeInit } = require("./cli/commands/init");
 const { executeMonitor, readStdinJson } = require("./cli/commands/monitor");
 const { executeProject } = require("./cli/commands/project");
 const { executeUpdate, updateWorkspace } = require("./cli/commands/update");
 const {
-  executeCompletion,
-  executeContext,
   executeDoctor,
   executeLanguage,
   executeSync,
@@ -24,10 +22,9 @@ async function dispatch(invocation) {
   if (key.startsWith("project ")) return executeProject(invocation);
   if (key === "update") return executeUpdate(invocation);
   if (key === "language") return executeLanguage(invocation);
-  if (key === "context") return executeContext(invocation);
   if (key === "sync") return executeSync(invocation);
   if (key === "doctor") return executeDoctor(invocation);
-  if (key === "completion") return executeCompletion(invocation, topLevelCommands());
+  if (key === "completion") return executeCompletion(invocation);
   if (key === "help") return executeHelp();
   if (key === "version") return executeVersion();
   throw Object.assign(new Error(`No handler is registered for command: ${key}`), { code: "CLI_HANDLER_MISSING" });

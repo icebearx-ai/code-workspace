@@ -1,12 +1,12 @@
 {
-  "description": "Report Codex Agent lifecycle events to OpenSpec Workspace Monitor.",
+  "description": "Report Codex Agent lifecycle events to Code Workspace Monitor.",
   "hooks": {
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "openspec-w monitor report",
+            "command": "code-w monitor report",
             "timeout": 1
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "openspec-w monitor report",
+            "command": "code-w monitor report",
             "timeout": 1
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "openspec-w monitor report",
+            "command": "code-w monitor report",
             "timeout": 1
           }
         ]
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "openspec-w monitor report",
+            "command": "code-w monitor report",
             "timeout": 1
           }
         ]
@@ -54,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "openspec-w monitor report",
+            "command": "code-w monitor report",
             "timeout": 1
           }
         ]
@@ -65,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "openspec-w monitor report",
+            "command": "code-w monitor report",
             "timeout": 1
           }
         ]
@@ -76,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "openspec-w monitor report",
+            "command": "code-w monitor report",
             "timeout": 1
           }
         ]

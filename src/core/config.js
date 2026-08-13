@@ -6,10 +6,10 @@ const { atomicWrite } = require("./fs");
 const { WorkspaceError } = require("./errors");
 const { LANGUAGE_CODES } = require("../i18n");
 
-const LOCAL_DIRECTORY = ".openspec-workspace";
+const LOCAL_DIRECTORY = ".code-workspace";
 const CONFIG_FILE = "config.yaml";
 const STATE_FILE = "state.json";
-const DEFAULT_WORKSPACE_NAME = "openspec-workspace";
+const DEFAULT_WORKSPACE_NAME = "code-workspace";
 const DEFAULT_MONITOR_URL = "http://127.0.0.1:3211";
 const CURRENT_CONFIG_VERSION = 2;
 const MINIMUM_READABLE_CONFIG_VERSION = 0;
@@ -48,7 +48,7 @@ function requireWorkspaceRoot(start = process.cwd()) {
   if (!root) {
     throw new WorkspaceError(
       "WORKSPACE_NOT_FOUND",
-      "No local OpenSpec Workspace found. Run `openspec-workspace init` first.",
+      "No local Code Workspace found. Run `code-workspace init` first.",
       { start: path.resolve(start) }
     );
   }
@@ -76,7 +76,7 @@ function normalizeWorkspaceLanguage(value, options = {}) {
     throw new WorkspaceError(code, `workspace.language must be one of: ${LANGUAGE_CODES.join(", ")}`, {
       actual: language || null,
       supported: LANGUAGE_CODES,
-      remediation: `openspec-w update --language ${LANGUAGE_CODES[0]}`,
+      remediation: `code-w update --language ${LANGUAGE_CODES[0]}`,
     });
   }
   return language;
@@ -312,7 +312,7 @@ function updateProjectBranch(root, update, options = {}) {
     ...document.value,
     projects: sourceProjects.map((entry) => entry?.name === update.name ? project : entry),
   };
-  (options.atomicWrite || atomicWrite)(document.file, renderConfigDocument(nextDocument));
+  (options.atomicWrite || atomicWrite)(configPath(root), renderConfigDocument(nextDocument));
   return project;
 }
 
@@ -336,7 +336,7 @@ function ensureLocalIgnore(root) {
   });
   if (ignored) return "skip";
   const prefix = current && !current.endsWith("\n") ? "\n" : "";
-  atomicWrite(file, `${current}${prefix}\n# OpenSpec Workspace local configuration\n/${LOCAL_DIRECTORY}/\n`);
+  atomicWrite(file, `${current}${prefix}\n# Code Workspace local configuration\n/${LOCAL_DIRECTORY}/\n`);
   return "write";
 }
 

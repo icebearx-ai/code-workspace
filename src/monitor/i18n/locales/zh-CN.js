@@ -2,7 +2,7 @@ module.exports = {
   code: "zh-CN",
   label: "中文（简体）",
   messages: {
-    title: "OpenSpec 工作区监控",
+    title: "Code Workspace 监控",
     eyebrow: "本地运行中心",
     language: "语言",
     summary: "监控汇总",
