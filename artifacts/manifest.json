@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "releaseVersion": "0.1.0-beta.0",
+  "releaseVersion": "0.1.0-beta.1",
   "requirements": {
     "node": ">=20.19.0"
   },
