@@ -31,11 +31,14 @@ const config = { workspace, monitor: { enable: true, url: "http://127.0.0.1:3211
 test("monitor dashboard is self-contained and consumes snapshot plus SSE APIs", () => {
   const page = renderMonitorPage();
   assert.match(page, /Code Workspace Monitor/);
-  assert.match(page, /language-select/);
+  assert.match(page, /id="language-toggle"/);
+  assert.match(page, /class="language-icon"/);
+  assert.match(page, /mask:url\('\/assets\/i18n-icon\.svg'\)/);
+  assert.doesNotMatch(page, /<select|language-select/);
   assert.match(page, /code-workspace-monitor-language/);
   assert.match(page, /"en-US"/);
   assert.match(page, /"zh-CN"/);
-  assert.doesNotMatch(page, /__MONITOR_MESSAGES__|__DEFAULT_MONITOR_LANGUAGE__/);
+  assert.doesNotMatch(page, /__MONITOR_MESSAGES__|__MONITOR_LANGUAGES__|__DEFAULT_MONITOR_LANGUAGE__/);
   assert.match(page, /fetch\('\/api\/v1\/snapshot'/);
   assert.match(page, /EventSource\('\/api\/v1\/stream'\)/);
   assert.match(page, /执行视图/);
@@ -43,11 +46,13 @@ test("monitor dashboard is self-contained and consumes snapshot plus SSE APIs", 
   assert.match(page, /panel-icon execution-icon/);
   assert.match(page, /panel-icon signal-icon/);
   assert.match(page, /class="brand-mark"/);
-  assert.match(page, /class="mark-signal"/);
-  assert.doesNotMatch(page, /class="mark"><span>O<\/span>/);
+  assert.match(page, /<img src="\/assets\/logo-vector\.svg" alt="">/);
+  assert.doesNotMatch(page, /class="mark-signal"/);
   assert.match(page, /@media\(max-width:400px\)[\s\S]*?\.brand-copy\{display:none\}/);
-  assert.match(page, /@media\(max-width:400px\)[\s\S]*?\.language-select\{width:68px/);
+  assert.match(page, /@media\(max-width:720px\)[\s\S]*?\.control-toggle\{width:32px/);
   assert.match(page, /@media\(max-width:600px\)\{\.metrics\{display:none\}/);
+  assert.match(page, /function toggleLanguage\(\)/);
+  assert.match(page, /next=current<0\?0:\(current\+1\)%LANGUAGES\.length/);
   assert.match(page, /id="sound-toggle"/);
   assert.match(page, /id="sound-toggle"[^>]*aria-pressed="true"/);
   assert.doesNotMatch(page, /id="beacons"|function showBeacon|function restoreBeacons/);
@@ -161,6 +166,12 @@ test("global monitor accepts events without reading a workspace", async (t) => {
     assert.equal(audio.status, 200);
     assert.equal(audio.headers.get("content-type"), "audio/mpeg");
     assert((await audio.arrayBuffer()).byteLength > 0);
+  }
+  for (const asset of ["logo-vector.svg", "i18n-icon.svg"]) {
+    const image = await fetch(`${base}/assets/${asset}`);
+    assert.equal(image.status, 200);
+    assert.match(image.headers.get("content-type"), /^image\/svg\+xml/);
+    assert.match(await image.text(), /<svg/);
   }
   assert.equal((await fetch(`${base}/assets/unknown.mp3`)).status, 404);
   const event = normalizeHookEvent({ hook_event_name: "UserPromptSubmit", session_id: "session-1", turn_id: "turn-1" }, config);

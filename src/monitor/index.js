@@ -7,8 +7,10 @@ const { renderMonitorPage } = require("./page");
 const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 3211;
 const MONITOR_ASSETS = new Map([
-  ["/assets/request_tip.mp3", path.join(__dirname, "..", "..", "assets", "request_tip.mp3")],
-  ["/assets/session_finish.mp3", path.join(__dirname, "..", "..", "assets", "session_finish.mp3")],
+  ["/assets/request_tip.mp3", { file: path.join(__dirname, "..", "..", "assets", "request_tip.mp3"), type: "audio/mpeg" }],
+  ["/assets/session_finish.mp3", { file: path.join(__dirname, "..", "..", "assets", "session_finish.mp3"), type: "audio/mpeg" }],
+  ["/assets/logo-vector.svg", { file: path.join(__dirname, "..", "..", "assets", "logo-vector.svg"), type: "image/svg+xml; charset=utf-8" }],
+  ["/assets/i18n-icon.svg", { file: path.join(__dirname, "..", "..", "assets", "i18n-icon.svg"), type: "image/svg+xml; charset=utf-8" }],
 ]);
 
 const EVENT_DEFINITIONS = {
@@ -156,10 +158,10 @@ function sendHtml(response, body) {
   response.end(body);
 }
 
-function sendAudio(response, file) {
-  const body = fs.readFileSync(file);
+function sendAsset(response, asset) {
+  const body = fs.readFileSync(asset.file);
   response.writeHead(200, {
-    "content-type": "audio/mpeg",
+    "content-type": asset.type,
     "content-length": body.length,
     "cache-control": "public, max-age=3600",
     "x-content-type-options": "nosniff",
@@ -175,7 +177,7 @@ function createMonitorServer(options = {}) {
     const url = new URL(request.url, `http://${request.headers.host || `${host}:${port}`}`);
     try {
       if (request.method === "GET" && url.pathname === "/") return sendHtml(response, renderMonitorPage());
-      if (request.method === "GET" && MONITOR_ASSETS.has(url.pathname)) return sendAudio(response, MONITOR_ASSETS.get(url.pathname));
+      if (request.method === "GET" && MONITOR_ASSETS.has(url.pathname)) return sendAsset(response, MONITOR_ASSETS.get(url.pathname));
       if (request.method === "GET" && url.pathname === "/api/v1/health") return sendJson(response, 200, { ok: true });
       if (request.method === "GET" && url.pathname === "/api/v1/snapshot") return sendJson(response, 200, store.snapshot());
       if (request.method === "GET" && url.pathname === "/api/v1/workspaces") return sendJson(response, 200, { workspaces: store.snapshot().workspaces });
