@@ -10,7 +10,7 @@ const { sha256 } = require("../core/fs");
 const { MANIFEST_FILE, loadInitManifest } = require("../core/init");
 const { INITIALIZATION_STAGE_IDS, initializeWorkspace } = require("../core/initializer");
 const { applyPermissionPlan, planPermissionChanges } = require("../core/permissions");
-const { applyProjectBranchSync } = require("../cli/commands/project");
+const { applyAcceptActual } = require("../cli/commands/project-branch");
 const { applyProjectConfiguration } = require("../core/project-configuration");
 const { updateWorkspace } = require("../cli/commands/update");
 const { failure } = require("../cli/result");
@@ -322,7 +322,7 @@ test("project configuration restores config and permissions at each write bounda
   }
 });
 
-test("project branch synchronization rolls back its only workspace write", () => {
+test("accepting an actual branch rolls back configuration at apply and verification boundaries", () => {
   const root = temporaryRoot();
   const project = {
     name: "service",
@@ -331,47 +331,108 @@ test("project branch synchronization rolls back its only workspace write", () =>
     type: "backend",
     context: "service",
   };
-  const config = {
+  saveConfig(root, {
     schemaVersion: 2,
-    workspace: { name: "branch-sync", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
+    workspace: { name: "branch-accept", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
     monitor: { enable: false, url: "http://127.0.0.1:3211" },
     projects: [project],
-  };
-  saveConfig(root, config);
+  });
   const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const permissionsFile = path.join(root, ".codex", "config.toml");
-  fs.mkdirSync(path.dirname(permissionsFile), { recursive: true });
-  fs.writeFileSync(permissionsFile, "# untouched permissions\n");
-  const baselineConfig = fs.readFileSync(configFile);
-  const baselinePermissions = fs.readFileSync(permissionsFile);
-  const plan = { action: "update", project, previousBranch: "main", actualBranch: "feature/sync" };
+  const baseline = fs.readFileSync(configFile);
+  const plan = {
+    action: "update",
+    project: { name: "service", location: "/tmp/service" },
+    before: { registeredBranch: "main", actualBranch: "feature/work" },
+    after: { registeredBranch: "feature/work", actualBranch: "feature/work" },
+    worktreeClean: true,
+    registeredBranchExists: true,
+  };
+  const inspectProjectBranch = (config) => {
+    const current = config.projects.find((entry) => entry.name === "service");
+    return {
+      project: { name: "service", location: "/tmp/service" },
+      registeredBranch: current.branch,
+      actualBranch: "feature/work",
+      matches: current.branch === "feature/work",
+      worktreeClean: true,
+      registeredBranchExists: true,
+    };
+  };
 
   for (const stageId of ["after-config-save", "after-verify"]) {
     let failure;
-    assert.throws(() => applyProjectBranchSync(root, plan, {
-      inspectGitWorktree: () => ({ branch: "feature/sync" }),
-      injectFailure: (current) => {
-        if (current === stageId) throw new Error(`injected ${stageId}`);
+    assert.throws(() => applyAcceptActual(root, plan, {
+      inspectProjectBranch,
+      injectFailure: (stage) => {
+        if (stage === stageId) throw new Error(`injected ${stageId}`);
       },
     }), (error) => {
       failure = error;
-      return error.code === "PROJECT_BRANCH_SYNC_FAILED";
+      return error.code === "PROJECT_BRANCH_ACCEPT_FAILED";
     });
     assert.equal(failure.details.workspaceRolledBack, true, stageId);
-    assert.deepEqual(fs.readFileSync(configFile), baselineConfig, stageId);
-    assert.deepEqual(fs.readFileSync(permissionsFile), baselinePermissions, stageId);
+    assert.deepEqual(fs.readFileSync(configFile), baseline, stageId);
   }
 
-  let raceFailure;
-  assert.throws(() => applyProjectBranchSync(root, plan, {
-    inspectGitWorktree: () => ({ branch: "feature/changed-again" }),
+  let inspections = 0;
+  assert.throws(() => applyAcceptActual(root, plan, {
+    inspectProjectBranch: (config) => {
+      inspections += 1;
+      const observed = inspectProjectBranch(config);
+      return inspections === 1 ? observed : { ...observed, actualBranch: "feature/drift", matches: false };
+    },
   }), (error) => {
-    raceFailure = error;
-    return error.code === "PROJECT_BRANCH_SYNC_VERIFY_FAILED";
+    assert.equal(error.code, "PROJECT_BRANCH_ACCEPT_VERIFY_FAILED");
+    assert.deepEqual(error.details.expectedState, plan.after);
+    assert.deepEqual(error.details.observedState, { registeredBranch: "feature/work", actualBranch: "feature/drift" });
+    assert.equal(error.details.workspaceRolledBack, true);
+    return true;
   });
-  assert.equal(raceFailure.details.workspaceRolledBack, true);
-  assert.deepEqual(fs.readFileSync(configFile), baselineConfig);
-  assert.deepEqual(fs.readFileSync(permissionsFile), baselinePermissions);
+  assert.deepEqual(fs.readFileSync(configFile), baseline);
+});
+
+test("an accept-actual conflict preserves another writer's configuration", () => {
+  const root = temporaryRoot();
+  const base = {
+    schemaVersion: 2,
+    workspace: { name: "branch-conflict", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
+    monitor: { enable: false, url: "http://127.0.0.1:3211" },
+    projects: [{ name: "service", location: "/tmp/service", branch: "main", type: "backend", context: "service" }],
+  };
+  saveConfig(root, base);
+  const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const plan = {
+    action: "update",
+    project: { name: "service", location: "/tmp/service" },
+    before: { registeredBranch: "main", actualBranch: "feature/work" },
+    after: { registeredBranch: "feature/work", actualBranch: "feature/work" },
+    worktreeClean: true,
+    registeredBranchExists: true,
+  };
+  const inspectProjectBranch = (config) => ({
+    project: { name: "service", location: "/tmp/service" },
+    registeredBranch: config.projects[0].branch,
+    actualBranch: "feature/work",
+    matches: false,
+    worktreeClean: true,
+    registeredBranchExists: true,
+  });
+  let concurrentContent;
+  assert.throws(() => applyAcceptActual(root, plan, {
+    inspectProjectBranch,
+    updateProjectBranch: () => {
+      saveConfig(root, { ...base, projects: [{ ...base.projects[0], branch: "feature/concurrent" }] });
+      concurrentContent = fs.readFileSync(configFile);
+      throw Object.assign(new Error("concurrent registry update"), {
+        code: "PROJECT_BRANCH_ACCEPT_CONFLICT",
+        details: {
+          expectedState: plan.before,
+          observedState: { registeredBranch: "feature/concurrent", actualBranch: "feature/work" },
+        },
+      });
+    },
+  }), (error) => error.code === "PROJECT_BRANCH_ACCEPT_CONFLICT");
+  assert.deepEqual(fs.readFileSync(configFile), concurrentContent);
 });
 
 test("permission application verifies its atomic write with a stable JSON failure", () => {

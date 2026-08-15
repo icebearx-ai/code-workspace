@@ -1,59 +1,59 @@
 # Workspace Context
 
-This directory is a Code Workspace for multiple independent software projects. The workspace is not a project and is not the default location for production code.
+This directory is the Code Workspace control plane for multiple independent software projects. The workspace is not a project and is not the default location for production code.
 
-Use the registry as the only source of truth for project locations, ownership, and registered branches.
+The registry is authoritative for project identity, ownership, location, and the registered branch. A project's `registeredBranch` is the Code Workspace expected state; its `actualBranch` is the selected Git worktree's observed state. A mismatch does not make either side automatically authoritative—the user chooses the reconciliation direction, and the CLI enforces it safely.
 
-## Discover and Select a Project
+## Select One Project Scope
 
-For tasks that read or modify project code, first run:
+If the user explicitly names a registered project, resolve it directly:
+
+```bash
+code-w project show "<project.name>" --json
+```
+
+Only when project ownership cannot be determined, list registry metadata:
 
 ```bash
 code-w project list --json
 ```
 
-Read every record in `data.projects`. Select the responsible project from its `name`, `type`, and `context`, then use its absolute `location` as the project root.
+Use `name`, `type`, and `context` only to identify relevant candidates and ask the user to choose. Do not inspect candidate repositories while selecting.
 
 - You MUST NOT guess a project path or scan parent/sibling directories for projects.
 - If the registry is empty, ask which projects to manage and tell the user to run `{{ADD_PROJECTS_INVOCATION}}`.
-- If no project clearly owns the task, show the relevant registered names and ask the user to choose.
 - If the user names an unregistered project, require registration before using its path.
-- Do not modify another registered project unless the user's request explicitly includes it.
+- Once selected, freeze the scope to that project. Do not read, verify, modify, repair, or comment on another registered project unless the user explicitly expands the request.
+- If multiple projects are explicitly included, handle each one with a separate targeted verification.
 
-Meta, help, or workspace-tool maintenance tasks that do not depend on registered project ownership do not require project discovery.
+Meta, help, or workspace-tool maintenance tasks that do not depend on registered project ownership do not require project selection.
 
 ## Verify the Selected Project
 
-After selecting `<project.name>`, run:
+Before reading or modifying selected project code, run:
 
 ```bash
 code-w project verify "<project.name>" --json
 ```
 
-Do not begin project work unless the response has `ok: true`.
-
-- On `PROJECT_BRANCH_MISMATCH`, stop project work and invoke the installed `code-workspace-resolve-branch` Skill for that project.
-- For any other failure, explain the diagnostics and do not repair or guess registry information without explicit user direction.
-- Do not reuse branch-dependent project context after a mismatch is resolved; list and verify the project again.
+- Continue only when the targeted result has `ok: true`.
+- On `PROJECT_BRANCH_MISMATCH`, pause project work and invoke the installed `code-workspace-resolve-branch` Skill for that project. Do not choose a branch direction yourself.
+- For any other failure, report the targeted diagnostics and wait for user direction; do not escalate to full-workspace validation.
+- After reconciliation, discard branch-dependent context and use only the Skill's targeted re-verification. Do not list or verify unrelated projects.
 
 ## Workspace Write Boundary
 
-The AI MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root.
-
-In particular, do not directly modify:
+The AI MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root, including:
 
 - `.code-workspace/config.yaml` or `.code-workspace/state.json`
 - `.codex/config.toml`
 - `CLAUDE.md`, `AGENTS.md`, or other managed workspace files
 
-Change workspace registry information only through an approved `code-w` command. The CLI owns validation, confirmation, atomic persistence, postconditions, rollback, and structured output.
+Change registry information only through an approved `code-w` command. The CLI owns confirmation, concurrency checks, persistence or safe external effects, postconditions, rollback/compensation, and structured output. This boundary does not prevent user-requested production-code changes inside the selected external `project.location`.
 
-This boundary does not prevent user-requested changes inside the selected external `project.location`.
+## Responsibilities
 
-## Operating Rules
-
-- Resolve production code locations only from the registry.
-- Treat targeted `project verify` as a mandatory guard before project work.
-- Keep the registered and actual Git branches consistent.
-- Never guess a project, path, branch, or code owner.
-- Stop and ask the user whenever required verification has not succeeded.
+- The CLI collects and verifies branch facts and performs only explicitly confirmed safe reconciliation.
+- The Agent explains facts, invokes the branch Skill, and follows the user's selected direction.
+- The user decides whether to use the registered branch, accept the actual branch, or resolve manually.
+- Code Workspace does not edit production code, create branches, fetch network state, stash/reset changes, or resolve conflicts.

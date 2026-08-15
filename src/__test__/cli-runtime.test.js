@@ -66,6 +66,31 @@ test("semantic parser accepts targeted project verification with valid option or
   assert.deepEqual({ args: after.args, options: after.options }, { args: ["service"], options: { json: true } });
 });
 
+test("project branch commands are registry-driven three-segment contracts", () => {
+  const contracts = {
+    "project branch inspect": { interaction: "never", effects: "read-only", options: [] },
+    "project branch accept-actual": { interaction: "required", effects: "planned-write", options: ["yes"] },
+    "project branch use-registered": { interaction: "required", effects: "external", options: ["yes"] },
+  };
+  for (const [commandPath, expected] of Object.entries(contracts)) {
+    const definition = getCommand(commandPath);
+    assert(definition, commandPath);
+    assert.equal(definition.workspace, "required");
+    assert.deepEqual(definition.config, ["projects"]);
+    assert.equal(definition.interaction, expected.interaction);
+    assert.equal(definition.effects, expected.effects);
+    assert.deepEqual(Object.keys(definition.options), expected.options);
+    const tokens = commandPath.split(" ");
+    const before = parse(argv(...tokens, "--json", "service", ...(expected.options.includes("yes") ? ["--yes"] : [])));
+    const after = parse(argv(...tokens, "service", ...(expected.options.includes("yes") ? ["--yes"] : []), "--json"));
+    assert.deepEqual(before.args, ["service"]);
+    assert.deepEqual(before.options, after.options);
+  }
+  assert.throws(() => parse(argv("project", "branch", "inspect", "service", "extra")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
+  assert.throws(() => parse(argv("project", "branch", "inspect", "service", "--yes")), (error) => error.code === "CLI_UNKNOWN_OPTION");
+  assert.throws(() => parse(argv("project", "branch", "use-registered", "service", "--force")), (error) => error.code === "CLI_UNKNOWN_OPTION");
+});
+
 test("semantic parser covers explicit boolean values, missing values, aliases, and -- paths", () => {
   assert.throws(() => parse(argv("project", "list", "--json=false")), (error) => error.code === "CLI_INVALID_OPTION_VALUE");
   assert.throws(() => parse(argv("project", "list", "--json", "false")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
@@ -100,7 +125,7 @@ test("completion scripts include subcommands and command-specific options", () =
   const bash = renderBashCompletion(spec);
   const zsh = renderZshCompletion(spec);
   for (const script of [bash, zsh]) {
-    for (const subcommand of ["inspect", "add", "remove", "sync-branch", "list", "show", "verify"]) {
+    for (const subcommand of ["inspect", "add", "remove", "branch", "list", "show", "verify"]) {
       assert.match(script, new RegExp(`['\"]?${subcommand}['\"]?`));
     }
     assert.match(script, /monitor/);
@@ -109,6 +134,9 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /--shell/);
     assert.match(script, /permissions/);
     assert.match(script, /apply/);
+    assert.match(script, /accept-actual/);
+    assert.match(script, /use-registered/);
+    assert.doesNotMatch(script, /sync-branch/);
   }
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
   const projectList = spec.commands.find((entry) => entry.path.join(" ") === "project list");
@@ -119,13 +147,19 @@ test("completion scripts include subcommands and command-specific options", () =
   assert(permissionsApply.options.includes("--tools"));
   assert(permissionsApply.options.includes("--yes"));
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("sync"));
+  assert.deepEqual(
+    new Set(spec.children.find((entry) => entry.path.join(" ") === "project branch").values),
+    new Set(["inspect", "accept-actual", "use-registered"])
+  );
 });
 
 test("completion returns the generated script in text and JSON modes", () => {
   const bash = run(os.tmpdir(), ["completion", "--shell", "bash"]);
   assert.equal(bash.status, 0, bash.stderr);
   assert.match(bash.stdout, /complete -F _code_workspace code-workspace code-w/);
-  assert.match(bash.stdout, /inspect add remove sync-branch list show verify/);
+  assert.doesNotMatch(bash.stdout, /sync-branch/);
+  assert.match(bash.stdout, /accept-actual/);
+  assert.match(bash.stdout, /use-registered/);
 
   const zsh = run(os.tmpdir(), ["completion", "--shell", "zsh", "--json"]);
   assert.equal(zsh.status, 0, zsh.stderr);
@@ -144,9 +178,21 @@ test("removed context command is rejected before workspace discovery", () => {
   assert.equal(envelope.diagnostics[0].code, "CLI_UNKNOWN_COMMAND");
 });
 
+test("removed project sync-branch command is rejected before workspace discovery", () => {
+  const result = run(os.tmpdir(), ["project", "sync-branch", "service", "--json"]);
+  assert.equal(result.status, 1);
+  const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.command, null);
+  assert.equal(envelope.diagnostics[0].code, "CLI_UNKNOWN_COMMAND");
+  assert.doesNotMatch(envelope.diagnostics[0].message, /Workspace/);
+});
+
 test("documentation references are validated by the real semantic parser", () => {
   assert.equal(validateCommandReference('project inspect "<path>" --json').valid, true);
-  assert.equal(validateCommandReference('project sync-branch "<name>" --yes --json').valid, true);
+  assert.equal(validateCommandReference('project sync-branch "<name>" --yes --json').valid, false);
+  assert.equal(validateCommandReference('project branch inspect "<name>" --json').valid, true);
+  assert.equal(validateCommandReference('project branch accept-actual "<name>" --yes --json').valid, true);
+  assert.equal(validateCommandReference('project branch use-registered "<name>" --yes --json').valid, true);
   assert.equal(validateCommandReference("permissions apply --tools claude,codex --yes --json").valid, true);
   assert.equal(validateCommandReference("update --tools").valid, false);
   assert.match(validateCommandReference("update --froce").reason, /CLI_UNKNOWN_OPTION/);
@@ -357,70 +403,150 @@ test("JSON writes require confirmation before changing files", () => {
   assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), content);
 });
 
-test("project sync-branch adopts the actual Git branch without touching permission files", () => {
+test("project branch inspect and accept-actual are targeted, canonical, and transactional", () => {
   const parent = temporaryRoot();
   const root = path.join(parent, "workspace");
   const repository = path.join(parent, "service");
   fs.mkdirSync(root);
   fs.mkdirSync(repository);
+  fs.writeFileSync(path.join(repository, "tracked.txt"), "initial\n");
   spawnSync("git", ["init", "-b", "main"], { cwd: repository, stdio: "ignore" });
-  writeConfig(root, [
+  spawnSync("git", ["add", "tracked.txt"], { cwd: repository, stdio: "ignore" });
+  spawnSync("git", ["-c", "user.name=Code Workspace", "-c", "user.email=workspace@example.invalid", "commit", "-m", "initial"], { cwd: repository, stdio: "ignore" });
+  spawnSync("git", ["switch", "-c", "feature/work"], { cwd: repository, stdio: "ignore" });
+  const content = [
     "schemaVersion: 2",
     "workspace:",
-    "  name: branch-sync",
+    "  name: branch-inspect",
     "  uuid: 123e4567-e89b-42d3-a456-426614174000",
+    "  language: invalid",
     "monitor:",
-    "  enable: false",
-    "  url: not-a-valid-monitor-url",
+    "  url: not-a-valid-url",
     "projects:",
     "  - name: service",
     `    location: ${repository}`,
     "    branch: main",
     "    type: backend",
     "    context: service",
+    "  - name: unreachable",
+    `    location: ${path.join(parent, "does-not-exist")}`,
+    "    branch: stale",
+    "    type: backend",
+    "    context: unreachable",
     "",
-  ].join("\n"));
-  const permissionsFile = path.join(root, ".codex", "config.toml");
-  fs.mkdirSync(path.dirname(permissionsFile), { recursive: true });
-  fs.writeFileSync(permissionsFile, "# preserve permissions\n");
-  spawnSync("git", ["switch", "-c", "feature/sync"], { cwd: repository, stdio: "ignore" });
-
-  const verifyBefore = run(root, ["project", "verify", "--json"]);
-  assert.equal(verifyBefore.status, 1);
-  const mismatch = JSON.parse(verifyBefore.stdout).diagnostics.find((entry) => entry.code === "PROJECT_BRANCH_MISMATCH");
-  assert.equal(mismatch.configuredBranch, "main");
-  assert.equal(mismatch.actualBranch, "feature/sync");
-
+  ].join("\n");
+  writeConfig(root, content);
   const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const configBefore = fs.readFileSync(configFile);
-  const permissionsBefore = fs.readFileSync(permissionsFile);
-  const unconfirmed = run(root, ["project", "sync-branch", "service", "--json"]);
+
+  const inspection = run(root, ["project", "branch", "inspect", "service", "--json"]);
+  assert.equal(inspection.status, 0, inspection.stderr);
+  const inspectionEnvelope = JSON.parse(inspection.stdout);
+  assert.equal(inspectionEnvelope.command, "project.branch.inspect");
+  assert.deepEqual(inspectionEnvelope.data, {
+    project: { name: "service", location: fs.realpathSync(repository) },
+    registeredBranch: "main",
+    actualBranch: "feature/work",
+    matches: false,
+    worktreeClean: true,
+    registeredBranchExists: true,
+  });
+  assert.doesNotMatch(JSON.stringify(inspectionEnvelope.data), /configuredBranch|previousBranch|expectedBranch|requestedBranch|savedBranch/);
+  const inspectionText = run(root, ["project", "branch", "inspect", "service"]);
+  assert.equal(inspectionText.status, 0, inspectionText.stderr);
+  assert.match(inspectionText.stdout, /service\s+main\s+feature\/work\s+mismatch/);
+
+  const missing = run(root, ["project", "branch", "inspect", "missing", "--json"]);
+  assert.equal(missing.status, 1);
+  assert.equal(JSON.parse(missing.stdout).diagnostics[0].code, "PROJECT_NOT_FOUND");
+
+  const unconfirmed = run(root, ["project", "branch", "accept-actual", "service", "--json"]);
   assert.equal(unconfirmed.status, 1);
   assert.equal(JSON.parse(unconfirmed.stdout).diagnostics[0].code, "CLI_CONFIRMATION_REQUIRED");
-  assert.deepEqual(fs.readFileSync(configFile), configBefore);
+  assert.equal(fs.readFileSync(configFile, "utf8"), content);
 
-  const synchronized = run(root, ["project", "sync-branch", "service", "--yes", "--json"]);
-  assert.equal(synchronized.status, 0, synchronized.stderr);
-  const data = JSON.parse(synchronized.stdout).data;
-  assert.equal(data.action, "update");
-  assert.equal(data.previousBranch, "main");
-  assert.equal(data.actualBranch, "feature/sync");
-  assert.equal(data.project.branch, "feature/sync");
-  assert.equal(loadConfigProjection(root, ["projects"]).projects[0].branch, "feature/sync");
-  assert.match(fs.readFileSync(configFile, "utf8"), /url: not-a-valid-monitor-url/);
-  assert.doesNotMatch(fs.readFileSync(configFile, "utf8"), /language:/);
-  assert.deepEqual(fs.readFileSync(permissionsFile), permissionsBefore);
-  assert.equal(run(root, ["project", "verify", "--json"]).status, 0);
+  const accepted = run(root, ["project", "branch", "accept-actual", "service", "--yes", "--json"]);
+  assert.equal(accepted.status, 0, accepted.stderr);
+  const acceptedEnvelope = JSON.parse(accepted.stdout);
+  assert.equal(acceptedEnvelope.command, "project.branch.accept-actual");
+  assert.deepEqual(acceptedEnvelope.data.before, { registeredBranch: "main", actualBranch: "feature/work" });
+  assert.deepEqual(acceptedEnvelope.data.after, { registeredBranch: "feature/work", actualBranch: "feature/work" });
+  assert.deepEqual(Object.keys(acceptedEnvelope), ["schemaVersion", "ok", "command", "data", "diagnostics"]);
+  assert.equal(loadConfigProjection(root, ["projects"]).projects.find((entry) => entry.name === "service").branch, "feature/work");
+  assert.match(fs.readFileSync(configFile, "utf8"), /url: not-a-valid-url/);
+  assert.match(fs.readFileSync(configFile, "utf8"), /language: invalid/);
+
+  const matched = run(root, ["project", "branch", "inspect", "service", "--json"]);
+  assert.equal(matched.status, 0, matched.stderr);
+  assert.equal(JSON.parse(matched.stdout).data.matches, true);
 
   const committed = fs.readFileSync(configFile);
-  const repeated = run(root, ["project", "sync-branch", "service", "--yes", "--json"]);
+  const repeated = run(root, ["project", "branch", "accept-actual", "service", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
   assert.equal(JSON.parse(repeated.stdout).data.action, "skip");
   assert.deepEqual(fs.readFileSync(configFile), committed);
+});
 
-  const missing = run(root, ["project", "sync-branch", "missing", "--yes", "--json"]);
+test("project branch use-registered enforces safety and leaves configuration unchanged", () => {
+  const parent = temporaryRoot();
+  const root = path.join(parent, "workspace");
+  const repository = path.join(parent, "service");
+  fs.mkdirSync(root);
+  fs.mkdirSync(repository);
+  fs.writeFileSync(path.join(repository, "tracked.txt"), "initial\n");
+  spawnSync("git", ["init", "-b", "main"], { cwd: repository, stdio: "ignore" });
+  spawnSync("git", ["add", "tracked.txt"], { cwd: repository, stdio: "ignore" });
+  spawnSync("git", ["-c", "user.name=Code Workspace", "-c", "user.email=workspace@example.invalid", "commit", "-m", "initial"], { cwd: repository, stdio: "ignore" });
+  spawnSync("git", ["switch", "-c", "feature/work"], { cwd: repository, stdio: "ignore" });
+  const render = (registeredBranch) => [
+    "schemaVersion: 2",
+    "workspace:",
+    "  name: branch-switch",
+    "  uuid: 123e4567-e89b-42d3-a456-426614174000",
+    "monitor:",
+    "  url: not-a-valid-url",
+    "projects:",
+    "  - name: service",
+    `    location: ${repository}`,
+    `    branch: ${registeredBranch}`,
+    "    type: backend",
+    "    context: service",
+    "",
+  ].join("\n");
+  writeConfig(root, render("main"));
+  const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const configBefore = fs.readFileSync(configFile);
+
+  const unconfirmed = run(root, ["project", "branch", "use-registered", "service", "--json"]);
+  assert.equal(unconfirmed.status, 1);
+  assert.equal(JSON.parse(unconfirmed.stdout).diagnostics[0].code, "CLI_CONFIRMATION_REQUIRED");
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "feature/work");
+
+  const switched = run(root, ["project", "branch", "use-registered", "service", "--yes", "--json"]);
+  assert.equal(switched.status, 0, switched.stderr);
+  const envelope = JSON.parse(switched.stdout);
+  assert.equal(envelope.command, "project.branch.use-registered");
+  assert.deepEqual(envelope.data.before, { registeredBranch: "main", actualBranch: "feature/work" });
+  assert.deepEqual(envelope.data.after, { registeredBranch: "main", actualBranch: "main" });
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "main");
+  assert.deepEqual(fs.readFileSync(configFile), configBefore);
+
+  const repeated = run(root, ["project", "branch", "use-registered", "service", "--json"]);
+  assert.equal(repeated.status, 0, repeated.stderr);
+  assert.equal(JSON.parse(repeated.stdout).data.action, "skip");
+
+  spawnSync("git", ["switch", "feature/work"], { cwd: repository, stdio: "ignore" });
+  fs.writeFileSync(path.join(repository, "uncommitted.txt"), "dirty\n");
+  const dirty = run(root, ["project", "branch", "use-registered", "service", "--yes", "--json"]);
+  assert.equal(dirty.status, 1);
+  assert.equal(JSON.parse(dirty.stdout).diagnostics[0].code, "PROJECT_WORKTREE_DIRTY");
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "feature/work");
+  fs.unlinkSync(path.join(repository, "uncommitted.txt"));
+
+  writeConfig(root, render("missing-local"));
+  const missing = run(root, ["project", "branch", "use-registered", "service", "--yes", "--json"]);
   assert.equal(missing.status, 1);
-  assert.equal(JSON.parse(missing.stdout).diagnostics[0].code, "PROJECT_NOT_FOUND");
+  assert.equal(JSON.parse(missing.stdout).diagnostics[0].code, "PROJECT_REGISTERED_BRANCH_MISSING");
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "feature/work");
 });
 
 test("project verify targets one project without unrelated branch or config-domain failures", () => {
@@ -452,6 +578,11 @@ test("project verify targets one project without unrelated branch or config-doma
     "    branch: stale",
     "    type: backend",
     "    context: other",
+    "  - name: unreachable",
+    `    location: ${path.join(parent, "does-not-exist")}`,
+    "    branch: stale",
+    "    type: backend",
+    "    context: unreachable",
     "",
   ].join("\n");
   writeConfig(root, content);
@@ -473,7 +604,16 @@ test("project verify targets one project without unrelated branch or config-doma
 
   const unrelated = run(root, ["project", "verify", "other", "--json"]);
   assert.equal(unrelated.status, 1);
-  assert(JSON.parse(unrelated.stdout).diagnostics.some((entry) => entry.code === "PROJECT_BRANCH_MISMATCH"));
+  const unrelatedMismatch = JSON.parse(unrelated.stdout).diagnostics.find((entry) => entry.code === "PROJECT_BRANCH_MISMATCH");
+  assert.deepEqual({
+    registeredBranch: unrelatedMismatch.registeredBranch,
+    actualBranch: unrelatedMismatch.actualBranch,
+  }, { registeredBranch: "stale", actualBranch: "main" });
+  assert.equal("configuredBranch" in unrelatedMismatch, false);
+
+  const unreachableSelected = run(root, ["project", "verify", "unreachable", "--json"]);
+  assert.equal(unreachableSelected.status, 1);
+  assert(JSON.parse(unreachableSelected.stdout).diagnostics.some((entry) => entry.code === "PROJECT_INSPECTION_FAILED"));
 
   const workspaceWide = run(root, ["project", "verify", "--json"]);
   assert.equal(workspaceWide.status, 1);
@@ -573,6 +713,7 @@ test("packaged skills and README files reference registered commands and options
   const roots = [
     path.resolve(__dirname, "..", "..", "README.md"),
     path.resolve(__dirname, "..", "..", "README.zh-CN.md"),
+    path.resolve(__dirname, "..", "..", "docs", "code-workspace-flow.zh-CN.md"),
     path.resolve(__dirname, "..", "..", "artifacts", "templates"),
   ];
   const files = [];
@@ -609,4 +750,67 @@ test("packaged skills and README files reference registered commands and options
   assert.match(addProjects, /data\.language/);
   assert.match(addProjects, /data\.projectContext/);
   assert.match(addProjects, /`schemaVersion`, `ok`, `command`, `data`, and `diagnostics`/);
+});
+
+test("final branch migration leaves no legacy public contract in implementation or managed documentation", () => {
+  const repositoryRoot = path.resolve(__dirname, "..", "..");
+  const files = [
+    "src/cli/registry.js",
+    "src/cli/commands/project.js",
+    "src/cli/commands/project-branch.js",
+    "src/core/config.js",
+    "src/core/project.js",
+    "src/core/validation.js",
+    "README.md",
+    "README.zh-CN.md",
+    "docs/code-workspace-flow.zh-CN.md",
+    "artifacts/templates/agents/WORKSPACE_GUARD.md.template",
+    "artifacts/templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
+    "artifacts/templates/user-guide/en-US.md",
+    "artifacts/templates/user-guide/zh-CN.md",
+  ];
+  const forbidden = [
+    ["sync", "branch"].join("-"),
+    ...[
+      ["configured", "Branch"],
+      ["previous", "Branch"],
+      ["expected", "Branch"],
+      ["requested", "Branch"],
+      ["saved", "Branch"],
+    ].map((parts) => parts.join("")),
+  ];
+  for (const relative of files) {
+    const source = fs.readFileSync(path.join(repositoryRoot, relative), "utf8");
+    for (const value of forbidden) assert.doesNotMatch(source, new RegExp(value), `${relative}: ${value}`);
+  }
+
+  const help = run(os.tmpdir(), ["help"]);
+  const completion = run(os.tmpdir(), ["completion", "--shell", "bash"]);
+  assert.equal(help.status, 0, help.stderr);
+  assert.equal(completion.status, 0, completion.stderr);
+  for (const value of forbidden) {
+    assert.doesNotMatch(help.stdout, new RegExp(value), `help: ${value}`);
+    assert.doesNotMatch(completion.stdout, new RegExp(value), `completion: ${value}`);
+  }
+
+  const userGuides = [
+    "artifacts/templates/user-guide/en-US.md",
+    "artifacts/templates/user-guide/zh-CN.md",
+  ];
+  const forbiddenGuideDetails = [
+    /code-w project branch/,
+    /`project branch (?:inspect|accept-actual|use-registered)/,
+    /registeredBranch/,
+    /actualBranch/,
+    /projects\[\]\.branch/,
+    /worktreeClean/,
+    /registeredBranchExists/,
+  ];
+  for (const relative of userGuides) {
+    const source = fs.readFileSync(path.join(repositoryRoot, relative), "utf8");
+    assert.match(source, /code-workspace-resolve-branch/, `${relative}: missing user-facing branch Skill`);
+    for (const pattern of forbiddenGuideDetails) {
+      assert.doesNotMatch(source, pattern, `${relative}: ${pattern}`);
+    }
+  }
 });

@@ -296,18 +296,21 @@ function updateProjectBranch(root, update, options = {}) {
     throw new WorkspaceError("PROJECT_REGISTRY_INVALID", "projects must be an array", { file: document.file });
   }
   const sourceProject = sourceProjects.find((project) => project?.name === update.name);
-  if (!sourceProject || sourceProject.branch !== update.expectedBranch) {
+  if (!sourceProject || sourceProject.branch !== update.before.registeredBranch) {
     throw new WorkspaceError(
-      "PROJECT_BRANCH_SYNC_CONFLICT",
-      `Registered branch changed while preparing to synchronize ${update.name}.`,
+      "PROJECT_BRANCH_ACCEPT_CONFLICT",
+      `Registered branch changed while preparing to accept the actual branch for ${update.name}.`,
       {
         project: update.name,
-        expectedBranch: update.expectedBranch,
-        registeredBranch: sourceProject?.branch || null,
+        expectedState: update.before,
+        observedState: {
+          registeredBranch: sourceProject?.branch || null,
+          actualBranch: update.before.actualBranch,
+        },
       }
     );
   }
-  const project = { ...sourceProject, branch: update.actualBranch };
+  const project = { ...sourceProject, branch: update.after.registeredBranch };
   const nextDocument = {
     ...document.value,
     projects: sourceProjects.map((entry) => entry?.name === update.name ? project : entry),

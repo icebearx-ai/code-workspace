@@ -89,8 +89,12 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(codexInstructions, /\$code-workspace-add-projects \/absolute\/path\/to\/project/);
   for (const instructions of [claudeInstructions, codexInstructions]) {
     assert.match(instructions, /code-w project list --json/);
+    assert.match(instructions, /code-w project show "<project\.name>" --json/);
     assert.match(instructions, /code-w project verify "<project\.name>" --json/);
     assert.match(instructions, /code-workspace-resolve-branch/);
+    assert.match(instructions, /registeredBranch.*expected state/);
+    assert.match(instructions, /actualBranch.*observed state/);
+    assert.match(instructions, /freeze the scope to that project/);
     assert.doesNotMatch(instructions, /OpenSpec owns|Cross-project|Every capability/);
   }
   const addProjectsSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-add-projects", "SKILL.md"), "utf8");
@@ -105,8 +109,13 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(addProjectsSkill, /corresponding label returned in `data\.projectContext`/);
   assert.match(addProjectsSkill, /standard envelope fields `schemaVersion`, `ok`, `command`, `data`, and `diagnostics`/);
   assert.doesNotMatch(addProjectsSkill, /For `zh-CN`|For `en-US`/);
-  assert.match(resolveBranchSkill, /project sync-branch "<project\.name>" --yes --json/);
+  assert.match(resolveBranchSkill, /project branch inspect "<project\.name>" --json/);
+  assert.match(resolveBranchSkill, /project branch use-registered "<project\.name>" --yes --json/);
+  assert.match(resolveBranchSkill, /project branch accept-actual "<project\.name>" --yes --json/);
   assert.match(resolveBranchSkill, /project verify "<project\.name>" --json/);
+  assert.match(resolveBranchSkill, /Project branch mismatch detected\. Project work is paused\./);
+  assert.match(resolveBranchSkill, /Reply with 1, 2, or 3\. No Git or Workspace state will change before your choice\./);
+  assert.doesNotMatch(resolveBranchSkill, /git status|git show-ref|git switch|\.code-workspace\/config\.yaml|project list --json/);
   assert.match(addProjectsCommand, /project inspect ["']?<path>["']? --json/);
   assert.match(addProjectsCommand, /explicitly invokes `\/code-workspace:add-projects`/);
   assert.match(addProjectsCommand, /\/code-workspace:add-projects \/absolute\/path\/to\/project-a \/absolute\/path\/to\/project-b/);

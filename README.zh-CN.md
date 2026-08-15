@@ -64,7 +64,7 @@ Codex 用户可对相同的显式路径调用 `$code-workspace-add-projects`。�
 code-workspace project add --projects-file projects.json --yes --json
 ```
 
-注册表保存项目名称、真实路径、预期 Git 分支、类型和上下文。Workspace 不会根据对话猜测路径。
+注册表保存项目名称、真实路径、注册分支、类型和上下文。注册分支是 Code Workspace 的期望状态，实际分支是从选中 Git worktree 观测到的状态。Workspace 不会根据对话猜测路径，也不会自动判断哪一侧分支更权威。
 
 ## 日常命令
 
@@ -72,12 +72,21 @@ code-workspace project add --projects-file projects.json --yes --json
 code-workspace project list --json
 code-workspace project show payments --json
 code-workspace project verify payments --json
-code-workspace project sync-branch payments --yes --json
+code-workspace project branch inspect payments --json
+code-workspace project branch use-registered payments --yes --json
+code-workspace project branch accept-actual payments --yes --json
 code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
-`project sync-branch` 只记录仓库当前已检出的分支，不会切换 Git 分支。
+`project branch inspect` 只检查命名项目，返回 `registeredBranch`、`actualBranch`、是否一致、worktree 是否干净以及注册分支是否在本地存在。`PROJECT_BRANCH_MISMATCH` 诊断使用 `registeredBranch`、`actualBranch` 和 `location`；使用旧分支诊断或结果字段的调用方必须迁移到这套规范状态合同。
+
+两个协调方向通过独立命令表达：
+
+- `project branch use-registered` 将选中 worktree 切换到注册分支，要求确认、干净 worktree 和已存在的本地注册分支。
+- `project branch accept-actual` 只更新选中项目的注册记录，让注册分支接受实际分支；已有“接受实际分支”脚本应迁移到该命令。
+
+两条命令都会检查计划漂移并验证后置条件。Code Workspace 不会创建或下载分支，也不会执行 fetch、stash、reset、commit、生产代码编辑或冲突处理。
 
 `permissions apply` 会展示选中 Agent 工具的完整授权计划，在需要修改时要求确认，实施并验证请求的授权，并按工具报告结果。Agent 目录访问仍属于用户授权。该命令只补齐已注册项目缺失的访问权限，不撤销额外目录；如需撤销，请使用 `project remove` 或显式编辑 Agent 设置。
 

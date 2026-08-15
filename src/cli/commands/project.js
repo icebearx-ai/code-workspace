@@ -2,12 +2,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const yaml = require("js-yaml");
 
-const { configPath, loadConfigProjection, updateProjectBranch } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const { formatPermissionPlan, planPermissionChanges } = require("../../core/permissions");
 const { inspectGitWorktree, inspectProject } = require("../../core/project");
 const { applyProjectConfiguration, projectPermissionTools } = require("../../core/project-configuration");
-const { createFileTransaction } = require("../../core/transaction");
 const { validateProject, validateProjects } = require("../../core/validation");
 const { confirm } = require("../confirmation");
 const { fromDiagnostics, success } = require("../result");
@@ -25,58 +23,6 @@ function assertNoProjectConflict(config, project) {
   if (!conflict) return;
   if (PROJECT_FIELDS.every((field) => conflict[field] === project[field])) return "skip";
   throw projectError("PROJECT_CONFLICT", `Project conflicts with existing local entry: ${conflict.name}`, { project: project.name, conflict: conflict.name });
-}
-
-function planProjectBranchSync(config, name, options = {}) {
-  const project = config.projects.find((entry) => entry.name === name);
-  if (!project) throw projectError("PROJECT_NOT_FOUND", `Unknown local project: ${name}`, { project: name });
-  const actual = (options.inspectGitWorktree || inspectGitWorktree)(project.location);
-  return {
-    action: project.branch === actual.branch ? "skip" : "update",
-    project,
-    previousBranch: project.branch,
-    actualBranch: actual.branch,
-  };
-}
-
-function applyProjectBranchSync(root, plan, options = {}) {
-  const transaction = createFileTransaction([configPath(root)]);
-  try {
-    const updated = (options.updateProjectBranch || updateProjectBranch)(root, {
-      name: plan.project.name,
-      expectedBranch: plan.previousBranch,
-      actualBranch: plan.actualBranch,
-    }, options);
-    options.injectFailure?.("after-config-save", updated);
-    const persisted = (options.loadConfigProjection || loadConfigProjection)(root, ["projects"]);
-    const saved = persisted.projects.find((project) => project.name === plan.project.name);
-    const actual = (options.inspectGitWorktree || inspectGitWorktree)(plan.project.location);
-    if (!saved || saved.branch !== plan.actualBranch || actual.branch !== plan.actualBranch) {
-      throw new WorkspaceError(
-        "PROJECT_BRANCH_SYNC_VERIFY_FAILED",
-        `Project branch changed while synchronizing ${plan.project.name}; the registry update was not committed.`,
-        {
-          project: plan.project.name,
-          requestedBranch: plan.actualBranch,
-          savedBranch: saved?.branch || null,
-          actualBranch: actual.branch,
-        }
-      );
-    }
-    options.injectFailure?.("after-verify", saved);
-    transaction.commit();
-    return saved;
-  } catch (error) {
-    const failure = ["PROJECT_BRANCH_SYNC_CONFLICT", "PROJECT_BRANCH_SYNC_VERIFY_FAILED"].includes(error.code)
-      ? error
-      : new WorkspaceError(
-        "PROJECT_BRANCH_SYNC_FAILED",
-        `Project branch synchronization rolled back: ${error.message}`,
-        { ...(error.details || {}), project: plan.project.name, cause: error.code || error.name }
-      );
-    transaction.rollback(failure);
-    throw failure;
-  }
 }
 
 function readJsonFile(input, label) {
@@ -115,10 +61,11 @@ function normalizeProjectRecord(value) {
   }
   const actual = inspectGitWorktree(project.location);
   if (project.branch !== actual.branch) {
-    throw projectError("PROJECT_BRANCH_MISMATCH", `Project ${project.name} configured branch ${project.branch} does not match actual branch ${actual.branch}.`, {
+    throw projectError("PROJECT_BRANCH_MISMATCH", `Project ${project.name} registered branch ${project.branch} does not match actual branch ${actual.branch}.`, {
       project: project.name,
-      configuredBranch: project.branch,
+      registeredBranch: project.branch,
       actualBranch: actual.branch,
+      location: actual.realPath,
     });
   }
   project.location = actual.realPath;
@@ -205,21 +152,6 @@ async function executeProject(invocation) {
       projects: [project],
     }, `Local project verification passed: ${name}.`);
   }
-  if (action === "sync-branch") {
-    const plan = planProjectBranchSync(config, args[0], options.dependencies);
-    if (plan.action === "skip") {
-      return success(command, plan, `Project branch already current: ${plan.project.name} (${plan.actualBranch})`);
-    }
-    if (!(await confirm(
-      `Update registered branch for ${plan.project.name} from ${plan.previousBranch} to ${plan.actualBranch}?`,
-      options
-    ))) {
-      throw projectError("CLI_CANCELLED", "Project branch synchronization cancelled.");
-    }
-    const project = applyProjectBranchSync(root, plan, options.dependencies);
-    return success(command, { ...plan, project },
-      `Updated registered branch for ${project.name}: ${plan.previousBranch} -> ${plan.actualBranch}`);
-  }
   if (action === "add") {
     const candidates = projectRecordsFromInput(args, options);
     const additions = [];
@@ -274,11 +206,9 @@ async function executeProject(invocation) {
 
 module.exports = {
   PROJECT_FIELDS,
-  applyProjectBranchSync,
   applyProjectConfiguration,
   executeProject,
   normalizeProjectRecord,
-  planProjectBranchSync,
   projectRecordsFromInput,
   projectPermissionTools,
 };

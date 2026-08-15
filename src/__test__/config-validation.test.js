@@ -119,8 +119,8 @@ test("targeted project branch updates preserve unrelated config domains and reje
 
   const updated = updateProjectBranch(root, {
     name: "service",
-    expectedBranch: "main",
-    actualBranch: "feature/sync",
+    before: { registeredBranch: "main", actualBranch: "feature/sync" },
+    after: { registeredBranch: "feature/sync", actualBranch: "feature/sync" },
   });
   assert.equal(updated.branch, "feature/sync");
   const persisted = fs.readFileSync(file, "utf8");
@@ -131,14 +131,34 @@ test("targeted project branch updates preserve unrelated config domains and reje
 
   assert.throws(() => updateProjectBranch(root, {
     name: "service",
-    expectedBranch: "main",
-    actualBranch: "feature/stale",
+    before: { registeredBranch: "main", actualBranch: "feature/stale" },
+    after: { registeredBranch: "feature/stale", actualBranch: "feature/stale" },
   }), (error) => {
-    assert.equal(error.code, "PROJECT_BRANCH_SYNC_CONFLICT");
-    assert.equal(error.details.registeredBranch, "feature/sync");
+    assert.equal(error.code, "PROJECT_BRANCH_ACCEPT_CONFLICT");
+    assert.deepEqual(error.details.expectedState, { registeredBranch: "main", actualBranch: "feature/stale" });
+    assert.deepEqual(error.details.observedState, { registeredBranch: "feature/sync", actualBranch: "feature/stale" });
     return true;
   });
   assert.equal(fs.readFileSync(file, "utf8"), persisted);
+});
+
+test("public branch implementation does not reintroduce legacy branch-state fields", () => {
+  const sourceFiles = [
+    path.resolve(__dirname, "..", "core", "config.js"),
+    path.resolve(__dirname, "..", "core", "validation.js"),
+    path.resolve(__dirname, "..", "cli", "commands", "project.js"),
+  ];
+  const forbidden = [
+    ["configured", "Branch"],
+    ["previous", "Branch"],
+    ["expected", "Branch"],
+    ["requested", "Branch"],
+    ["saved", "Branch"],
+  ].map((parts) => parts.join(""));
+  for (const file of sourceFiles) {
+    const source = fs.readFileSync(file, "utf8");
+    for (const field of forbidden) assert.doesNotMatch(source, new RegExp(`\\b${field}\\b`), `${file}: ${field}`);
+  }
 });
 
 test("repository inspection reports only stable Git and file facts", () => {
@@ -175,7 +195,20 @@ test("project validation accepts extended context and checks actual branches", (
     schemaVersion: 1,
     projects: [{ ...project, branch: "another-branch" }],
   });
-  assert(invalid.diagnostics.some((entry) => entry.code === "PROJECT_BRANCH_MISMATCH"));
+  const mismatch = invalid.diagnostics.find((entry) => entry.code === "PROJECT_BRANCH_MISMATCH");
+  assert.deepEqual(
+    {
+      registeredBranch: mismatch.registeredBranch,
+      actualBranch: mismatch.actualBranch,
+      location: mismatch.location,
+    },
+    {
+      registeredBranch: "another-branch",
+      actualBranch: "main",
+      location: fs.realpathSync(repository),
+    }
+  );
+  assert.equal("configuredBranch" in mismatch, false);
 });
 
 test("targeted project validation ignores unrelated runtime drift and retains selected conflicts", () => {
@@ -230,4 +263,48 @@ test("targeted project validation ignores unrelated runtime drift and retains se
   assert(nested.diagnostics.some((entry) =>
     entry.code === "NESTED_PROJECT_PATH" && entry.projects.includes("service")
   ));
+});
+
+test("targeted validation never inspects unselected worktrees", () => {
+  const parent = temporaryRoot();
+  const workspace = path.join(parent, "workspace");
+  fs.mkdirSync(workspace);
+  const serviceRepository = gitRepository(parent, "service");
+  const service = {
+    name: "service",
+    location: fs.realpathSync(serviceRepository),
+    branch: "main",
+    type: "backend",
+    context: "service",
+  };
+  const unreachable = {
+    name: "unreachable",
+    location: path.join(parent, "does-not-exist"),
+    branch: "stale",
+    type: "backend",
+    context: "must remain unobserved",
+  };
+  const inspected = [];
+  const inspectGitWorktree = (location) => {
+    inspected.push(location);
+    assert.equal(location, service.location);
+    return { location, realPath: location, branch: "main" };
+  };
+
+  const selected = validateProject(workspace, { schemaVersion: 2, projects: [service, unreachable] }, "service", { inspectGitWorktree });
+  assert.deepEqual(selected.errors, []);
+  assert.deepEqual(inspected, [service.location]);
+
+  inspected.length = 0;
+  const missing = validateProject(workspace, { schemaVersion: 2, projects: [service, unreachable] }, "missing", { inspectGitWorktree });
+  assert(missing.diagnostics.some((entry) => entry.code === "PROJECT_NOT_FOUND"));
+  assert.deepEqual(inspected, []);
+
+  inspected.length = 0;
+  const conflict = validateProject(workspace, {
+    schemaVersion: 2,
+    projects: [service, { ...unreachable, location: path.join(service.location, "nested") }],
+  }, "service", { inspectGitWorktree });
+  assert(conflict.diagnostics.some((entry) => entry.code === "NESTED_PROJECT_PATH" && entry.projects.includes("unreachable")));
+  assert.deepEqual(inspected, [service.location]);
 });

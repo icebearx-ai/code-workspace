@@ -35,6 +35,7 @@
   },
   "scripts": {
     "test": "node --test src/__test__/*.test.js",
+    "dev:monitor": "node bin/code-workspace.js monitor",
     "check": "npm test && npm run cli:architecture-check && npm run pack:check",
     "cli:architecture-check": "node scripts/check-cli-architecture.js",
     "pack:check": "npm pack --dry-run",

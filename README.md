@@ -64,7 +64,7 @@ Codex users can invoke `$code-workspace-add-projects` with the same explicit pat
 code-workspace project add --projects-file projects.json --yes --json
 ```
 
-The registry stores each project's name, real location, expected Git branch, type, and context. Workspace never guesses a path from a conversation.
+The registry stores each project's name, real location, registered branch, type, and context. The registered branch is the Code Workspace expected state; the actual branch is observed from the selected Git worktree. Workspace never guesses a path from a conversation or automatically decides which branch is authoritative.
 
 ## Daily commands
 
@@ -72,12 +72,21 @@ The registry stores each project's name, real location, expected Git branch, typ
 code-workspace project list --json
 code-workspace project show payments --json
 code-workspace project verify payments --json
-code-workspace project sync-branch payments --yes --json
+code-workspace project branch inspect payments --json
+code-workspace project branch use-registered payments --yes --json
+code-workspace project branch accept-actual payments --yes --json
 code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
-`project sync-branch` records the branch already checked out in the repository; it never switches Git branches.
+`project branch inspect` reports `registeredBranch`, `actualBranch`, whether they match, worktree cleanliness, and local registered-branch availability for only the named project. A `PROJECT_BRANCH_MISMATCH` diagnostic uses `registeredBranch`, `actualBranch`, and `location`; consumers of older branch diagnostic/result fields must migrate to this canonical state contract.
+
+The two reconciliation directions are deliberately separate:
+
+- `project branch use-registered` switches the selected worktree to its registered branch. It requires confirmation, a clean worktree, and an existing local branch.
+- `project branch accept-actual` updates only the selected registry record so its registered branch accepts the actual branch. Existing branch-adoption scripts should migrate to this command.
+
+Both commands detect plan drift and verify postconditions. Code Workspace never creates or downloads a branch and never performs fetch, stash, reset, commit, production-code edits, or conflict resolution.
 
 `permissions apply` shows the complete authorization plan for the selected Agent tools, requires confirmation when changes are needed, applies and verifies the requested grants, and reports the result per tool. Agent directory access remains a user authorization. The command adds missing registered-project access but does not revoke additional directories; use `project remove` or edit the Agent settings explicitly to revoke access.
 

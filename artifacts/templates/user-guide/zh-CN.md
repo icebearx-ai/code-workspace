@@ -89,7 +89,7 @@ code-w project verify <project-name>
 ## Workspace Skills
 
 - `$code-workspace-add-projects` — 检查并注册本地 Git 项目，同时生成供 AI 导航使用的简洁 context。
-- `$code-workspace-resolve-branch` — 安全解决选中项目的注册分支与实际分支不一致问题，并重新执行定向校验。
+- `$code-workspace-resolve-branch` — 安全解决选中项目的分支不一致问题，并重新执行定向校验。
 
 | 用途 | Codex | Claude Code |
 | --- | --- | --- |

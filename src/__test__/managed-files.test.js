@@ -146,11 +146,16 @@ test("one canonical template renders both workspace instructions with platform-s
   for (const content of [claude, codex]) {
     assert.match(content, /The workspace is not a project/);
     assert.match(content, /code-w project list --json/);
+    assert.match(content, /code-w project show "<project\.name>" --json/);
     assert.match(content, /code-w project verify "<project\.name>" --json/);
     assert.match(content, /code-workspace-resolve-branch/);
     assert.match(content, /PROJECT_BRANCH_MISMATCH/);
     assert.match(content, /MUST NOT guess a project path/);
     assert.match(content, /MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root/);
+    assert.match(content, /registeredBranch.*expected state/);
+    assert.match(content, /actualBranch.*observed state/);
+    assert.match(content, /freeze the scope to that project/);
+    assert.match(content, /Do not list or verify unrelated projects/);
     assert.doesNotMatch(content, /OpenSpec owns|Cross-project|Every capability|proposal|archive workflow/);
   }
   assert.match(claude, /\/code-workspace:add-projects \/absolute\/path\/to\/project/);

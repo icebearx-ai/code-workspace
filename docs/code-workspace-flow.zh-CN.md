@@ -61,30 +61,35 @@ Claude Code 使用 `/code-workspace:add-projects`；Codex 使用 `$code-workspac
 
 ```mermaid
 flowchart LR
-    M[PROJECT_BRANCH_MISMATCH] --> I[检查当前分支和 worktree]
+    M[PROJECT_BRANCH_MISMATCH] --> I[project branch inspect<br/>注册分支/实际分支]
     I --> C{用户明确选择}
-    C -->|接受当前分支| CLI[project sync-branch]
-    C -->|自行切换或修复| MANUAL[人工处理 Git]
-    CLI --> V[project verify]
+    C -->|使用注册分支| USE[project branch use-registered]
+    C -->|接受实际分支| ACCEPT[project branch accept-actual]
+    C -->|自行处理| MANUAL[人工处理 Git 或注册状态]
+    USE --> V[project verify name]
+    ACCEPT --> V
     MANUAL --> V
-    V -->|通过| CONTINUE[重新获取项目记录后继续]
+    V -->|通过| CONTINUE[重新获取目标项目上下文后继续]
     V -->|失败| STOP[保持停止]
 ```
 
 ```bash
-code-workspace project sync-branch "<project-name>" --yes --json
+code-workspace project branch inspect "<project-name>" --json
+code-workspace project branch use-registered "<project-name>" --yes --json
+code-workspace project branch accept-actual "<project-name>" --yes --json
+code-workspace project verify "<project-name>" --json
 ```
 
-`project sync-branch` 只接受仓库当前分支并更新注册表，不执行 `git switch`。
+注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支要求干净 worktree 和已存在的本地分支；接受实际分支只原子更新目标注册记录。两条命令都检查计划漂移并验证结果，恢复后只复验命名项目。
 
 ## 责任边界
 
 | 层次 | 负责内容 |
 | --- | --- |
-| Workspace CLI | 项目注册表、项目验证、权限、Doctor、监控 |
+| Workspace CLI | 项目注册表、定向/全量项目验证、经确认的安全分支协调、权限、Doctor、监控 |
 | Workspace Agent 集成 | 显式添加项目、分支不一致恢复引导 |
 | 用户或外部工具 | `openspec/` 记录的创建、编辑、同步、归档和删除 |
-| 各项目仓库 | 生产代码、测试、构建和 Git 分支操作 |
+| 各项目仓库及用户 | 生产代码、测试、构建、分支创建、网络同步、脏 worktree 处理和冲突解决 |
 
 ## 不变量
 
@@ -93,3 +98,4 @@ code-workspace project sync-branch "<project-name>" --yes --json
 - 不得把独立的 `openspec/` 存储隐式绑定到 Workspace。
 - Workspace 初始化、更新和 Doctor 不依赖其他 OpenSpec 包或可执行文件。
 - Workspace 不读取或写入 `openspec/`。
+- Workspace CLI 不编辑生产代码，不创建或下载分支，不执行 stash/reset，也不处理 Git 冲突。
