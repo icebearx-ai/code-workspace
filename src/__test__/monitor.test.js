@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  DEFAULT_SESSION_INACTIVITY_MS,
   createMonitorServer,
   createMonitorStore,
   normalizeHookEvent,
@@ -75,6 +76,12 @@ test("monitor dashboard is self-contained and consumes snapshot plus SSE APIs", 
   assert.match(page, /event\.eventType==='tool\.completed'/);
   assert.match(page, /item\.turnId===event\.turn\?\.id&&item\.toolName===event\.tool\?\.name/);
   assert.match(page, /method:'DELETE'/);
+  assert.match(page, /function removeSession\(workspace,session\)/);
+  assert.match(page, /\/sessions\/'\+encodeURIComponent\(session\.id\)/);
+  assert.match(page, /setInterval\(refresh,10000\)/);
+  assert.match(page, /session\.status==='ACTIVE'/);
+  assert.match(page, /"INACTIVE":"非活跃"/);
+  assert.match(page, /超过 10 分钟未收到信号/);
   assert.match(page, /localStorage\.getItem\(SOUND_KEY\)!=='off'/);
   assert.match(page, /setAttribute\('aria-pressed',String\(state\.soundEnabled\)\)/);
   assert.match(page, /ALERT_KEY='code-workspace-monitor-workspace-alerts'/);
@@ -125,6 +132,101 @@ test("monitor store isolates equal session ids by workspace UUID", () => {
   }
   assert.equal(store.snapshot().workspaces.length, 2);
   assert(store.snapshot().workspaces.every((entry) => entry.sessions["same-session"]));
+});
+
+test("monitor store projects inactive sessions at ten minutes and restores them on a new signal", () => {
+  let now = new Date("2026-08-17T00:00:00.000Z");
+  const store = createMonitorStore({ now: () => now });
+  const baseEvent = {
+    schemaVersion: 1,
+    eventId: "event-1",
+    eventType: "turn.started",
+    status: "RUNNING",
+    timestamp: "2020-01-01T00:00:00.000Z",
+    workspace,
+    session: { id: "session-1" },
+    turn: { id: "turn-1" },
+  };
+
+  store.accept(baseEvent);
+  now = new Date(now.getTime() + DEFAULT_SESSION_INACTIVITY_MS - 1);
+  let snapshot = store.snapshot();
+  assert.equal(snapshot.workspaces[0].sessions["session-1"].status, "ACTIVE");
+  assert.equal(snapshot.workspaces[0].activeSessionCount, 1);
+  assert.deepEqual(snapshot.summary, { workspaces: 1, sessions: 1, activeSessions: 1, turns: 1 });
+
+  now = new Date(now.getTime() + 1);
+  snapshot = store.snapshot();
+  assert.equal(snapshot.workspaces[0].sessions["session-1"].status, "INACTIVE");
+  assert.equal(snapshot.workspaces[0].sessionCount, 1);
+  assert.equal(snapshot.workspaces[0].activeSessionCount, 0);
+  assert.equal(snapshot.summary.sessions, 1);
+  assert.equal(snapshot.summary.activeSessions, 0);
+
+  store.accept({ ...baseEvent, eventId: "event-2", eventType: "tool.completed" });
+  snapshot = store.snapshot();
+  assert.equal(snapshot.workspaces[0].sessions["session-1"].status, "ACTIVE");
+  assert.equal(snapshot.workspaces[0].sessions["session-1"].lastSignalAt, now.toISOString());
+
+  store.accept({
+    ...baseEvent,
+    eventId: "event-3",
+    eventType: "session.ended",
+    status: "SESSION_ENDED",
+    turn: null,
+  });
+  now = new Date(now.getTime() + DEFAULT_SESSION_INACTIVITY_MS * 2);
+  snapshot = store.snapshot();
+  assert.equal(snapshot.workspaces[0].sessions["session-1"].status, "ENDED");
+  assert.equal(snapshot.summary.activeSessions, 0);
+});
+
+test("monitor store removes one session, its events, and publishes the deletion", () => {
+  const store = createMonitorStore({ now: () => new Date("2026-08-17T00:00:00.000Z") });
+  const messages = [];
+  store.subscribers.add({ write: (message) => messages.push(message) });
+  const event = (eventId, sessionId, turnId) => ({
+    schemaVersion: 1,
+    eventId,
+    eventType: "turn.started",
+    status: "RUNNING",
+    workspace,
+    session: { id: sessionId },
+    turn: { id: turnId },
+  });
+  store.accept(event("event-1", "session-1", "turn-1"));
+  store.accept({ ...event("event-2", "session-1", "turn-1"), eventType: "tool.completed" });
+  store.accept(event("event-3", "session-2", "turn-2"));
+
+  assert.deepEqual(store.removeSession(workspace.uuid, "missing"), {
+    removed: false,
+    workspaceUuid: workspace.uuid,
+    sessionId: "missing",
+  });
+  assert.deepEqual(store.removeSession(workspace.uuid, "session-1"), {
+    removed: true,
+    workspaceUuid: workspace.uuid,
+    sessionId: "session-1",
+    removedEvents: 2,
+  });
+  let snapshot = store.snapshot();
+  assert(!snapshot.workspaces[0].sessions["session-1"]);
+  assert(snapshot.workspaces[0].sessions["session-2"]);
+  assert.equal(snapshot.workspaces[0].eventCount, 1);
+  assert.equal(snapshot.events.length, 1);
+  assert.equal(snapshot.summary.sessions, 1);
+  assert(messages.some((message) => message.includes('"sessionRemoved"')));
+
+  store.removeSession(workspace.uuid, "session-2");
+  snapshot = store.snapshot();
+  assert.equal(snapshot.workspaces.length, 1);
+  assert.equal(snapshot.workspaces[0].sessionCount, 0);
+  assert.equal(snapshot.workspaces[0].activeSessionCount, 0);
+  assert.equal(snapshot.workspaces[0].eventCount, 0);
+
+  store.accept(event("event-4", "session-1", "turn-3"));
+  snapshot = store.snapshot();
+  assert.equal(snapshot.workspaces[0].sessions["session-1"].status, "ACTIVE");
 });
 
 test("removed monitor workspaces return when a new event arrives", () => {
@@ -183,6 +285,18 @@ test("global monitor accepts events without reading a workspace", async (t) => {
   assert.equal(posted.status, 202);
   const snapshot = await (await fetch(`${base}/api/v1/snapshot`)).json();
   assert.equal(snapshot.workspaces[0].name, "payments");
+  assert.equal(snapshot.summary.activeSessions, 1);
+  const removed = await fetch(`${base}/api/v1/workspaces/${encodeURIComponent(workspace.uuid)}/sessions/session-1`, {
+    method: "DELETE",
+  });
+  assert.equal(removed.status, 200);
+  assert.equal((await removed.json()).sessionId, "session-1");
+  const afterRemoval = await (await fetch(`${base}/api/v1/snapshot`)).json();
+  assert.equal(afterRemoval.workspaces[0].sessionCount, 0);
+  assert.equal(afterRemoval.events.length, 0);
+  assert.equal((await fetch(`${base}/api/v1/workspaces/${encodeURIComponent(workspace.uuid)}/sessions/session-1`, {
+    method: "DELETE",
+  })).status, 404);
 });
 
 test("hook reporting is disabled and failure-open", async () => {

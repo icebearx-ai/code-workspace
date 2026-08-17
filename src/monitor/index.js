@@ -6,6 +6,7 @@ const { renderMonitorPage } = require("./page");
 
 const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 3211;
+const DEFAULT_SESSION_INACTIVITY_MS = 10 * 60 * 1000;
 const MONITOR_ASSETS = new Map([
   ["/assets/request_tip.mp3", { file: path.join(__dirname, "..", "..", "assets", "request_tip.mp3"), type: "audio/mpeg" }],
   ["/assets/session_finish.mp3", { file: path.join(__dirname, "..", "..", "assets", "session_finish.mp3"), type: "audio/mpeg" }],
@@ -68,9 +69,21 @@ function validEvent(event) {
 function createMonitorStore(options = {}) {
   const maxEvents = Number(options.maxEvents || 1000);
   if (!Number.isInteger(maxEvents) || maxEvents < 1) throw new Error("maxEvents must be a positive integer");
+  const sessionInactivityMs = Number(options.sessionInactivityMs ?? DEFAULT_SESSION_INACTIVITY_MS);
+  if (!Number.isInteger(sessionInactivityMs) || sessionInactivityMs < 1) {
+    throw new Error("sessionInactivityMs must be a positive integer");
+  }
+  const clock = typeof options.now === "function" ? options.now : () => new Date();
   const events = [];
   const workspaces = new Map();
   const subscribers = new Set();
+
+  function nowIso() {
+    const value = clock();
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) throw new Error("monitor clock returned an invalid date");
+    return date.toISOString();
+  }
 
   function publish(message) {
     const payload = `event: update\ndata: ${JSON.stringify(message)}\n\n`;
@@ -80,35 +93,43 @@ function createMonitorStore(options = {}) {
   function accept(event) {
     if (!validEvent(event)) throw new Error("invalid event payload");
     if (events.some((current) => current.eventId === event.eventId)) return { duplicate: true };
-    const now = event.timestamp || new Date().toISOString();
+    const receivedAt = nowIso();
+    const storedEvent = { ...event, timestamp: event.timestamp || receivedAt };
     const previous = workspaces.get(event.workspace.uuid) || {
       uuid: event.workspace.uuid,
       name: event.workspace.name,
       sessions: {},
       eventCount: 0,
-      firstSeenAt: now,
+      firstSeenAt: receivedAt,
     };
-    const session = previous.sessions[event.session.id] || { id: event.session.id, turns: {}, status: "ACTIVE", firstSeenAt: now };
+    const session = previous.sessions[event.session.id] || {
+      id: event.session.id,
+      turns: {},
+      status: "ACTIVE",
+      firstSeenAt: receivedAt,
+    };
     const turnId = event.turn?.id;
     if (turnId) {
-      const turn = session.turns[turnId] || { id: turnId, eventCount: 0, startedAt: now };
+      const turn = session.turns[turnId] || { id: turnId, eventCount: 0, startedAt: receivedAt };
       turn.status = event.status;
       turn.eventCount += 1;
-      turn.updatedAt = now;
+      turn.updatedAt = receivedAt;
       turn.tool = event.tool;
       turn.subagent = event.subagent;
       session.turns[turnId] = turn;
     }
     if (event.status === "SESSION_ENDED") session.status = "ENDED";
-    session.updatedAt = now;
+    session.eventCount = (session.eventCount || 0) + 1;
+    session.lastSignalAt = receivedAt;
+    session.updatedAt = receivedAt;
     previous.name = event.workspace.name;
     previous.sessions[event.session.id] = session;
     previous.eventCount += 1;
-    previous.updatedAt = now;
+    previous.updatedAt = receivedAt;
     workspaces.set(previous.uuid, previous);
-    events.unshift(event);
+    events.unshift(storedEvent);
     if (events.length > maxEvents) events.length = maxEvents;
-    publish({ event, workspace: previous });
+    publish({ event: storedEvent, workspace: previous });
     return { duplicate: false, workspaceUuid: previous.uuid };
   }
 
@@ -121,15 +142,67 @@ function createMonitorStore(options = {}) {
     return { removed: true, workspaceUuid: uuid };
   }
 
+  function removeSession(workspaceUuid, sessionId) {
+    const workspace = workspaces.get(workspaceUuid);
+    if (!workspace || !workspace.sessions[sessionId]) {
+      return { removed: false, workspaceUuid, sessionId };
+    }
+    const session = workspace.sessions[sessionId];
+    delete workspace.sessions[sessionId];
+    let removedEvents = 0;
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      if (events[index].workspace.uuid === workspaceUuid && events[index].session.id === sessionId) {
+        events.splice(index, 1);
+        removedEvents += 1;
+      }
+    }
+    workspace.eventCount = Math.max(0, workspace.eventCount - (session.eventCount || removedEvents));
+    const remainingSessions = Object.values(workspace.sessions);
+    workspace.updatedAt = remainingSessions.reduce(
+      (latest, session) => latest > session.updatedAt ? latest : session.updatedAt,
+      workspace.firstSeenAt
+    );
+    publish({ sessionRemoved: { workspaceUuid, sessionId } });
+    return { removed: true, workspaceUuid, sessionId, removedEvents };
+  }
+
+  function effectiveSessionStatus(session, serverTime) {
+    if (session.status === "ENDED") return "ENDED";
+    const lastSignalAt = session.lastSignalAt || session.updatedAt || session.firstSeenAt;
+    const elapsed = new Date(serverTime).getTime() - new Date(lastSignalAt).getTime();
+    return Number.isFinite(elapsed) && elapsed >= sessionInactivityMs ? "INACTIVE" : "ACTIVE";
+  }
+
   function snapshot() {
+    const serverTime = nowIso();
+    const summary = { workspaces: workspaces.size, sessions: 0, activeSessions: 0, turns: 0 };
+    const projectedWorkspaces = [...workspaces.values()].map((workspace) => {
+      const sessions = {};
+      let activeSessionCount = 0;
+      for (const session of Object.values(workspace.sessions)) {
+        const status = effectiveSessionStatus(session, serverTime);
+        if (status === "ACTIVE") activeSessionCount += 1;
+        summary.sessions += 1;
+        summary.turns += Object.keys(session.turns).length;
+        sessions[session.id] = { ...session, status };
+      }
+      summary.activeSessions += activeSessionCount;
+      return {
+        ...workspace,
+        sessions,
+        sessionCount: Object.keys(sessions).length,
+        activeSessionCount,
+      };
+    });
     return {
-      workspaces: [...workspaces.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+      workspaces: projectedWorkspaces.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
       events: events.slice(),
-      serverTime: new Date().toISOString(),
+      serverTime,
+      summary,
     };
   }
 
-  return { accept, events, removeWorkspace, snapshot, subscribers, workspaces };
+  return { accept, events, removeSession, removeWorkspace, snapshot, subscribers, workspaces };
 }
 
 async function readJson(request, limit = 256_000) {
@@ -182,8 +255,19 @@ function createMonitorServer(options = {}) {
       if (request.method === "GET" && url.pathname === "/api/v1/snapshot") return sendJson(response, 200, store.snapshot());
       if (request.method === "GET" && url.pathname === "/api/v1/workspaces") return sendJson(response, 200, { workspaces: store.snapshot().workspaces });
       if (request.method === "GET" && url.pathname === "/api/v1/events") return sendJson(response, 200, { events: store.snapshot().events });
-      if (request.method === "DELETE" && url.pathname.startsWith("/api/v1/workspaces/")) {
-        const uuid = decodeURIComponent(url.pathname.slice("/api/v1/workspaces/".length));
+      const sessionRoute = url.pathname.match(/^\/api\/v1\/workspaces\/([^/]+)\/sessions\/([^/]+)$/);
+      if (request.method === "DELETE" && sessionRoute) {
+        const uuid = decodeURIComponent(sessionRoute[1]);
+        const sessionId = decodeURIComponent(sessionRoute[2]);
+        if (!uuid || !sessionId || uuid.includes("/") || sessionId.includes("/")) {
+          return sendJson(response, 404, { error: "not found" });
+        }
+        const result = store.removeSession(uuid, sessionId);
+        return sendJson(response, result.removed ? 200 : 404, result.removed ? result : { error: "session not found" });
+      }
+      const workspaceRoute = url.pathname.match(/^\/api\/v1\/workspaces\/([^/]+)$/);
+      if (request.method === "DELETE" && workspaceRoute) {
+        const uuid = decodeURIComponent(workspaceRoute[1]);
         if (!uuid || uuid.includes("/")) return sendJson(response, 404, { error: "not found" });
         const result = store.removeWorkspace(uuid);
         return sendJson(response, result.removed ? 200 : 404, result.removed ? result : { error: "workspace not found" });
@@ -248,6 +332,7 @@ async function reportHookEvent(input, config, options = {}) {
 module.exports = {
   DEFAULT_MONITOR_HOST,
   DEFAULT_MONITOR_PORT,
+  DEFAULT_SESSION_INACTIVITY_MS,
   EVENT_DEFINITIONS,
   createMonitorServer,
   createMonitorStore,
