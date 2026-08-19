@@ -4,13 +4,13 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { loadConfig, saveConfig } = require("../core/config");
+const { loadConfig, saveConfig, updateProjectBranch } = require("../core/config");
 const { doctorWorkspace } = require("../core/doctor");
 const { sha256 } = require("../core/fs");
 const { MANIFEST_FILE, loadInitManifest } = require("../core/init");
 const { INITIALIZATION_STAGE_IDS, initializeWorkspace } = require("../core/initializer");
 const { applyPermissionPlan, planPermissionChanges } = require("../core/permissions");
-const { applyAcceptActual } = require("../cli/commands/project-branch");
+const { applyAcceptActual, batchAcceptActual, batchUseRegistered } = require("../cli/commands/project-branch");
 const { applyProjectConfiguration } = require("../core/project-configuration");
 const { updateWorkspace } = require("../cli/commands/update");
 const { failure } = require("../cli/result");
@@ -433,6 +433,85 @@ test("an accept-actual conflict preserves another writer's configuration", () =>
     },
   }), (error) => error.code === "PROJECT_BRANCH_ACCEPT_CONFLICT");
   assert.deepEqual(fs.readFileSync(configFile), concurrentContent);
+});
+
+test("batch branch application isolates failures and continues with later projects", async () => {
+  const root = temporaryRoot();
+  const projects = ["alpha", "beta"].map((name) => ({
+    name,
+    location: `/tmp/${name}`,
+    branch: "main",
+    type: "backend",
+    context: name,
+  }));
+  const config = {
+    schemaVersion: 2,
+    workspace: { name: "branch-batch-failure", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
+    monitor: { enable: false, url: "http://127.0.0.1:3211" },
+    projects,
+  };
+  saveConfig(root, config);
+  const inspectProjectBranch = (current, name) => {
+    const project = current.projects.find((entry) => entry.name === name);
+    const actualBranch = `feature/${name}`;
+    return {
+      project: { name, location: project.location },
+      registeredBranch: project.branch,
+      actualBranch,
+      matches: project.branch === actualBranch,
+      worktreeClean: true,
+      registeredBranchExists: true,
+    };
+  };
+
+  const acceptDiagnostics = [];
+  const accepted = await batchAcceptActual(root, config, ["alpha", "beta"], { yes: true }, {
+    inspectProjectBranch,
+    updateProjectBranch: (targetRoot, update) => {
+      if (update.name === "alpha") {
+        throw Object.assign(new Error("injected alpha conflict"), {
+          code: "PROJECT_BRANCH_ACCEPT_CONFLICT",
+          details: { project: "alpha" },
+        });
+      }
+      return updateProjectBranch(targetRoot, update);
+    },
+  }, acceptDiagnostics);
+  assert.deepEqual(accepted.map((entry) => [entry.project, entry.ok, entry.action]), [
+    ["alpha", false, "failed"],
+    ["beta", true, "update"],
+  ]);
+  assert.equal(acceptDiagnostics[0].code, "PROJECT_BRANCH_ACCEPT_CONFLICT");
+  assert.deepEqual(loadConfig(root).projects.map((project) => [project.name, project.branch]), [
+    ["alpha", "main"],
+    ["beta", "feature/beta"],
+  ]);
+
+  const switchDiagnostics = [];
+  const switched = await batchUseRegistered(config, ["alpha", "beta"], { yes: true }, {
+    inspectProjectBranch,
+    switchProjectToRegisteredBranch: (plan) => {
+      if (plan.project.name === "alpha") {
+        throw Object.assign(new Error("injected alpha switch failure"), {
+          code: "PROJECT_BRANCH_SWITCH_FAILED",
+          details: { project: "alpha" },
+        });
+      }
+      return {
+        action: "switch",
+        project: plan.project,
+        before: { registeredBranch: plan.registeredBranch, actualBranch: plan.actualBranch },
+        after: { registeredBranch: plan.registeredBranch, actualBranch: plan.registeredBranch },
+        worktreeClean: true,
+        registeredBranchExists: true,
+      };
+    },
+  }, switchDiagnostics);
+  assert.deepEqual(switched.map((entry) => [entry.project, entry.ok, entry.action]), [
+    ["alpha", false, "failed"],
+    ["beta", true, "switch"],
+  ]);
+  assert.equal(switchDiagnostics[0].code, "PROJECT_BRANCH_SWITCH_FAILED");
 });
 
 test("permission application verifies its atomic write with a stable JSON failure", () => {

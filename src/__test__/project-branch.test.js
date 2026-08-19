@@ -6,6 +6,7 @@ const test = require("node:test");
 const {
   assertRegisteredBranchSwitchAvailable,
   inspectProjectBranch,
+  inspectProjectBranchMatch,
   switchProjectToRegisteredBranch,
 } = require("../core/project");
 
@@ -64,6 +65,30 @@ test("branch inspection maps registry and Git facts to the canonical state", () 
       && error.details.cause === "GIT_COMMAND_FAILED"
       && /retry/.test(error.details.remediation)
   );
+});
+
+test("branch-match inspection observes only registered and actual branches", () => {
+  let cleanChecked = false;
+  let localBranchChecked = false;
+  const inspected = inspectProjectBranchMatch({ projects: [project] }, "service", {
+    inspectGitWorktree: () => ({ realPath: "/workspace/service-real", branch: "main" }),
+    gitWorktreeClean: () => {
+      cleanChecked = true;
+      throw new Error("must not be called");
+    },
+    gitLocalBranchExists: () => {
+      localBranchChecked = true;
+      throw new Error("must not be called");
+    },
+  });
+  assert.deepEqual(inspected, {
+    project: { name: "service", location: "/workspace/service-real" },
+    registeredBranch: "main",
+    actualBranch: "main",
+    matches: true,
+  });
+  assert.equal(cleanChecked, false);
+  assert.equal(localBranchChecked, false);
 });
 
 test("registered-branch switching rejects dirty worktrees and missing local branches", () => {

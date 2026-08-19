@@ -24,7 +24,7 @@ Use `name`, `type`, and `context` only to identify relevant candidates and ask t
 - If the registry is empty, ask which projects to manage and tell the user to run `{{ADD_PROJECTS_INVOCATION}}`.
 - If the user names an unregistered project, require registration before using its path.
 - Once selected, freeze the scope to that project. Do not read, verify, modify, repair, or comment on another registered project unless the user explicitly expands the request.
-- If multiple projects are explicitly included, handle each one with a separate targeted verification.
+- If multiple projects are explicitly included, pass their names as separate arguments to one targeted `project verify` invocation. When two or more results report `PROJECT_BRANCH_MISMATCH`, the branch Skill may present them in one combined choice. Batch CLI invocations are allowed, but their effects, diagnostics, transactions, and verification results remain project-isolated.
 
 Meta, help, or workspace-tool maintenance tasks that do not depend on registered project ownership do not require project selection.
 
@@ -36,10 +36,17 @@ Before reading or modifying selected project code, run:
 code-w project verify "<project.name>" --json
 ```
 
-- Continue only when the targeted result has `ok: true`.
-- On `PROJECT_BRANCH_MISMATCH`, pause project work and invoke the installed `code-workspace-resolve-branch` Skill for that project. Do not choose a branch direction yourself.
-- For any other failure, report the targeted diagnostics and wait for user direction; do not escalate to full-workspace validation.
-- After reconciliation, discard branch-dependent context and use only the Skill's targeted re-verification. Do not list or verify unrelated projects.
+For several explicitly selected projects, use:
+
+```bash
+code-w project verify "<project-a>" "<project-b>" --json
+```
+
+- For one project, continue only when the targeted result has `ok: true`. For a multi-project result, evaluate every ordered project result independently: continue passed projects and keep failed projects paused even when the top-level `ok` is false.
+- On `PROJECT_BRANCH_MISMATCH`, pause affected project work and invoke the installed `code-workspace-resolve-branch` Skill. The Skill may combine mismatches from the explicitly selected scope into one concise question; do not choose a branch direction yourself.
+- For any other failure, report the targeted diagnostics and wait for user direction for the affected project; a failure in one batch result does not block unrelated successful selected projects. Do not escalate to full-workspace validation.
+- The branch Skill completes after `project branch verify` confirms alignment; it does not own overall project readiness. After its handoff, discard branch-dependent context and rerun targeted `project verify` for the successfully reconciled projects before resuming work.
+- If that overall verification fails for a non-branch reason, keep the affected project paused and handle the project-level diagnostic here without treating the branch Skill as failed. If a new `PROJECT_BRANCH_MISMATCH` appears because the branch drifted again, re-enter the Skill. Do not list or verify unrelated projects.
 
 ## Workspace Write Boundary
 

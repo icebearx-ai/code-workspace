@@ -34,25 +34,33 @@ Workspace Guard 必须（SHALL）要求 Agent 优先使用用户明确指定的�
 
 #### Scenario: 用户明确请求多个项目
 - **WHEN** 用户显式将多个注册项目纳入任务
-- **THEN** Agent 可以把这些项目加入作用域，但必须逐个定向校验和处理分支不一致
+- **THEN** Agent 可以把这些项目加入作用域，并使用独立项目名参数进行一次批量定向校验；若其中多个项目分支不一致，可以统一询问用户，CLI 内部仍必须隔离每个项目的协调与复验结果
 
-### Requirement: 分支 Skill 使用固定事实与选择模板
-分支处理 Skill 必须（SHALL）通过 `project branch inspect <name> --json` 获取目标事实，并使用固定询问结构呈现项目名、位置、注册分支、实际分支、工作树干净状态和注册本地分支存在性，以及三个固定选择和每个选择的影响。
+### Requirement: 分支 Skill 使用固定事实与自适应选择交互
+分支处理 Skill 必须（SHALL）通过 `project branch inspect <name...> --json` 获取目标事实，并基于当前交互上下文清晰呈现项目名、注册分支、实际分支、异常状态和三个固定方向。多个项目必须通过独立位置参数一次检查，不得拼接为逗号字符串。Skill 应使用示例说明推荐的信息结构，不得要求 Agent 逐字复现某一种语言或固定模板。
 
 #### Scenario: 两个自动方向都可用
 - **WHEN** 工作树干净且注册本地分支存在
-- **THEN** Skill 显示“使用注册分支”“接受实际分支”“手动处理”三个选择，不默认推荐任一自动方向，并声明用户选择前不改变状态
+- **THEN** Skill 显示“使用注册分支”“接受实际分支”“手动处理”三个选择，不输出“干净”或“可用”等正常状态噪声，不默认推荐任一自动方向，并声明用户选择前不改变状态
 
 #### Scenario: 使用注册分支不可用
 - **WHEN** 工作树不干净或注册本地分支不存在
-- **THEN** Skill 保留固定选择结构，将“使用注册分支”标记为不可用并填入 CLI 提供的原因，不临时发明 stash、reset、创建或下载分支方案
+- **THEN** Skill 保留三个选择，将异常标注在对应分支旁，并将“使用注册分支”标记为不可用；若两个条件同时存在则完整说明两个原因，且不临时发明 stash、reset、创建或下载分支方案
 
 #### Scenario: 询问所需事实缺失
 - **WHEN** 分支状态检查失败或未返回固定模板要求的事实
-- **THEN** Skill 报告诊断并停止，不猜测缺失值也不向用户展示不完整的方向选择
+- **THEN** Skill 不猜测缺失值，也不为失败项目展示不完整的方向选择；批量检查中其他成功项目仍可继续处理，若全部失败则报告汇总诊断并停止
+
+#### Scenario: 多个项目同时分支不一致
+- **WHEN** 已选作用域内两个或以上项目的定向校验报告分支不一致
+- **THEN** Skill 使用稳定的项目标签在一次询问中展示全部不一致项目，允许用户用 `1`、`2`、`3` 对全部项目统一选择，或用 `A1`、`B2` 等形式分别选择
+
+#### Scenario: 用户选择不完整或选择不可用方向
+- **WHEN** 用户遗漏部分项目，或为某个项目选择了因工作树不干净或注册分支本地不存在而不可用的“使用注册分支”
+- **THEN** Skill 保留尚未执行的有效选择，仅针对缺失或无效项目重新询问并说明规范事实原因，在全部选择有效且完整前不修改 Git 或 Workspace 状态
 
 ### Requirement: 两个自动协调方向只能通过 CLI 执行
-用户明确选择自动协调方向后，分支 Skill 必须（SHALL）分别调用 `project branch use-registered <name> --yes --json` 或 `project branch accept-actual <name> --yes --json`；不得直接执行 Git 分支变更或编辑 Workspace 配置。
+用户明确选择自动协调方向后，分支 Skill 必须（SHALL）按方向分组，分别调用一次 `project branch use-registered <name...> --yes --json` 或 `project branch accept-actual <name...> --yes --json`；不得直接执行 Git 分支变更或编辑 Workspace 配置。
 
 #### Scenario: 用户选择使用注册分支
 - **WHEN** 用户明确选择“使用注册分支”且该选项可用
@@ -63,23 +71,39 @@ Workspace Guard 必须（SHALL）要求 Agent 优先使用用户明确指定的�
 - **THEN** Skill 仅调用 `project branch accept-actual`，不切换目标 Git worktree
 
 #### Scenario: CLI 协调失败
-- **WHEN** 任一 CLI 命令返回失败
-- **THEN** Skill 向用户报告结构化诊断并保持项目工作暂停，不回退到原始 Git 命令、配置编辑或自由发挥的修复步骤
+- **WHEN** 批量 CLI 返回部分项目失败
+- **THEN** Skill 读取完整项目结果，继续执行另一自动方向组和后续成功项目复验，最终统一报告，不回退到原始 Git 命令、配置编辑或自由发挥的修复步骤
+
+#### Scenario: 多项目选择全部有效
+- **WHEN** 用户对全部不一致项目提交了完整且有效的方向选择
+- **THEN** Skill 将同方向项目合并为一次批量 CLI 调用，并在两个方向组完成后对成功或跳过项目进行一次批量定向复验
 
 #### Scenario: 用户选择手动处理
 - **WHEN** 用户选择手动处理
 - **THEN** Skill 保持暂停，直到用户确认处理完成，且不复用处理前缓存的分支状态
 
-### Requirement: 分支处理结束后只复验目标项目
-分支 Skill 必须（SHALL）在自动或手动处理后运行 `project verify <name> --json`，且不得重新列出或全量校验所有注册项目；只有目标校验成功才可恢复项目工作。
+### Requirement: 分支 Skill 只验证分支一致性并交还整体校验
+分支 Skill 必须（SHALL）在自动或手动处理后运行 `project branch verify <name...> --json`，且不得从 Skill 内运行整体 `project verify`。Skill 的完成只表示分支协调完成且分支一致性已验证；Workspace Guard 必须（SHALL）在 Skill 交还控制后重新运行目标项目的 `project verify <name...> --json`，并独立决定项目工作能否恢复。
+
+#### Scenario: 批量复验部分失败
+- **WHEN** 多项目分支一致性验证中部分项目成功、部分项目失败
+- **THEN** Skill 将成功项目交还 Guard，保持失败项目为分支未解决状态，并在全部结果产生后统一汇报
 
 #### Scenario: 目标项目复验成功
-- **WHEN** 分支处理完成且目标项目定向校验返回 `ok: true`
-- **THEN** Agent 可以重新获取该项目所需上下文并继续用户任务
+- **WHEN** 分支处理完成且目标项目的 `project branch verify` 返回 `ok: true`
+- **THEN** Skill 报告该项目分支协调已完成，并将项目交还 Workspace Guard 执行整体目标校验
 
 #### Scenario: 目标项目复验失败
-- **WHEN** 定向复验仍返回分支不一致或其他错误
-- **THEN** Agent 保持目标项目工作暂停，报告诊断且不检查其他项目
+- **WHEN** 分支一致性复验仍返回分支不一致或检查错误
+- **THEN** Skill 保持目标项目为未解决状态，报告诊断且不检查其他项目
+
+#### Scenario: 整体校验发现非分支问题
+- **WHEN** Skill 已成功验证分支一致性，但 Guard 后续运行的定向 `project verify` 因非分支问题失败
+- **THEN** 分支 Skill 保持完成，Guard 保持该项目工作暂停并负责报告或处理项目级问题
+
+#### Scenario: 整体校验发现新的分支漂移
+- **WHEN** Guard 后续运行的定向 `project verify` 因再次发生的 `PROJECT_BRANCH_MISMATCH` 失败
+- **THEN** Guard 可以重新进入分支 Skill，并以新的 CLI 观察结果开始一次新的协调流程
 
 ### Requirement: 分支相关技术文档只引用已注册 CLI
 Guard、分支 Skill、README 和流程文档中的命令引用必须（SHALL）通过真实 CLI 解析器校验；托管资产不得引用已移除的 `project sync-branch` 或任何尚未注册的命令。

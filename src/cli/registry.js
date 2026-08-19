@@ -12,12 +12,13 @@ const COMMAND_SUMMARIES = {
   "project inspect": "Inspect a Git project without writing files",
   "project add": "Register a project (low-level skill command)",
   "project remove": "Remove a local project",
-  "project branch inspect": "Inspect one project's registered and actual branches",
-  "project branch accept-actual": "Update a registered branch from the project's actual branch",
-  "project branch use-registered": "Switch a project worktree to its registered branch",
+  "project branch inspect": "Inspect selected projects' registered and actual branches",
+  "project branch verify": "Verify selected projects' registered and actual branches match",
+  "project branch accept-actual": "Update selected registered branches from actual branches",
+  "project branch use-registered": "Switch selected project worktrees to registered branches",
   "project list": "List local projects",
   "project show": "Show one local project",
-  "project verify": "Validate all local projects or one selected project",
+  "project verify": "Validate all local projects or selected projects",
   "permissions apply": "Apply registered project directory authorization",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
@@ -40,12 +41,13 @@ const COMMANDS = [
     context: { type: "string" }, "context-file": { type: "string" }, yes: { type: "boolean" },
   } },
   { path: ["project", "remove"], args: [{ name: "name", required: true }], workspace: "required", config: ["complete"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
-  { path: ["project", "branch", "inspect"], args: [{ name: "name", required: true }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
-  { path: ["project", "branch", "accept-actual"], args: [{ name: "name", required: true }], workspace: "required", config: ["projects"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
-  { path: ["project", "branch", "use-registered"], args: [{ name: "name", required: true }], workspace: "required", config: ["projects"], interaction: "required", effects: "external", options: { yes: { type: "boolean" } } },
+  { path: ["project", "branch", "inspect"], args: [{ name: "name", required: true, variadic: true }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
+  { path: ["project", "branch", "verify"], args: [{ name: "name", required: true, variadic: true }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
+  { path: ["project", "branch", "accept-actual"], args: [{ name: "name", required: true, variadic: true }], workspace: "required", config: ["projects"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
+  { path: ["project", "branch", "use-registered"], args: [{ name: "name", required: true, variadic: true }], workspace: "required", config: ["projects"], interaction: "required", effects: "external", options: { yes: { type: "boolean" } } },
   { path: ["project", "list"], args: [], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "show"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: { name: { type: "string" } } },
-  { path: ["project", "verify"], args: [{ name: "name", required: false }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
+  { path: ["project", "verify"], args: [{ name: "name", required: false, variadic: true }], workspace: "required", config: ["projects"], interaction: "never", effects: "read-only", options: {} },
   { path: ["permissions", "apply"], args: [], workspace: "required", config: ["projects"], interaction: "required", effects: "planned-write", options: {
     tools: { type: "string" }, yes: { type: "boolean" },
   } },
@@ -67,7 +69,10 @@ function commandHelpRows() {
     .map((command) => ({
       usage: [
         ...command.path,
-        ...command.args.map((argument) => argument.required ? `<${argument.name}>` : `[${argument.name}]`),
+        ...command.args.map((argument) => {
+          const name = `${argument.name}${argument.variadic ? "..." : ""}`;
+          return argument.required ? `<${name}>` : `[${name}]`;
+        }),
       ].join(" "),
       summary: COMMAND_SUMMARIES[command.path.join(" ")],
       command,

@@ -73,13 +73,14 @@ code-workspace project list --json
 code-workspace project show payments --json
 code-workspace project verify payments --json
 code-workspace project branch inspect payments --json
+code-workspace project branch verify payments --json
 code-workspace project branch use-registered payments --yes --json
 code-workspace project branch accept-actual payments --yes --json
 code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
-`project branch inspect` 只检查命名项目，返回 `registeredBranch`、`actualBranch`、是否一致、worktree 是否干净以及注册分支是否在本地存在。`PROJECT_BRANCH_MISMATCH` 诊断使用 `registeredBranch`、`actualBranch` 和 `location`；使用旧分支诊断或结果字段的调用方必须迁移到这套规范状态合同。
+`project branch inspect` 只检查命名项目，返回 `registeredBranch`、`actualBranch`、是否一致、worktree 是否干净以及注册分支是否在本地存在。`project branch verify` 是协调后的窄范围断言，只检查注册分支和实际分支是否一致，不执行项目整体健康校验。`PROJECT_BRANCH_MISMATCH` 诊断使用 `registeredBranch`、`actualBranch` 和 `location`；使用旧分支诊断或结果字段的调用方必须迁移到这套规范状态合同。
 
 两个协调方向通过独立命令表达：
 

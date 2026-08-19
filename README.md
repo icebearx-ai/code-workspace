@@ -73,13 +73,14 @@ code-workspace project list --json
 code-workspace project show payments --json
 code-workspace project verify payments --json
 code-workspace project branch inspect payments --json
+code-workspace project branch verify payments --json
 code-workspace project branch use-registered payments --yes --json
 code-workspace project branch accept-actual payments --yes --json
 code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
-`project branch inspect` reports `registeredBranch`, `actualBranch`, whether they match, worktree cleanliness, and local registered-branch availability for only the named project. A `PROJECT_BRANCH_MISMATCH` diagnostic uses `registeredBranch`, `actualBranch`, and `location`; consumers of older branch diagnostic/result fields must migrate to this canonical state contract.
+`project branch inspect` reports `registeredBranch`, `actualBranch`, whether they match, worktree cleanliness, and local registered-branch availability for only the named project. `project branch verify` is the narrower assertion used after reconciliation: it checks only whether the registered and actual branches match, without running overall project-health validation. A `PROJECT_BRANCH_MISMATCH` diagnostic uses `registeredBranch`, `actualBranch`, and `location`; consumers of older branch diagnostic/result fields must migrate to this canonical state contract.
 
 The two reconciliation directions are deliberately separate:
 

@@ -8,7 +8,7 @@ const { inspectGitWorktree, inspectProject } = require("../../core/project");
 const { applyProjectConfiguration, projectPermissionTools } = require("../../core/project-configuration");
 const { validateProject, validateProjects } = require("../../core/validation");
 const { confirm } = require("../confirmation");
-const { fromDiagnostics, success } = require("../result");
+const { fromDiagnostics, selectionResult, success } = require("../result");
 
 const PROJECT_FIELDS = ["name", "location", "branch", "type", "context"];
 
@@ -113,6 +113,49 @@ function projectRecordsFromInput(args, options) {
   })];
 }
 
+function verifyProjectSelection(root, config, requested) {
+  const names = [];
+  const seen = new Set();
+  const diagnostics = [];
+  for (const name of requested) {
+    if (!seen.has(name)) {
+      seen.add(name);
+      names.push(name);
+    } else {
+      diagnostics.push({
+        code: "CLI_DUPLICATE_ARGUMENT",
+        severity: "warning",
+        message: `Project ${name} was provided more than once; later occurrences were ignored.`,
+        project: name,
+        argument: "name",
+      });
+    }
+  }
+  const results = names.map((name) => {
+    const project = config.projects.find((entry) => entry?.name === name) || null;
+    const output = validateProject(root, config, name);
+    diagnostics.push(...output.diagnostics.map((entry) => ({
+      ...entry,
+      project: entry.project || entry.projectName || name,
+    })));
+    const ok = output.errors.length === 0;
+    return {
+      project: name,
+      ok,
+      action: ok ? "verify" : "failed",
+      data: project ? { project } : null,
+      message: ok ? "verification passed" : output.errors[0] || "verification failed",
+    };
+  });
+  const succeeded = results.filter((entry) => entry.ok).length;
+  const failed = results.length - succeeded;
+  const text = [
+    ...results.map((entry) => `${entry.ok ? "OK" : "FAILED"}\t${entry.project}\t${entry.message}`),
+    `Summary\ttotal=${results.length}\tsucceeded=${succeeded}\tskipped=0\tfailed=${failed}`,
+  ].join("\n");
+  return selectionResult("project.verify", requested, results, { diagnostics, text });
+}
+
 async function executeProject(invocation) {
   const { args, config, options, root } = invocation;
   const action = invocation.definition.path[1];
@@ -134,8 +177,7 @@ async function executeProject(invocation) {
     return success(command, { project }, yaml.dump(project, { lineWidth: -1, noRefs: true, sortKeys: false, styles: { "!!str": "literal" } }));
   }
   if (action === "verify") {
-    const name = args[0] || null;
-    if (!name) {
+    if (args.length === 0) {
       const output = validateProjects(root, config);
       return fromDiagnostics(command, output, {
         scope: "workspace",
@@ -143,6 +185,8 @@ async function executeProject(invocation) {
         projects: config.projects,
       }, "Local projects verification passed.");
     }
+    if (args.length > 1) return verifyProjectSelection(root, config, args);
+    const name = args[0];
     const project = config.projects.find((entry) => entry?.name === name);
     if (!project) throw projectError("PROJECT_NOT_FOUND", `Unknown local project: ${name}`, { project: name });
     const output = validateProject(root, config, name);
@@ -211,4 +255,5 @@ module.exports = {
   normalizeProjectRecord,
   projectRecordsFromInput,
   projectPermissionTools,
+  verifyProjectSelection,
 };

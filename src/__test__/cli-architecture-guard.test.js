@@ -36,6 +36,22 @@ test("CLI architecture guard rejects incomplete command contracts", () => {
   assert(codes.has("REGISTRY_CONFIRMATION_OPTION_MISSING"));
 });
 
+test("CLI architecture guard constrains variadic arguments to the final position", () => {
+  const problems = validateRegistry([{
+    path: ["project", "unsafe-batch"],
+    args: [
+      { name: "names", required: true, variadic: true },
+      { name: "mode", required: true },
+    ],
+    workspace: "required",
+    config: ["projects"],
+    interaction: "never",
+    effects: "read-only",
+    options: {},
+  }]);
+  assert(problems.some((entry) => entry.code === "REGISTRY_ARGUMENT_VARIADIC_ORDER_INVALID"));
+});
+
 test("CLI architecture guard rejects raw persistence in command modules", () => {
   const problems = inspectCommandSource("src/cli/commands/unsafe.js", [
     "const fs = require(\"node:fs\");",

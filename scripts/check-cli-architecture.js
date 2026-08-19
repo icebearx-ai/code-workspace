@@ -47,10 +47,16 @@ function validateRegistry(commands, globalOptions = {}) {
     } else {
       const names = new Set();
       let optionalSeen = false;
-      for (const argument of command.args) {
+      for (const [index, argument] of command.args.entries()) {
         if (!argument || typeof argument.name !== "string" || !argument.name || typeof argument.required !== "boolean") {
           problems.push(problem("REGISTRY_ARGUMENT_INVALID", `${label} arguments require name and boolean required fields`));
           continue;
+        }
+        if (argument.variadic !== undefined && typeof argument.variadic !== "boolean") {
+          problems.push(problem("REGISTRY_ARGUMENT_VARIADIC_INVALID", `${label} argument ${argument.name} variadic must be boolean`));
+        }
+        if (argument.variadic && index !== command.args.length - 1) {
+          problems.push(problem("REGISTRY_ARGUMENT_VARIADIC_ORDER_INVALID", `${label} variadic argument ${argument.name} must be last`));
         }
         if (names.has(argument.name)) problems.push(problem("REGISTRY_ARGUMENT_DUPLICATE", `${label} repeats argument ${argument.name}`));
         names.add(argument.name);

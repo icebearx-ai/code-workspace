@@ -11,7 +11,7 @@ function renderResult(result, options = {}) {
       stream.write(`${diagnostic.severity === "warning" ? "WARN" : diagnostic.severity === "error" ? "ERROR" : "INFO"} ${diagnostic.message}\n`);
       if (diagnostic.remediation) stream.write(`REMEDIATION ${diagnostic.remediation}\n`);
     }
-    if (result.ok && result.text) stdout.write(result.text.endsWith("\n") ? result.text : `${result.text}\n`);
+    if (result.text && (result.ok || result.renderTextOnError)) stdout.write(result.text.endsWith("\n") ? result.text : `${result.text}\n`);
   }
   if (!result.ok) process.exitCode = 1;
   return result;

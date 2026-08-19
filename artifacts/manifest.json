@@ -49,7 +49,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "7523cc3b86eb991730f7f02d5395b88cd34354844306452474eaf422ca5e8978"
+        "sha256": "8c996b5e40c89707b8865ecdabca81e52078097aef6adc84a9246378260062e6"
       },
       "render": {
         "variables": [
@@ -72,7 +72,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "7523cc3b86eb991730f7f02d5395b88cd34354844306452474eaf422ca5e8978"
+        "sha256": "8c996b5e40c89707b8865ecdabca81e52078097aef6adc84a9246378260062e6"
       },
       "render": {
         "variables": [
@@ -158,7 +158,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "310398c336b9254b992e1439214e7d09bc0cb9e63e72ba312da5d6df5f259d5e"
+        "sha256": "997dc41841492a4524a351886ff0a2b0e0d8968d7b6562686969537b7d807fea"
       },
       "provenance": {
         "kind": "template"
@@ -173,7 +173,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "310398c336b9254b992e1439214e7d09bc0cb9e63e72ba312da5d6df5f259d5e"
+        "sha256": "997dc41841492a4524a351886ff0a2b0e0d8968d7b6562686969537b7d807fea"
       },
       "provenance": {
         "kind": "template"

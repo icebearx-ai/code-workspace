@@ -66,21 +66,24 @@ flowchart LR
     C -->|使用注册分支| USE[project branch use-registered]
     C -->|接受实际分支| ACCEPT[project branch accept-actual]
     C -->|自行处理| MANUAL[人工处理 Git 或注册状态]
-    USE --> V[project verify name]
-    ACCEPT --> V
-    MANUAL --> V
-    V -->|通过| CONTINUE[重新获取目标项目上下文后继续]
-    V -->|失败| STOP[保持停止]
+    USE --> BV[project branch verify name]
+    ACCEPT --> BV
+    MANUAL --> BV
+    BV -->|分支一致| V[Guard: project verify name]
+    BV -->|仍不一致| STOP[保持停止]
+    V -->|整体通过| CONTINUE[重新获取目标项目上下文后继续]
+    V -->|项目级问题| STOP
 ```
 
 ```bash
 code-workspace project branch inspect "<project-name>" --json
 code-workspace project branch use-registered "<project-name>" --yes --json
 code-workspace project branch accept-actual "<project-name>" --yes --json
+code-workspace project branch verify "<project-name>" --json
 code-workspace project verify "<project-name>" --json
 ```
 
-注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支要求干净 worktree 和已存在的本地分支；接受实际分支只原子更新目标注册记录。两条命令都检查计划漂移并验证结果，恢复后只复验命名项目。
+注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支要求干净 worktree 和已存在的本地分支；接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 使用定向 `project verify` 接管项目整体健康校验。
 
 ## 责任边界
 

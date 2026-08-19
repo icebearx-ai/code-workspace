@@ -55,7 +55,7 @@
 - **THEN** CLI 将结果范围标记为 `project`，仅返回命名项目，并且不调用全量项目校验路径
 
 ### Requirement: 定向命令隔离无关配置域
-`project verify <name>` 和三条 `project branch` 命令必须（SHALL）只加载 `projects` 配置域；语言、监控或其他配置域无效时不得阻塞目标项目操作。
+`project verify <name>` 和四条 `project branch` 命令必须（SHALL）只加载 `projects` 配置域；语言、监控或其他配置域无效时不得阻塞目标项目操作。
 
 #### Scenario: 无关配置域无效
 - **WHEN** Workspace 的语言或监控配置无效，但 `projects` 域和目标项目有效

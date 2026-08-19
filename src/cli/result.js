@@ -31,6 +31,7 @@ function commandResult(command, data = null, options = {}) {
     data: data ?? null,
     diagnostics,
     text: options.text || "",
+    renderTextOnError: options.renderTextOnError === true,
   };
 }
 
@@ -59,6 +60,40 @@ function failure(error, command = null) {
   });
 }
 
+function diagnosticFromError(error, details = {}) {
+  const source = error instanceof Error ? error : new WorkspaceError("CLI_ERROR", String(error));
+  return normalizeDiagnostic({
+    code: source.code || "CLI_ERROR",
+    severity: "error",
+    message: source.message,
+    details: {
+      ...details,
+      ...(source.details || {}),
+    },
+  });
+}
+
+function selectionResult(command, requested, results, options = {}) {
+  const diagnostics = options.diagnostics || [];
+  const summary = {
+    total: results.length,
+    succeeded: results.filter((entry) => entry.ok && entry.action !== "skip").length,
+    skipped: results.filter((entry) => entry.ok && entry.action === "skip").length,
+    failed: results.filter((entry) => !entry.ok).length,
+  };
+  return commandResult(command, {
+    scope: "selection",
+    requested,
+    results,
+    summary,
+  }, {
+    ok: summary.failed === 0 && !diagnostics.some((entry) => (entry.severity || "error") === "error"),
+    diagnostics,
+    text: options.text || "",
+    renderTextOnError: true,
+  });
+}
+
 function jsonEnvelope(result) {
   return {
     schemaVersion: result.schemaVersion,
@@ -73,9 +108,11 @@ module.exports = {
   RESULT_SCHEMA_VERSION,
   commandName,
   commandResult,
+  diagnosticFromError,
   failure,
   fromDiagnostics,
   jsonEnvelope,
   normalizeDiagnostic,
+  selectionResult,
   success,
 };

@@ -16,6 +16,8 @@ Every command is declared in `src/cli/registry.js`. Its declaration is the sourc
 
 Handlers must consume the parser result. They must not reinterpret raw `argv`, silently accept unknown options, or ignore extra positionals.
 
+A command may declare only its final positional argument as `variadic: true`. The parser then accepts zero or more values for an optional variadic argument, or one or more values for a required variadic argument. Each value remains a separate shell argument; commands must not invent comma-delimited positional parsing.
+
 Supported classifications are:
 
 ```text
@@ -79,6 +81,8 @@ Commands with `interaction: required` use the shared confirmation helper and dec
 
 External-effect commands must verify observable postconditions when possible and report effects that cannot be rolled back.
 
+Commands that accept several independent targets use best-effort batching unless their contract explicitly requires one atomic set. They apply one confirmation boundary before the first effect, preserve the existing transaction or compensation boundary for each target, continue after a target-specific failure, and return a complete ordered summary. A batch-level failure must not hide successful or skipped target results.
+
 ## 5. Results and errors
 
 All handlers return the shared result model through `success()`, `fromDiagnostics()`, or another result helper. JSON output uses the stable envelope:
@@ -96,6 +100,8 @@ All handlers return the shared result model through `success()`, `fromDiagnostic
 Expected failures use `WorkspaceError` with a stable code. Include structured details such as the affected file, project, expected value, actual value, and remediation when available.
 
 Warnings belong in diagnostics so JSON and text renderers can apply their respective output policies.
+
+Single-target invocations retain their established data contract. Multi-target invocations return `data.scope: "selection"`, the requested target names, ordered per-target results, and succeeded/skipped/failed counts. Their top-level `ok` is false when any target fails, while the data still reports every completed target.
 
 ## 6. Required tests
 

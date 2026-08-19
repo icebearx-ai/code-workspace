@@ -160,6 +160,34 @@ function inspectProjectBranch(config, name, options = {}) {
   return inspectProjectBranchState(findRegisteredProject(config, name), options);
 }
 
+function inspectProjectBranchMatch(config, name, options = {}) {
+  const project = findRegisteredProject(config, name);
+  try {
+    const actual = (options.inspectGitWorktree || inspectGitWorktree)(project.location);
+    return {
+      project: {
+        name: project.name,
+        location: actual.realPath || project.location,
+      },
+      registeredBranch: project.branch,
+      actualBranch: actual.branch,
+      matches: project.branch === actual.branch,
+    };
+  } catch (error) {
+    if (error.code === "PROJECT_BRANCH_INSPECTION_FAILED") throw error;
+    throw new WorkspaceError(
+      "PROJECT_BRANCH_INSPECTION_FAILED",
+      `Cannot inspect branch state for project ${project.name}: ${error.message}`,
+      {
+        project: project.name,
+        location: project.location,
+        cause: error.code || error.name,
+        remediation: "Inspect the selected Git worktree and retry the command.",
+      }
+    );
+  }
+}
+
 function assertRegisteredBranchSwitchAvailable(state) {
   if (!state.worktreeClean) {
     throw new WorkspaceError(
@@ -402,6 +430,7 @@ module.exports = {
   inspectGitWorktree,
   inspectProject,
   inspectProjectBranch,
+  inspectProjectBranchMatch,
   inspectProjectBranchState,
   runGit,
   sameBranchPlan,

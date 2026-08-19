@@ -86,7 +86,8 @@ function parse(argv) {
       const missing = resolved.command.args[args.length]?.name || "argument";
       throw new WorkspaceError("CLI_ARGUMENT_REQUIRED", `${resolved.command.path.join(" ")} requires <${missing}>`, { argument: missing });
     }
-    if (!options.help && args.length > resolved.command.args.length) {
+    const variadic = resolved.command.args.at(-1)?.variadic === true;
+    if (!options.help && !variadic && args.length > resolved.command.args.length) {
       throw new WorkspaceError("CLI_EXTRA_ARGUMENT", `Unexpected argument for ${resolved.command.path.join(" ")}: ${args[resolved.command.args.length]}`, { argument: args[resolved.command.args.length] });
     }
     return {

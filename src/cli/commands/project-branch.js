@@ -4,11 +4,12 @@ const {
   assertRegisteredBranchSwitchAvailable,
   canonicalBranchState,
   inspectProjectBranch,
+  inspectProjectBranchMatch,
   switchProjectToRegisteredBranch,
 } = require("../../core/project");
 const { createFileTransaction } = require("../../core/transaction");
 const { confirm } = require("../confirmation");
-const { success } = require("../result");
+const { diagnosticFromError, fromDiagnostics, selectionResult, success } = require("../result");
 
 function branchError(code, message, details = {}) {
   return new WorkspaceError(code, message, details);
@@ -108,15 +109,244 @@ function applyAcceptActual(root, plan, options = {}) {
   }
 }
 
+function uniqueProjectSelection(args) {
+  const requested = [...args];
+  const names = [];
+  const diagnostics = [];
+  const seen = new Set();
+  for (const name of requested) {
+    if (!seen.has(name)) {
+      seen.add(name);
+      names.push(name);
+      continue;
+    }
+    diagnostics.push({
+      code: "CLI_DUPLICATE_ARGUMENT",
+      severity: "warning",
+      message: `Project ${name} was provided more than once; later occurrences were ignored.`,
+      project: name,
+      argument: "name",
+    });
+  }
+  return { requested, names, diagnostics };
+}
+
+function batchEntry(project, ok, action, data, message) {
+  return { project, ok, action, data: data || null, message };
+}
+
+function batchText(results) {
+  const lines = results.map((entry) => `${entry.ok ? (entry.action === "skip" ? "SKIP" : "OK") : "FAILED"}\t${entry.project}\t${entry.message}`);
+  const succeeded = results.filter((entry) => entry.ok && entry.action !== "skip").length;
+  const skipped = results.filter((entry) => entry.ok && entry.action === "skip").length;
+  const failed = results.filter((entry) => !entry.ok).length;
+  return [...lines, `Summary\ttotal=${results.length}\tsucceeded=${succeeded}\tskipped=${skipped}\tfailed=${failed}`].join("\n");
+}
+
+function recordBatchFailure(slot, error, diagnostics) {
+  diagnostics.push(diagnosticFromError(error, { project: slot.name }));
+  slot.result = batchEntry(slot.name, false, "failed", null, error.message);
+}
+
+function branchMismatchError(inspected) {
+  return branchError(
+    "PROJECT_BRANCH_MISMATCH",
+    `Project ${inspected.project.name} registered branch ${inspected.registeredBranch} does not match actual branch ${inspected.actualBranch}.`,
+    {
+      project: inspected.project.name,
+      location: inspected.project.location,
+      registeredBranch: inspected.registeredBranch,
+      actualBranch: inspected.actualBranch,
+      remediation: "Choose a branch reconciliation direction for the selected project, then retry branch verification.",
+    }
+  );
+}
+
+function batchBranchInspection(config, names, dependencies, diagnostics) {
+  const slots = names.map((name) => ({ name }));
+  for (const slot of slots) {
+    try {
+      const inspected = (dependencies.inspectProjectBranch || inspectProjectBranch)(config, slot.name, dependencies);
+      slot.result = batchEntry(
+        slot.name,
+        true,
+        "inspect",
+        inspected,
+        `${inspected.registeredBranch} -> ${inspected.actualBranch} (${inspected.matches ? "match" : "mismatch"})`
+      );
+    } catch (error) {
+      recordBatchFailure(slot, error, diagnostics);
+    }
+  }
+  return slots.map((slot) => slot.result);
+}
+
+function batchBranchVerification(config, names, dependencies, diagnostics) {
+  const slots = names.map((name) => ({ name }));
+  for (const slot of slots) {
+    try {
+      const inspected = (dependencies.inspectProjectBranchMatch || inspectProjectBranchMatch)(config, slot.name, dependencies);
+      if (!inspected.matches) {
+        const error = branchMismatchError(inspected);
+        diagnostics.push(diagnosticFromError(error, { project: slot.name }));
+        slot.result = batchEntry(slot.name, false, "failed", inspected, error.message);
+        continue;
+      }
+      slot.result = batchEntry(
+        slot.name,
+        true,
+        "verify",
+        inspected,
+        `registered and actual branches match: ${inspected.actualBranch}`
+      );
+    } catch (error) {
+      recordBatchFailure(slot, error, diagnostics);
+    }
+  }
+  return slots.map((slot) => slot.result);
+}
+
+async function batchAcceptActual(root, config, names, options, dependencies, diagnostics) {
+  const slots = names.map((name) => ({ name }));
+  for (const slot of slots) {
+    try {
+      slot.plan = planAcceptActual(config, slot.name, dependencies);
+      if (slot.plan.action === "skip") {
+        slot.result = batchEntry(
+          slot.name,
+          true,
+          "skip",
+          slot.plan,
+          `registered and actual branches already match: ${slot.plan.after.actualBranch}`
+        );
+      }
+    } catch (error) {
+      recordBatchFailure(slot, error, diagnostics);
+    }
+  }
+  const applicable = slots.filter((slot) => slot.plan?.action === "update");
+  if (applicable.length > 0 && !(await confirm(
+    [
+      "Accept actual branches by updating these registered branches?",
+      ...applicable.map((slot) => `- ${slot.name}: ${slot.plan.before.registeredBranch} -> ${slot.plan.after.registeredBranch}`),
+    ].join("\n"),
+    options
+  ))) {
+    throw branchError("CLI_CANCELLED", "Accepting the actual project branches was cancelled.");
+  }
+  for (const slot of applicable) {
+    try {
+      const applied = applyAcceptActual(root, slot.plan, dependencies);
+      slot.result = batchEntry(
+        slot.name,
+        true,
+        applied.action,
+        applied,
+        `accepted actual branch: ${slot.plan.before.registeredBranch} -> ${slot.plan.after.registeredBranch}`
+      );
+    } catch (error) {
+      recordBatchFailure(slot, error, diagnostics);
+    }
+  }
+  return slots.map((slot) => slot.result);
+}
+
+async function batchUseRegistered(config, names, options, dependencies, diagnostics) {
+  const slots = names.map((name) => ({ name }));
+  for (const slot of slots) {
+    try {
+      slot.plan = (dependencies.inspectProjectBranch || inspectProjectBranch)(config, slot.name, dependencies);
+      if (slot.plan.matches) {
+        const skipped = {
+          action: "skip",
+          project: slot.plan.project,
+          before: canonicalBranchState(slot.plan),
+          after: canonicalBranchState(slot.plan),
+          worktreeClean: slot.plan.worktreeClean,
+          registeredBranchExists: slot.plan.registeredBranchExists,
+        };
+        slot.result = batchEntry(
+          slot.name,
+          true,
+          "skip",
+          skipped,
+          `registered and actual branches already match: ${slot.plan.actualBranch}`
+        );
+      } else {
+        assertRegisteredBranchSwitchAvailable(slot.plan);
+      }
+    } catch (error) {
+      recordBatchFailure(slot, error, diagnostics);
+    }
+  }
+  const applicable = slots.filter((slot) => slot.plan && !slot.result);
+  if (applicable.length > 0 && !(await confirm(
+    [
+      "Switch these projects to their registered branches?",
+      ...applicable.map((slot) => `- ${slot.name}: ${slot.plan.actualBranch} -> ${slot.plan.registeredBranch}`),
+    ].join("\n"),
+    options
+  ))) {
+    throw branchError("CLI_CANCELLED", "Using the registered project branches was cancelled.");
+  }
+  for (const slot of applicable) {
+    try {
+      const applied = (dependencies.switchProjectToRegisteredBranch || switchProjectToRegisteredBranch)(slot.plan, dependencies);
+      slot.result = batchEntry(
+        slot.name,
+        true,
+        applied.action,
+        applied,
+        `switched to registered branch: ${slot.plan.registeredBranch}`
+      );
+    } catch (error) {
+      recordBatchFailure(slot, error, diagnostics);
+    }
+  }
+  return slots.map((slot) => slot.result);
+}
+
+async function executeProjectBranchSelection(invocation, action, command, dependencies) {
+  const { config, options, root } = invocation;
+  const selection = uniqueProjectSelection(invocation.args);
+  const diagnostics = [...selection.diagnostics];
+  let results;
+  if (action === "inspect") {
+    results = batchBranchInspection(config, selection.names, dependencies, diagnostics);
+  } else if (action === "verify") {
+    results = batchBranchVerification(config, selection.names, dependencies, diagnostics);
+  } else if (action === "accept-actual") {
+    results = await batchAcceptActual(root, config, selection.names, options, dependencies, diagnostics);
+  } else if (action === "use-registered") {
+    results = await batchUseRegistered(config, selection.names, options, dependencies, diagnostics);
+  } else {
+    throw branchError("CLI_UNKNOWN_COMMAND", `Unknown project branch command: ${action || "<missing>"}`);
+  }
+  return selectionResult(command, selection.requested, results, {
+    diagnostics,
+    text: batchText(results),
+  });
+}
+
 async function executeProjectBranch(invocation) {
   const { args, config, options, root } = invocation;
   const action = invocation.definition.path[2];
   const command = `project.branch.${action}`;
   const dependencies = options.dependencies || {};
+  if (args.length > 1) return executeProjectBranchSelection(invocation, action, command, dependencies);
   if (action === "inspect") {
     const inspected = (dependencies.inspectProjectBranch || inspectProjectBranch)(config, args[0], dependencies);
     return success(command, inspected,
       `${inspected.project.name}\t${inspected.registeredBranch}\t${inspected.actualBranch}\t${inspected.matches ? "match" : "mismatch"}`);
+  }
+  if (action === "verify") {
+    const inspected = (dependencies.inspectProjectBranchMatch || inspectProjectBranchMatch)(config, args[0], dependencies);
+    if (inspected.matches) {
+      return success(command, inspected, `Branch verification passed for ${inspected.project.name}: ${inspected.actualBranch}`);
+    }
+    return fromDiagnostics(command, {
+      diagnostics: [diagnosticFromError(branchMismatchError(inspected))],
+    }, inspected, `Branch verification failed for ${inspected.project.name}.`);
   }
   if (action === "accept-actual") {
     const plan = planAcceptActual(config, args[0], dependencies);
@@ -163,6 +393,12 @@ async function executeProjectBranch(invocation) {
 module.exports = {
   applyAcceptActual,
   assertAcceptPlanCurrent,
+  batchAcceptActual,
+  batchBranchInspection,
+  batchBranchVerification,
+  batchUseRegistered,
   executeProjectBranch,
+  executeProjectBranchSelection,
   planAcceptActual,
+  uniqueProjectSelection,
 };
