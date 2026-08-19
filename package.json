@@ -1,6 +1,6 @@
 {
   "name": "@icebearx-ai/code-workspace",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "description": "Local multi-project registry and safety layer for AI coding workspaces",
   "author": "icebearx-ai",
   "license": "MIT",
