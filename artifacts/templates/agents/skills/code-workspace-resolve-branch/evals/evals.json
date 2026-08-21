@@ -1,0 +1,45 @@
+{
+  "skill_name": "code-workspace-resolve-branch",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use the Skill to present the ASK only; do not run a CLI command or resolve the branch. Canonical inspection facts: one project named api, registered branch main, actual branch feature/login, matches false, worktreeClean true, registeredBranchExists true.",
+      "expected_output": "A concise single-project ASK with one unlabeled three-line project block and all three available choices.",
+      "files": [],
+      "expectations": [
+        "The project name, registered branch, and actual branch appear on three consecutive non-bulleted lines.",
+        "The choice prompt states that the displayed choices are available choices.",
+        "Choices 1, 2, and 3 are shown with their stable semantics.",
+        "No letter label, reply-format section, or important-notes section is shown.",
+        "No CLI command or state change is performed."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use the Skill to present the ASK only; do not run a CLI command or resolve the branch. Canonical inspection facts: one project named api, registered branch main, actual branch feature/login, matches false, worktreeClean false, registeredBranchExists false.",
+      "expected_output": "A single-project ASK that annotates both abnormal facts and shows only choices 2 and 3 with their original numbers.",
+      "files": [],
+      "expectations": [
+        "The registered-branch line indicates that the branch is missing locally.",
+        "The actual-branch line indicates that the worktree is unclean.",
+        "Choice 1 is omitted while choices 2 and 3 retain their semantic numbers.",
+        "The choice prompt states that only available choices are shown.",
+        "No reply-format section or important-notes section is shown.",
+        "No CLI command or state change is performed."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use the Skill to present and validate a multi-project ASK without running a CLI command. Canonical facts in order: api has registered main, actual feature/api, worktreeClean true, registeredBranchExists true; worker has registered main, actual feature/worker, worktreeClean false, registeredBranchExists false; web has registered main, actual feature/web, worktreeClean true, registeredBranchExists false. After presenting the ASK, process the user reply `1 B2`.",
+      "expected_output": "A three-project ASK with stable blocks and complete unavailable reasons, followed by rejection of the mixed global-and-labelled reply without changing state.",
+      "files": [],
+      "expectations": [
+        "Projects A, B, and C appear in inspection order with three non-bulleted lines per project and blank lines between blocks.",
+        "All three choices and the multi-project reply-format section are shown.",
+        "The important-notes section contains two separate choice-1 reasons for project B and one reason for project C.",
+        "The reply `1 B2` is rejected because bare-number and labelled modes cannot be mixed.",
+        "No project selection is executed and no CLI command or state change is performed."
+      ]
+    }
+  ]
+}

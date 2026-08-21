@@ -89,7 +89,7 @@ Add `--json` when a query result is consumed by Codex or a script.
 ## Workspace skills
 
 - `$code-workspace-add-projects` — inspect and register local Git projects with concise AI-generated navigation context.
-- `$code-workspace-resolve-branch` — safely resolve a selected project's branch mismatch and re-run targeted verification.
+- `$code-workspace-resolve-branch` — safely resolve a selected project's branch mismatch and confirm branch alignment.
 
 | Purpose | Codex | Claude Code |
 | --- | --- | --- |

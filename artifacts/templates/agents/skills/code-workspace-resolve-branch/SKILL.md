@@ -1,11 +1,11 @@
 ---
 name: code-workspace-resolve-branch
-description: Resolve `PROJECT_BRANCH_MISMATCH` for one or more already selected Code Workspace projects before project work. Use this Skill whenever targeted verification reports registered/actual branch mismatches; it gathers canonical facts, can combine several mismatches into one concise choice, delegates every automatic direction to the CLI, and verifies branch alignment without taking ownership of overall project health.
+description: Resolve `PROJECT_BRANCH_MISMATCH` for one or more already selected Code Workspace projects before project work. Use this Skill whenever targeted verification reports registered/actual branch mismatches; it gathers canonical facts, presents a deterministic structured choice, delegates every automatic direction to the branch CLI, and verifies branch alignment.
 ---
 
 # Resolve Workspace Project Branches
 
-Resolve only the already selected registered project or projects. This Skill owns branch reconciliation only; Workspace Guard decides whether project work can resume after overall project verification.
+Resolve only the already selected registered project or projects. This Skill owns branch reconciliation only; Workspace Guard decides whether project work can resume.
 
 ## Inspect canonical facts
 
@@ -21,65 +21,49 @@ Keep failed inspections paused and exclude them from the choice, but continue wi
 
 If `matches` is already true, omit that project from the choice and proceed to branch-alignment verification. Do not inspect or include projects outside the already selected scope.
 
-## Present one concise choice
+## Keep the ASK structure stable
 
-Explain the mismatch and ask the user to choose a direction. The examples below demonstrate the useful information and interaction shape; they are guidance, not required wording or a script to reproduce exactly. Do not recommend a default direction.
-
-Keep the presentation compact:
-
-- Always show the project name, registered branch, actual branch, and the three directions.
-- Add a short annotation to the registered branch only when `registeredBranchExists` is false.
-- Add a short annotation to the actual branch only when `worktreeClean` is false.
-- Omit normal-state annotations such as "available" or "clean".
-- Choice 1 is available only when both `registeredBranchExists` and `worktreeClean` are true. Choices 2 and 3 remain available.
-- When choice 1 is unavailable, state every applicable reason. Do not suggest stashing, resetting, creating, or fetching a branch.
-
-Single-project example:
+Different models may choose different wording, but preserve the following presentation shape so users can scan the same information consistently:
 
 ```text
-检测到项目 `api` 分支不一致，项目工作已暂停。
+[mismatch introduction and request for a decision]
 
-注册分支：main（本地不存在）
-实际分支：feature/login（有代码未提交）
+[multi-project only: A:] [project name]
+[registered-branch label]: [registered branch][optional annotation when the branch is missing locally]
+[actual-branch label]: [actual branch][optional annotation when the worktree is unclean]
 
-请选择：
-1. 使用注册分支
-2. 接受实际分支
-3. 手动处理
+[multi-project only: B:] [project name]
+[registered-branch label]: [registered branch][optional annotation]
+[actual-branch label]: [actual branch][optional annotation]
 
-回复 1、2 或 3
+[continue in inspection order, with one blank line between project blocks]
 
-注意：选项 1 当前不可用，因为注册分支本地不存在，且工作区有未提交代码。
+[choice prompt; for one project, state that only available choices are shown]
+1. [use the registered branch]
+2. [accept the actual branch]
+3. [handle manually without an automatic Git operation]
+
+[request a decision for each project]
+
+[multi-project only: reply-format heading]
+[explain that one number applies to every project, while labelled selections such as A1 B2 C3 apply per project]
+[explain that labels are case-insensitive and commas, spaces, or line breaks are accepted as separators]
+
+[multi-project only, and only when a choice is unavailable: important-notes heading]
+[project label]: choice 1 is unavailable — [one canonical reason]
+[one line for each additional project/reason]
+
+[multi-project only: explain that an unavailable selection is re-asked only for that project, valid selections are retained, and no state changes occur until every selection is valid and complete]
 ```
 
-When two or more selected projects have mismatches, ask once and assign stable labels `A`, `B`, `C`, and so on in presentation order. A bare `1`, `2`, or `3` applies that direction to every listed project. A labelled reply such as `A1, B2` assigns directions per project. Accept unambiguous natural separators rather than requiring one exact reply format.
+Ask rules:
 
-Multi-project example:
-
-```text
-检测到项目 `api`、`server` 分支不一致，项目工作已暂停。
-
-项目 A：api
-注册分支：main（本地不存在）
-实际分支：feature/login
-
-项目 B：server
-注册分支：main
-实际分支：feature/order（有代码未提交）
-
-请选择：
-1. 使用注册分支
-2. 接受实际分支
-3. 手动处理
-
-回复 1、2 或 3，或者分别回复 A2、B1。
-
-注意：
-A1 不可选，因为项目 A 的注册分支本地不存在，需要手动处理或接受实际分支。
-B1 不可选，因为项目 B 有未提交代码，无法安全切换分支。
-```
-
-Do not mutate Git or Workspace state until the submitted choices are valid and complete for every listed project. Preserve valid pending choices while asking again only for projects whose choice is missing or unavailable. If the user insists on an unavailable choice such as `A1`, explain the applicable canonical reason and ask again for that project; never silently substitute another direction.
+- Replace the bracketed instructions with user-facing text without exposing them. Keep inspection order, three non-bulleted lines per project, blank lines between projects, and only the two abnormal annotations shown in the template.
+- Choice 1 is available only when the registered branch exists locally and the worktree is clean. Choices 2 and 3 remain available. Do not recommend a default or invent another recovery direction.
+- For one project, omit everything marked multi-project only, state that only available choices are shown, and preserve the semantic numbers of those choices.
+- For several projects, keep stable letter labels and all three choices. Include every applicable unavailable reason, with one project and one reason per line.
+- Accept either one bare number for every project or labelled selections, never both. In labelled mode, accept partial replies, but treat unknown labels or options and duplicate or conflicting labels as invalid. Retain other valid selections and re-ask only for missing, unavailable, or invalid projects.
+- Do not mutate state until all choices are valid and complete. If an ASK control cannot preserve the template, use a normal user-facing question.
 
 ## Apply valid choices through the CLI
 
@@ -99,4 +83,4 @@ code-w project branch verify "<project-a>" "<project-b>" --json
 
 Use each result independently. A successful result means branch reconciliation is complete and branch alignment has been verified for that project; a failed result remains unresolved. Complete all independent automatic operations and branch verification before giving one consolidated report of inspected failures, successful changes, skips, branch-verification failures, and projects awaiting manual handling.
 
-Hand successful projects back to Workspace Guard for overall targeted `project verify`. Unrelated project-health failures discovered there do not reopen or fail this Skill; they remain Guard-owned issues. If the Guard observes a new `PROJECT_BRANCH_MISMATCH` caused by later drift, it may invoke this Skill again. Do not run `project list` or any `project verify` inside this Skill, and do not inspect any registered project outside the selected scope.
+Hand successful projects back to Workspace Guard. Later non-branch project issues do not reopen or fail this Skill. If later branch drift is observed, the Guard may invoke this Skill again. Do not inspect any registered project outside the selected scope.

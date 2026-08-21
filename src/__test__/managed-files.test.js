@@ -116,6 +116,42 @@ test("workspace guide uses the selected workspace language at one stable target"
   assert(!fs.existsSync(path.join(root, "USER_GUIDE.zh-CN.md")));
 });
 
+test("branch Skill stays static across artifact languages and keeps one ASK structure", () => {
+  const manifest = loadInitManifest();
+  const installed = [];
+  for (const language of ["zh-CN", "en-US"]) {
+    const root = baseline(["codex"]);
+    installManagedFiles(root, manifest, ["codex"], {
+      variables: { WORKSPACE_LANGUAGE: language },
+    });
+    const skill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-resolve-branch", "SKILL.md"), "utf8");
+    installed.push(skill);
+    assert.doesNotMatch(skill, /\{\{WORKSPACE_LANGUAGE\}\}|branchAsk|Workspace ASK language|Requirement:|Scenario:|zh-CN|en-US/);
+    assert.match(skill, /\[mismatch introduction and request for a decision\]/);
+    assert.match(skill, /three non-bulleted lines per project/);
+    assert.match(skill, /blank lines between projects/);
+    assert.match(skill, /For one project, omit everything marked multi-project only/);
+    assert.match(skill, /state that only available choices are shown/);
+    assert.match(skill, /Choices 2 and 3 remain available/);
+    assert.match(skill, /Include every applicable unavailable reason, with one project and one reason per line/);
+    assert.match(skill, /Accept either one bare number for every project or labelled selections, never both/);
+    assert.doesNotMatch(skill, /Single-project example|Multi-project example|project verify|project list/);
+  }
+  assert.equal(installed[0], installed[1]);
+});
+
+test("branch Skill includes reusable model-behavior eval cases", () => {
+  const file = path.join(__dirname, "..", "..", "artifacts", "templates", "agents", "skills", "code-workspace-resolve-branch", "evals", "evals.json");
+  const evals = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.equal(evals.skill_name, "code-workspace-resolve-branch");
+  assert.deepEqual(evals.evals.map((entry) => entry.id), [1, 2, 3]);
+  assert(evals.evals.every((entry) => entry.prompt && entry.expected_output && Array.isArray(entry.files) && entry.expectations.length >= 5));
+  assert.match(evals.evals[0].expected_output, /single-project ASK/);
+  assert.match(evals.evals[1].expected_output, /choices 2 and 3/);
+  assert.match(evals.evals[2].prompt, /`1 B2`/);
+  assert(evals.evals[2].expectations.some((entry) => /cannot be mixed/.test(entry)));
+});
+
 test("Codex monitor hooks are capability-gated and idempotent", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();

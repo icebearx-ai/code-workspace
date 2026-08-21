@@ -118,20 +118,24 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(resolveBranchSkill, /project branch accept-actual "<project-a>" "<project-b>" --yes --json/);
   assert.match(resolveBranchSkill, /project branch verify "<project-a>" "<project-b>" --json/);
   assert.match(resolveBranchSkill, /branch reconciliation is complete and branch alignment has been verified/);
-  assert.match(resolveBranchSkill, /Workspace Guard for overall targeted `project verify`/);
-  assert.match(resolveBranchSkill, /guidance, not required wording or a script to reproduce exactly/);
-  assert.match(resolveBranchSkill, /Omit normal-state annotations/);
-  assert.match(resolveBranchSkill, /A1, B2/);
-  assert.match(resolveBranchSkill, /bare `1`, `2`, or `3` applies that direction to every listed project/);
-  assert.match(resolveBranchSkill, /until the submitted choices are valid and complete for every listed project/);
-  assert.match(resolveBranchSkill, /If the user insists on an unavailable choice such as `A1`/);
+  assert.match(resolveBranchSkill, /\[mismatch introduction and request for a decision\]/);
+  assert.match(resolveBranchSkill, /A1 B2 C3/);
+  assert.match(resolveBranchSkill, /one number applies to every project/);
+  assert.match(resolveBranchSkill, /For one project, omit everything marked multi-project only/);
+  assert.match(resolveBranchSkill, /state that only available choices are shown/);
+  assert.match(resolveBranchSkill, /Choice 1 is available only when the registered branch exists locally and the worktree is clean/);
+  assert.match(resolveBranchSkill, /Choices 2 and 3 remain available/);
+  assert.match(resolveBranchSkill, /Include every applicable unavailable reason, with one project and one reason per line/);
+  assert.match(resolveBranchSkill, /Accept either one bare number for every project or labelled selections, never both/);
+  assert.match(resolveBranchSkill, /unknown labels or options and duplicate or conflicting labels as invalid/);
+  assert.match(resolveBranchSkill, /Retain other valid selections and re-ask only for missing, unavailable, or invalid projects/);
+  assert.match(resolveBranchSkill, /Do not mutate state until all choices are valid and complete/);
   assert.match(resolveBranchSkill, /run each non-empty automatic direction group once/);
   assert.match(resolveBranchSkill, /Continue with the other automatic direction group/);
   assert.match(resolveBranchSkill, /one consolidated report/);
   assert.match(resolveBranchSkill, /together with projects that were already matching during inspection/);
-  assert.match(resolveBranchSkill, /本地不存在/);
-  assert.match(resolveBranchSkill, /有代码未提交/);
-  assert.doesNotMatch(resolveBranchSkill, /Use the following template exactly|Replace only the `\{placeholders\}`/);
+  assert.doesNotMatch(resolveBranchSkill, /Coordinate through the branch CLI/);
+  assert.doesNotMatch(resolveBranchSkill, /branchAsk|Workspace ASK language|\{\{WORKSPACE_LANGUAGE\}\}|Requirement:|Scenario:|Single-project example|Multi-project example|project verify|project list/);
   assert.doesNotMatch(resolveBranchSkill, /git status|git show-ref|git switch|\.code-workspace\/config\.yaml|project list --json/);
   assert.match(addProjectsCommand, /project inspect ["']?<path>["']? --json/);
   assert.match(addProjectsCommand, /explicitly invokes `\/code-workspace:add-projects`/);
@@ -198,6 +202,20 @@ test("update changes workspace language and its derived managed artifacts", () =
   const repeated = run(root, ["update", "--tools", "none", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
   assert.equal(jsonData(repeated).language, "en-US");
+});
+
+test("language update does not rewrite the static branch ASK contract", () => {
+  const root = temporaryRoot();
+  assert.equal(run(root, ["init", ".", "--tools", "codex", "--language", "zh-CN", "--yes", "--json"]).status, 0);
+  const skillFile = path.join(root, ".codex", "skills", "code-workspace-resolve-branch", "SKILL.md");
+  const before = fs.readFileSync(skillFile, "utf8");
+  assert.match(before, /Keep the ASK structure stable/);
+
+  const updated = run(root, ["update", "--language", "en-US", "--json"]);
+  assert.equal(updated.status, 0, updated.stderr);
+  const after = fs.readFileSync(skillFile, "utf8");
+  assert.equal(after, before);
+  assert.doesNotMatch(after, /Workspace ASK language|branchAsk|"messages"|zh-CN|en-US/);
 });
 
 test("language update leaves existing project context unchanged", () => {

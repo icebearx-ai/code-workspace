@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "e89e5d2eca50fdf2f79c14ef8653a4b49a7acddf6bbd6df8a87a96a7f51a29e0"
+      "sha256": "d6e3f59fc86262c4e71d2320fb2fba21394d7b4f099ef465fdec765d0b6c7754"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "5bce388d749f63bb4d2bec46af8532589ce3819fb61f7ddeda63a4b52801ba90"
+      "sha256": "4dc207305a3975ab7272addedf3bc2930054e860c2b0b2b6e0e102f4457f5cc0"
     }
   ],
   "managedFiles": [
@@ -158,7 +158,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "997dc41841492a4524a351886ff0a2b0e0d8968d7b6562686969537b7d807fea"
+        "sha256": "99e8ade7d577ff0f7a64f4437a302f447cfae94e22e230e493dc2d826a523b2c"
       },
       "provenance": {
         "kind": "template"
@@ -173,7 +173,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "997dc41841492a4524a351886ff0a2b0e0d8968d7b6562686969537b7d807fea"
+        "sha256": "99e8ade7d577ff0f7a64f4437a302f447cfae94e22e230e493dc2d826a523b2c"
       },
       "provenance": {
         "kind": "template"
