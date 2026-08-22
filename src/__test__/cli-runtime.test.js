@@ -73,6 +73,7 @@ test("project branch commands are registry-driven three-segment contracts", () =
     "project branch verify": { interaction: "never", effects: "read-only", options: [] },
     "project branch accept-actual": { interaction: "required", effects: "planned-write", options: ["yes"] },
     "project branch use-registered": { interaction: "required", effects: "external", options: ["yes"] },
+    "project branch update-latest": { interaction: "never", effects: "external", options: [] },
   };
   for (const [commandPath, expected] of Object.entries(contracts)) {
     const definition = getCommand(commandPath);
@@ -139,6 +140,7 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /apply/);
     assert.match(script, /accept-actual/);
     assert.match(script, /use-registered/);
+    assert.match(script, /update-latest/);
     assert.doesNotMatch(script, /sync-branch/);
   }
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
@@ -152,7 +154,7 @@ test("completion scripts include subcommands and command-specific options", () =
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("sync"));
   assert.deepEqual(
     new Set(spec.children.find((entry) => entry.path.join(" ") === "project branch").values),
-    new Set(["inspect", "verify", "accept-actual", "use-registered"])
+    new Set(["inspect", "verify", "accept-actual", "use-registered", "update-latest"])
   );
 });
 
@@ -199,6 +201,7 @@ test("documentation references are validated by the real semantic parser", () =>
   assert.equal(validateCommandReference('project branch verify "<name>" "<name>" --json').valid, true);
   assert.equal(validateCommandReference('project branch accept-actual "<name>" --yes --json').valid, true);
   assert.equal(validateCommandReference('project branch use-registered "<name>" --yes --json').valid, true);
+  assert.equal(validateCommandReference('project branch update-latest "<name>" --json').valid, true);
   assert.equal(validateCommandReference("permissions apply --tools claude,codex --yes --json").valid, true);
   assert.equal(validateCommandReference("update --tools").valid, false);
   assert.match(validateCommandReference("update --froce").reason, /CLI_UNKNOWN_OPTION/);

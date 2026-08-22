@@ -41,6 +41,13 @@ function validateProjectFields(output, project, label) {
       add(output, "error", "PROJECT_FIELD_REQUIRED", `Project ${label} must contain a non-empty ${field}.`, { projectName: project.name || null, field });
     }
   }
+  if (project.updateLatest !== undefined && typeof project.updateLatest !== "boolean") {
+    add(output, "error", "PROJECT_UPDATE_LATEST_INVALID", `Project ${label} updateLatest must be a boolean when present.`, {
+      projectName: project.name || null,
+      field: "updateLatest",
+      actual: project.updateLatest,
+    });
+  }
   if (typeof project.location !== "string" || !path.isAbsolute(project.location)) {
     add(output, "error", "PROJECT_LOCATION_NOT_ABSOLUTE", `Project ${label} location must be absolute: ${project.location}`, { projectName: project.name || null });
     return false;

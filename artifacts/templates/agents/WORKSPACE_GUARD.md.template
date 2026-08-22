@@ -47,20 +47,27 @@ code-w project verify "<project-a>" "<project-b>" --json
 - For any other failure, report the targeted diagnostics and wait for user direction for the affected project; a failure in one batch result does not block unrelated successful selected projects. Do not escalate to full-workspace validation.
 - The branch Skill completes after `project branch verify` confirms alignment; it does not own overall project readiness. After its handoff, discard branch-dependent context and rerun targeted `project verify` for the successfully reconciled projects before resuming work.
 - If that overall verification fails for a non-branch reason, keep the affected project paused and handle the project-level diagnostic here without treating the branch Skill as failed. If a new `PROJECT_BRANCH_MISMATCH` appears because the branch drifted again, re-enter the Skill. Do not list or verify unrelated projects.
+- After branch verification succeeds—including projects whose branches were already aligned—run `project branch update-latest` for the selected projects:
+
+```bash
+code-w project branch update-latest "<project-a>" "<project-b>" --json
+```
+
+  Pass each selected project name as a separate argument; for a single project, pass only that project name. Evaluate each project result independently, including when the batch-level `ok` is `false`: continue only for projects whose individual result has `ok: true`, and treat `disabled` and `already-latest` as successful skips. If an update fails, keep that project paused and do not run ad-hoc `fetch`, `pull`, `reset`, `stash`, or `rebase` commands. For each successful or skipped project, discard pre-update context and rerun targeted `project verify` before starting project work.
 
 ## Workspace Write Boundary
 
-The AI MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root, including:
+The AI/Agent MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root, including:
 
 - `.code-workspace/config.yaml` or `.code-workspace/state.json`
 - `.codex/config.toml`
 - `CLAUDE.md`, `AGENTS.md`, or other managed workspace files
 
-Change registry information only through an approved `code-w` command. The CLI owns confirmation, concurrency checks, persistence or safe external effects, postconditions, rollback/compensation, and structured output. This boundary does not prevent user-requested production-code changes inside the selected external `project.location`.
+AI/Agent registry changes must use an approved `code-w` command. Users may manually edit `.code-workspace/config.yaml` and are responsible for the resulting configuration; AI/Agent must not imitate that edit with a script or direct file write. The CLI owns confirmation, concurrency checks, persistence or safe external effects, postconditions, rollback/compensation, and structured output. This boundary does not prevent user-requested production-code changes inside the selected external `project.location`.
 
 ## Responsibilities
 
-- The CLI collects and verifies branch facts and performs only explicitly confirmed safe reconciliation.
-- The Agent explains facts, invokes the branch Skill, and follows the user's selected direction.
+- The CLI collects and verifies branch facts, performs safe reconciliation, and executes the explicitly configured latest-branch fast-forward.
+- The Agent explains facts, invokes the branch Skill, follows the user's selected direction, and invokes `project branch update-latest` after branch alignment.
 - The user decides whether to use the registered branch, accept the actual branch, or resolve manually.
-- Code Workspace does not edit production code, create branches, fetch network state, stash/reset changes, or resolve conflicts.
+- Code Workspace does not edit production code, create branches, or resolve conflicts. Only `project branch update-latest` may fetch and fast-forward an explicitly enabled project; it never runs reset, stash, rebase, or non-fast-forward merge.

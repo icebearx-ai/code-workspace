@@ -76,6 +76,7 @@ code-workspace project branch inspect payments --json
 code-workspace project branch verify payments --json
 code-workspace project branch use-registered payments --yes --json
 code-workspace project branch accept-actual payments --yes --json
+code-workspace project branch update-latest payments --json
 code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
@@ -87,7 +88,17 @@ The two reconciliation directions are deliberately separate:
 - `project branch use-registered` switches the selected worktree to its registered branch. It requires confirmation, a clean worktree, and an existing local branch.
 - `project branch accept-actual` updates only the selected registry record so its registered branch accepts the actual branch. Existing branch-adoption scripts should migrate to this command.
 
-Both commands detect plan drift and verify postconditions. Code Workspace never creates or downloads a branch and never performs fetch, stash, reset, commit, production-code edits, or conflict resolution.
+Both commands detect plan drift and verify postconditions. `project branch update-latest` is the separate, opt-in path for projects with `updateLatest: true`; it only fetches the configured upstream and fast-forwards a clean matching branch. Code Workspace never creates or downloads a branch and never performs stash, reset, rebase, non-fast-forward merge, production-code edits, or conflict resolution.
+
+Users may manually set the optional project policy in `.code-workspace/config.yaml`:
+
+```yaml
+projects:
+  - name: payments
+    updateLatest: true
+```
+
+AI/Agent must not directly edit this file. They may read the policy and invoke the registered CLI command; users remain responsible for manual configuration changes.
 
 `permissions apply` shows the complete authorization plan for the selected Agent tools, requires confirmation when changes are needed, applies and verifies the requested grants, and reports the result per tool. Agent directory access remains a user authorization. The command adds missing registered-project access but does not revoke additional directories; use `project remove` or edit the Agent settings explicitly to revoke access.
 

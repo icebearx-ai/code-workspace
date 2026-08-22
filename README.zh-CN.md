@@ -76,6 +76,7 @@ code-workspace project branch inspect payments --json
 code-workspace project branch verify payments --json
 code-workspace project branch use-registered payments --yes --json
 code-workspace project branch accept-actual payments --yes --json
+code-workspace project branch update-latest payments --json
 code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
@@ -87,7 +88,17 @@ code-workspace doctor --json
 - `project branch use-registered` 将选中 worktree 切换到注册分支，要求确认、干净 worktree 和已存在的本地注册分支。
 - `project branch accept-actual` 只更新选中项目的注册记录，让注册分支接受实际分支；已有“接受实际分支”脚本应迁移到该命令。
 
-两条命令都会检查计划漂移并验证后置条件。Code Workspace 不会创建或下载分支，也不会执行 fetch、stash、reset、commit、生产代码编辑或冲突处理。
+两条命令都会检查计划漂移并验证后置条件。`project branch update-latest` 是独立的显式配置路径：仅当项目 `updateLatest: true` 时，才对干净且分支一致的 worktree fetch upstream 并 fast-forward。Code Workspace 不会创建或下载分支，也不会执行 stash、reset、rebase、非 fast-forward merge、生产代码编辑或冲突处理。
+
+用户可以手动在 `.code-workspace/config.yaml` 中设置项目策略：
+
+```yaml
+projects:
+  - name: payments
+    updateLatest: true
+```
+
+AI/Agent 不得直接编辑该文件；可以读取策略并调用已注册的 CLI，手动配置结果由用户负责。
 
 `permissions apply` 会展示选中 Agent 工具的完整授权计划，在需要修改时要求确认，实施并验证请求的授权，并按工具报告结果。Agent 目录访问仍属于用户授权。该命令只补齐已注册项目缺失的访问权限，不撤销额外目录；如需撤销，请使用 `project remove` 或显式编辑 Agent 设置。
 

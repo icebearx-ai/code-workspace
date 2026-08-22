@@ -10,6 +10,7 @@ const { executeMonitor, readStdinJson } = require("./cli/commands/monitor");
 const { executePermissions } = require("./cli/commands/permissions");
 const { executeProject } = require("./cli/commands/project");
 const { executeProjectBranch } = require("./cli/commands/project-branch");
+const { executeProjectBranchUpdateLatest } = require("./cli/commands/project-branch-update");
 const { executeUpdate, updateWorkspace } = require("./cli/commands/update");
 const {
   executeDoctor,
@@ -20,6 +21,7 @@ async function dispatch(invocation) {
   const key = invocation.definition.path.join(" ");
   if (key === "init") return executeInit(invocation);
   if (key === "monitor" || key === "monitor report") return executeMonitor(invocation);
+  if (key === "project branch update-latest") return executeProjectBranchUpdateLatest(invocation);
   if (key.startsWith("project branch ")) return executeProjectBranch(invocation);
   if (key.startsWith("project ")) return executeProject(invocation);
   if (key === "update") return executeUpdate(invocation);

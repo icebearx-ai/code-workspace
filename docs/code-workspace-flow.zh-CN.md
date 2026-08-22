@@ -71,7 +71,9 @@ flowchart LR
     MANUAL --> BV
     BV -->|分支一致| V[Guard: project verify name]
     BV -->|仍不一致| STOP[保持停止]
-    V -->|整体通过| CONTINUE[重新获取目标项目上下文后继续]
+    V -->|整体通过| U[project branch update-latest]
+    U -->|成功或 skip| CONTINUE[重新获取目标项目上下文后继续]
+    U -->|失败| STOP
     V -->|项目级问题| STOP
 ```
 
@@ -80,10 +82,11 @@ code-workspace project branch inspect "<project-name>" --json
 code-workspace project branch use-registered "<project-name>" --yes --json
 code-workspace project branch accept-actual "<project-name>" --yes --json
 code-workspace project branch verify "<project-name>" --json
+code-workspace project branch update-latest "<project-name>" --json
 code-workspace project verify "<project-name>" --json
 ```
 
-注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支要求干净 worktree 和已存在的本地分支；接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 使用定向 `project verify` 接管项目整体健康校验。
+注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支要求干净 worktree 和已存在的本地分支；接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 根据 `projects[].updateLatest` 调用 `project branch update-latest`，最后使用定向 `project verify` 接管项目整体健康校验。
 
 ## 责任边界
 
@@ -97,8 +100,8 @@ code-workspace project verify "<project-name>" --json
 ## 不变量
 
 - 不得猜测项目路径、项目归属或分支。
-- 不得直接编辑 `.code-workspace/config.yaml`；通过 CLI 写入。
+- AI/Agent 不得直接编辑 `.code-workspace/config.yaml`；用户可以手动编辑并对结果负责。AI/Agent 的配置写入必须通过受支持的 CLI。
 - 不得把独立的 `openspec/` 存储隐式绑定到 Workspace。
 - Workspace 初始化、更新和 Doctor 不依赖其他 OpenSpec 包或可执行文件。
 - Workspace 不读取或写入 `openspec/`。
-- Workspace CLI 不编辑生产代码，不创建或下载分支，不执行 stash/reset，也不处理 Git 冲突。
+- Workspace CLI 不编辑生产代码，不创建分支，不执行 stash/reset，也不处理 Git 冲突；仅对显式启用 `updateLatest` 的项目执行 upstream fetch 和 fast-forward。

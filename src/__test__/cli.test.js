@@ -97,6 +97,9 @@ test("init installs only workspace-owned integrations and does not create opensp
     assert.match(instructions, /freeze the scope to that project/);
     assert.match(instructions, /one combined choice/);
     assert.match(instructions, /one targeted `project verify` invocation/);
+    assert.match(instructions, /project branch update-latest/);
+    assert.match(instructions, /Users may manually edit `\.code-workspace\/config\.yaml`/);
+    assert.match(instructions, /AI\/Agent must not imitate that edit/);
     assert.match(instructions, /effects, diagnostics, transactions, and verification results remain project-isolated/);
     assert.match(instructions, /even when the top-level `ok` is false/);
     assert.doesNotMatch(instructions, /OpenSpec owns|Cross-project|Every capability/);
