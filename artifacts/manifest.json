@@ -158,7 +158,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "99e8ade7d577ff0f7a64f4437a302f447cfae94e22e230e493dc2d826a523b2c"
+        "sha256": "d09b0e1847f5b39e6409ba3ac43f26fa5829a15690a3e216576e51535fb6b161"
       },
       "provenance": {
         "kind": "template"
@@ -173,7 +173,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "99e8ade7d577ff0f7a64f4437a302f447cfae94e22e230e493dc2d826a523b2c"
+        "sha256": "d09b0e1847f5b39e6409ba3ac43f26fa5829a15690a3e216576e51535fb6b161"
       },
       "provenance": {
         "kind": "template"

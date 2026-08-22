@@ -117,7 +117,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(addProjectsSkill, /standard envelope fields `schemaVersion`, `ok`, `command`, `data`, and `diagnostics`/);
   assert.doesNotMatch(addProjectsSkill, /For `zh-CN`|For `en-US`/);
   assert.match(resolveBranchSkill, /project branch inspect "<project-a>" "<project-b>" --json/);
-  assert.match(resolveBranchSkill, /project branch use-registered "<project-a>" "<project-b>" --yes --json/);
+  assert.match(resolveBranchSkill, /project branch use-registered "<project-a>" "<project-b>" --allow-remote --yes --json/);
   assert.match(resolveBranchSkill, /project branch accept-actual "<project-a>" "<project-b>" --yes --json/);
   assert.match(resolveBranchSkill, /project branch verify "<project-a>" "<project-b>" --json/);
   assert.match(resolveBranchSkill, /branch reconciliation is complete and branch alignment has been verified/);
@@ -126,7 +126,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(resolveBranchSkill, /one number applies to every project/);
   assert.match(resolveBranchSkill, /For one project, omit everything marked multi-project only/);
   assert.match(resolveBranchSkill, /state that only available choices are shown/);
-  assert.match(resolveBranchSkill, /Choice 1 is available only when the registered branch exists locally and the worktree is clean/);
+  assert.match(resolveBranchSkill, /Choice 1 is available when the worktree is clean and either the registered branch exists locally or exactly one/);
   assert.match(resolveBranchSkill, /Choices 2 and 3 remain available/);
   assert.match(resolveBranchSkill, /Include every applicable unavailable reason, with one project and one reason per line/);
   assert.match(resolveBranchSkill, /Accept either one bare number for every project or labelled selections, never both/);

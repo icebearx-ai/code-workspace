@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const {
   assertRegisteredBranchSwitchAvailable,
+  planRegisteredBranchAcquisition,
   inspectProjectBranch,
   inspectProjectBranchMatch,
   switchProjectToRegisteredBranch,
@@ -106,6 +107,106 @@ test("registered-branch switching rejects dirty worktrees and missing local bran
       && error.details.actualBranch === "feature/work"
       && /will not create or download/.test(error.details.remediation)
   );
+});
+
+test("remote acquisition requires explicit mode and rejects ambiguous candidates", () => {
+  const missing = state({ registeredBranchExists: false, remoteBranchCandidates: [] });
+  assert.throws(() => planRegisteredBranchAcquisition(missing), (error) => error.code === "PROJECT_REGISTERED_BRANCH_MISSING");
+  assert.deepEqual(planRegisteredBranchAcquisition(missing, {
+    allowRemote: true,
+    gitRemoteTrackingBranches: () => [{ remote: "origin", remoteBranch: "origin/main" }],
+    gitRemoteBranchHead: () => "head",
+  }), {
+    mode: "remote-tracking",
+    remote: "origin",
+    remoteBranch: "origin/main",
+    targetHead: "head",
+    localBranchCreated: true,
+  });
+  assert.throws(() => planRegisteredBranchAcquisition({
+    ...missing,
+    remoteBranchCandidates: [
+      { remote: "origin", remoteBranch: "origin/main" },
+      { remote: "upstream", remoteBranch: "upstream/main" },
+    ],
+  }, { allowRemote: true }), (error) => error.code === "PROJECT_BRANCH_REMOTE_AMBIGUOUS");
+  assert.throws(() => planRegisteredBranchAcquisition(missing, { allowRemote: true, remote: "origin" }), (error) => error.code === "CLI_OPTION_CONFLICT");
+});
+
+test("remote-tracking acquisition creates a local branch and reports its source", () => {
+  const calls = [];
+  const result = switchProjectToRegisteredBranch(state({
+    registeredBranchExists: false,
+    remoteBranchCandidates: [{ remote: "origin", remoteBranch: "origin/main" }],
+  }), {
+    allowRemote: true,
+    inspectProjectBranchState: observations(
+      state({ registeredBranchExists: false, remoteBranchCandidates: [{ remote: "origin", remoteBranch: "origin/main" }] }),
+      state({ registeredBranchExists: false, remoteBranchCandidates: [{ remote: "origin", remoteBranch: "origin/main" }] }),
+      state({ actualBranch: "main", matches: true, registeredBranchExists: true }),
+    ),
+    createTrackingBranch: (location, branch, remoteBranch) => calls.push({ location, branch, remoteBranch }),
+    gitRemoteBranchHead: () => "head",
+  });
+  assert.deepEqual(calls, [{ location: "/workspace/service", branch: "main", remoteBranch: "origin/main" }]);
+  assert.deepEqual(result.acquisition, {
+    mode: "remote-tracking",
+    remote: "origin",
+    remoteBranch: "origin/main",
+    targetHead: "head",
+    localBranchCreated: true,
+  });
+});
+
+test("explicit remote acquisition fetches before creating the tracking branch", () => {
+  const calls = [];
+  const result = switchProjectToRegisteredBranch(state({ registeredBranchExists: false }), {
+    remote: "origin",
+    gitRemotes: () => ["origin"],
+    inspectProjectBranchState: observations(
+      state({ registeredBranchExists: false }),
+      state({ registeredBranchExists: false }),
+      state({ actualBranch: "main", matches: true, registeredBranchExists: true }),
+    ),
+    fetchRegisteredBranch: (location, remote, branch) => {
+      calls.push(["fetch", location, remote, branch]);
+      return { remote, remoteBranch: `${remote}/${branch}`, targetHead: "fetched-head" };
+    },
+    createTrackingBranch: (location, branch, remoteBranch) => calls.push(["create", location, branch, remoteBranch]),
+  });
+  assert.deepEqual(calls, [
+    ["fetch", "/workspace/service", "origin", "main"],
+    ["create", "/workspace/service", "main", "origin/main"],
+  ]);
+  assert.equal(result.acquisition.mode, "fetched");
+  assert.equal(result.acquisition.targetHead, "fetched-head");
+});
+
+test("remote branch creation is reported as retained when post-switch verification fails", () => {
+  const calls = [];
+  assert.throws(() => switchProjectToRegisteredBranch(state({
+    registeredBranchExists: false,
+    remoteBranchCandidates: [{ remote: "origin", remoteBranch: "origin/main" }],
+  }), {
+    allowRemote: true,
+    inspectProjectBranchState: observations(
+      state({ registeredBranchExists: false, remoteBranchCandidates: [{ remote: "origin", remoteBranch: "origin/main" }] }),
+      state({ registeredBranchExists: false, remoteBranchCandidates: [{ remote: "origin", remoteBranch: "origin/main" }] }),
+      state({ actualBranch: "feature/work", matches: false, registeredBranchExists: false }),
+    ),
+    gitRemoteBranchHead: () => "head",
+    createTrackingBranch: () => calls.push("create"),
+    switchGitBranch: (location, branch) => calls.push(branch),
+    injectFailure: (stage) => {
+      if (stage === "after-switch") throw new Error("verification hook failed");
+    },
+  }), (error) => {
+    assert.equal(error.code, "PROJECT_BRANCH_SWITCH_VERIFY_FAILED");
+    assert.equal(error.details.compensation.succeeded, true);
+    assert.equal(error.details.effects.retained[0].kind, "git-branch-created");
+    return true;
+  });
+  assert.deepEqual(calls, ["create", "feature/work"]);
 });
 
 test("registered-branch switching compares the complete plan before applying Git", () => {

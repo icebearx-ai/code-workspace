@@ -81,11 +81,11 @@ code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
-`project branch inspect` 只检查命名项目，返回 `registeredBranch`、`actualBranch`、是否一致、worktree 是否干净以及注册分支是否在本地存在。`project branch verify` 是协调后的窄范围断言，只检查注册分支和实际分支是否一致，不执行项目整体健康校验。`PROJECT_BRANCH_MISMATCH` 诊断使用 `registeredBranch`、`actualBranch` 和 `location`；使用旧分支诊断或结果字段的调用方必须迁移到这套规范状态合同。
+`project branch inspect` 只检查命名项目，返回 `registeredBranch`、`actualBranch`、是否一致、worktree 是否干净、注册分支是否在本地存在以及远程跟踪候选。`project branch verify` 是协调后的窄范围断言，只检查注册分支和实际分支是否一致，不执行项目整体健康校验。`PROJECT_BRANCH_MISMATCH` 诊断使用 `registeredBranch`、`actualBranch` 和 `location`；使用旧分支诊断或结果字段的调用方必须迁移到这套规范状态合同。
 
 两个协调方向通过独立命令表达：
 
-- `project branch use-registered` 将选中 worktree 切换到注册分支，要求确认、干净 worktree 和已存在的本地注册分支。
+- `project branch use-registered` 将选中 worktree 切换到注册分支，默认要求确认、干净 worktree 和已存在的本地注册分支。提供 `--allow-remote` 时，可以从唯一已有的远程跟踪分支创建本地 tracking 分支；提供 `--remote <name>` 时，可以在确认后仅 fetch 指定远程的注册分支，再创建本地 tracking 分支并切换。
 - `project branch accept-actual` 只更新选中项目的注册记录，让注册分支接受实际分支；已有“接受实际分支”脚本应迁移到该命令。
 
 两条命令都会检查计划漂移并验证后置条件。`project branch update-latest` 是独立的显式配置路径：仅当项目 `updateLatest: true` 时，才对干净且分支一致的 worktree fetch upstream 并 fast-forward。Code Workspace 不会创建或下载分支，也不会执行 stash、reset、rebase、非 fast-forward merge、生产代码编辑或冲突处理。

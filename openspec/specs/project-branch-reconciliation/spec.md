@@ -53,27 +53,55 @@ CLI 必须（SHALL）提供 `project branch accept-actual <name>`，以目标项
 - **THEN** 命令返回稳定的冲突或验证失败诊断，回滚本命令的 Workspace 文件写入，并且不修改其他配置域
 
 ### Requirement: 项目可以安全使用注册分支
-CLI 必须（SHALL）提供 `project branch use-registered <name>`，将命名项目从 `actualBranch` 切换到 `registeredBranch`；该命令必须（SHALL）声明为需要确认的 `external` 命令，并且不得创建分支、fetch、stash、reset、commit 或修改 Workspace 注册表。
+`project branch use-registered <name>` SHALL retain local-only behavior by default. When explicitly given `--allow-remote`, it MAY create a local tracking branch from exactly one existing remote-tracking branch. When explicitly given `--remote <remote>`, it MAY fetch only the registered branch from that configured remote, create a local tracking branch, and switch the worktree. It SHALL never overwrite an existing local branch.
+
+#### Scenario: 默认仍拒绝缺失本地分支
+- **WHEN** 注册分支不是本地分支，且用户未提供远程选项
+- **THEN** 命令在确认和 Git 变更前返回 `PROJECT_REGISTERED_BRANCH_MISSING`
 
 #### Scenario: 安全切换成功
 - **WHEN** 工作树干净、注册本地分支存在、用户已确认且计划没有漂移
 - **THEN** CLI 切换命名项目到注册分支，验证实际分支和干净状态，并返回原实际分支与最终实际分支
 
+#### Scenario: 使用唯一远程跟踪分支
+- **WHEN** 用户提供 `--allow-remote`，且存在唯一的 `refs/remotes/<remote>/<registeredBranch>`
+- **THEN** CLI 在确认后创建本地 tracking 分支、切换到注册分支并验证最终分支和干净 worktree
+
+#### Scenario: 远程跟踪分支存在歧义
+- **WHEN** 用户提供 `--allow-remote`，且多个 remote 存在同名远程跟踪分支
+- **THEN** CLI 在 Git 变更前返回 `PROJECT_BRANCH_REMOTE_AMBIGUOUS`，并列出候选 remote
+
+#### Scenario: 显式 fetch 远程分支
+- **WHEN** 用户提供已配置的 `--remote <remote>`，且远程存在注册分支
+- **THEN** CLI 在确认后仅 fetch 该分支，创建本地 tracking 分支、切换并验证最终状态
+
 #### Scenario: 工作树不干净
 - **WHEN** 目标项目存在未提交变更
 - **THEN** 命令在确认和 Git 切换前返回稳定诊断，说明必须由用户手动处理，并且不运行 stash、reset 或其他补救命令
 
-#### Scenario: 注册本地分支不存在
-- **WHEN** 项目的注册分支不是现有本地分支
-- **THEN** 命令在确认和 Git 切换前返回稳定诊断，且不创建或下载该分支
+#### Scenario: fetch 失败
+- **WHEN** 显式远程不可访问、认证失败或远程分支不存在
+- **THEN** CLI 返回稳定 fetch/remote 诊断，且在创建本地分支前保持原 worktree 分支不变
+
+#### Scenario: 远程选项冲突
+- **WHEN** 用户同时提供 `--allow-remote` 和 `--remote`
+- **THEN** CLI 返回 `CLI_OPTION_CONFLICT`，且不执行 Git 操作
 
 #### Scenario: 实际分支已经等于注册分支
 - **WHEN** 用户运行 `project branch use-registered <name>`，且两个分支已经一致
 - **THEN** 命令以 `skip` 成功返回，不要求确认且不执行 Git 变更
 
+#### Scenario: 确认提示反映远程效果
+- **WHEN** 计划需要创建 tracking 分支或 fetch
+- **THEN** 确认文本明确列出 remote、fetch、创建本地分支和切换效果；JSON/非 TTY 未提供 `--yes` 时仍返回 `CLI_CONFIRMATION_REQUIRED`
+
 #### Scenario: 确认后计划失效
 - **WHEN** 注册分支、实际分支、工作树干净状态或目标分支存在性在确认后发生变化
 - **THEN** CLI 在执行 `git switch` 前返回计划过期诊断，并且不产生外部效果
+
+#### Scenario: 创建后验证失败
+- **WHEN** 本地分支已创建或切换已发生，但后置验证失败
+- **THEN** CLI 尝试切回原实际分支，并报告未自动删除的新建本地分支等 retained Git effects
 
 ### Requirement: 外部分支效果必须验证和补偿
 CLI 必须（SHALL）验证 `use-registered` 的可观测后置条件；在 Git 切换后发生失败时必须（SHALL）尝试切回计划中的原实际分支，并在补偿失败时通过稳定诊断报告保留的外部效果和人工恢复信息。

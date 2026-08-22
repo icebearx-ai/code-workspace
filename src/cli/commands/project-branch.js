@@ -5,6 +5,7 @@ const {
   canonicalBranchState,
   inspectProjectBranch,
   inspectProjectBranchMatch,
+  planRegisteredBranchAcquisition,
   switchProjectToRegisteredBranch,
 } = require("../../core/project");
 const { createFileTransaction } = require("../../core/transaction");
@@ -143,6 +144,32 @@ function batchText(results) {
   return [...lines, `Summary\ttotal=${results.length}\tsucceeded=${succeeded}\tskipped=${skipped}\tfailed=${failed}`].join("\n");
 }
 
+function branchOperationOptions(options = {}, dependencies = {}) {
+  return {
+    ...dependencies,
+    includeRemoteBranchCandidates: true,
+    allowRemote: options.allowRemote ?? options["allow-remote"] ?? dependencies.allowRemote,
+    remote: options.remote ?? dependencies.remote,
+  };
+}
+
+function planUseRegistered(config, name, options = {}) {
+  const inspected = (options.inspectProjectBranch || inspectProjectBranch)(config, name, { ...options, includeRemoteBranchCandidates: true });
+  const acquisition = (options.planRegisteredBranchAcquisition || planRegisteredBranchAcquisition)(inspected, options);
+  return { ...inspected, acquisition };
+}
+
+function useRegisteredConfirmation(plan) {
+  const from = `${plan.project.name} from actual branch ${plan.actualBranch}`;
+  if (plan.acquisition?.mode === "remote-tracking") {
+    return `Create local branch ${plan.registeredBranch} tracking ${plan.acquisition.remoteBranch}, then switch ${from} to ${plan.registeredBranch}?`;
+  }
+  if (plan.acquisition?.mode === "fetched") {
+    return `Fetch ${plan.acquisition.remote}/${plan.registeredBranch}, create local branch ${plan.registeredBranch} tracking ${plan.acquisition.remoteBranch}, then switch ${from} to ${plan.registeredBranch}?`;
+  }
+  return `Switch ${from} to registered branch ${plan.registeredBranch}?`;
+}
+
 function recordBatchFailure(slot, error, diagnostics) {
   diagnostics.push(diagnosticFromError(error, { project: slot.name }));
   slot.result = batchEntry(slot.name, false, "failed", null, error.message);
@@ -252,10 +279,11 @@ async function batchAcceptActual(root, config, names, options, dependencies, dia
 }
 
 async function batchUseRegistered(config, names, options, dependencies, diagnostics) {
+  const operationOptions = branchOperationOptions(options, dependencies);
   const slots = names.map((name) => ({ name }));
   for (const slot of slots) {
     try {
-      slot.plan = (dependencies.inspectProjectBranch || inspectProjectBranch)(config, slot.name, dependencies);
+      slot.plan = planUseRegistered(config, slot.name, operationOptions);
       if (slot.plan.matches) {
         const skipped = {
           action: "skip",
@@ -273,7 +301,7 @@ async function batchUseRegistered(config, names, options, dependencies, diagnost
           `registered and actual branches already match: ${slot.plan.actualBranch}`
         );
       } else {
-        assertRegisteredBranchSwitchAvailable(slot.plan);
+        if (slot.plan.acquisition?.mode === "local") assertRegisteredBranchSwitchAvailable(slot.plan);
       }
     } catch (error) {
       recordBatchFailure(slot, error, diagnostics);
@@ -283,7 +311,7 @@ async function batchUseRegistered(config, names, options, dependencies, diagnost
   if (applicable.length > 0 && !(await confirm(
     [
       "Switch these projects to their registered branches?",
-      ...applicable.map((slot) => `- ${slot.name}: ${slot.plan.actualBranch} -> ${slot.plan.registeredBranch}`),
+      ...applicable.map((slot) => `- ${slot.name}: ${useRegisteredConfirmation(slot.plan)}`),
     ].join("\n"),
     options
   ))) {
@@ -291,7 +319,7 @@ async function batchUseRegistered(config, names, options, dependencies, diagnost
   }
   for (const slot of applicable) {
     try {
-      const applied = (dependencies.switchProjectToRegisteredBranch || switchProjectToRegisteredBranch)(slot.plan, dependencies);
+      const applied = (dependencies.switchProjectToRegisteredBranch || switchProjectToRegisteredBranch)(slot.plan, operationOptions);
       slot.result = batchEntry(
         slot.name,
         true,
@@ -312,7 +340,7 @@ async function executeProjectBranchSelection(invocation, action, command, depend
   const diagnostics = [...selection.diagnostics];
   let results;
   if (action === "inspect") {
-    results = batchBranchInspection(config, selection.names, dependencies, diagnostics);
+    results = batchBranchInspection(config, selection.names, { ...dependencies, includeRemoteBranchCandidates: true }, diagnostics);
   } else if (action === "verify") {
     results = batchBranchVerification(config, selection.names, dependencies, diagnostics);
   } else if (action === "accept-actual") {
@@ -333,9 +361,10 @@ async function executeProjectBranch(invocation) {
   const action = invocation.definition.path[2];
   const command = `project.branch.${action}`;
   const dependencies = options.dependencies || {};
+  const operationOptions = branchOperationOptions(options, dependencies);
   if (args.length > 1) return executeProjectBranchSelection(invocation, action, command, dependencies);
   if (action === "inspect") {
-    const inspected = (dependencies.inspectProjectBranch || inspectProjectBranch)(config, args[0], dependencies);
+    const inspected = (dependencies.inspectProjectBranch || inspectProjectBranch)(config, args[0], { ...dependencies, includeRemoteBranchCandidates: true });
     return success(command, inspected,
       `${inspected.project.name}\t${inspected.registeredBranch}\t${inspected.actualBranch}\t${inspected.matches ? "match" : "mismatch"}`);
   }
@@ -364,7 +393,7 @@ async function executeProjectBranch(invocation) {
       `Accepted actual branch for ${plan.project.name}: ${plan.before.registeredBranch} -> ${plan.after.registeredBranch}`);
   }
   if (action === "use-registered") {
-    const inspected = (dependencies.inspectProjectBranch || inspectProjectBranch)(config, args[0], dependencies);
+    const inspected = planUseRegistered(config, args[0], operationOptions);
     if (inspected.matches) {
       const skipped = {
         action: "skip",
@@ -376,14 +405,14 @@ async function executeProjectBranch(invocation) {
       };
       return success(command, skipped, `Registered and actual branches already match for ${inspected.project.name}: ${inspected.actualBranch}`);
     }
-    assertRegisteredBranchSwitchAvailable(inspected);
+    if (inspected.acquisition?.mode === "local") assertRegisteredBranchSwitchAvailable(inspected);
     if (!(await confirm(
-      `Switch project ${inspected.project.name} from actual branch ${inspected.actualBranch} to registered branch ${inspected.registeredBranch}?`,
+      useRegisteredConfirmation(inspected),
       options
     ))) {
       throw branchError("CLI_CANCELLED", "Using the registered project branch was cancelled.");
     }
-    const applied = (dependencies.switchProjectToRegisteredBranch || switchProjectToRegisteredBranch)(inspected, dependencies);
+    const applied = (dependencies.switchProjectToRegisteredBranch || switchProjectToRegisteredBranch)(inspected, operationOptions);
     return success(command, applied,
       `Switched ${inspected.project.name} to registered branch ${inspected.registeredBranch}`);
   }

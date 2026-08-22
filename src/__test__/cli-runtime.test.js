@@ -72,7 +72,7 @@ test("project branch commands are registry-driven three-segment contracts", () =
     "project branch inspect": { interaction: "never", effects: "read-only", options: [] },
     "project branch verify": { interaction: "never", effects: "read-only", options: [] },
     "project branch accept-actual": { interaction: "required", effects: "planned-write", options: ["yes"] },
-    "project branch use-registered": { interaction: "required", effects: "external", options: ["yes"] },
+    "project branch use-registered": { interaction: "required", effects: "external", options: ["yes", "allow-remote", "remote"] },
     "project branch update-latest": { interaction: "never", effects: "external", options: [] },
   };
   for (const [commandPath, expected] of Object.entries(contracts)) {
@@ -458,6 +458,7 @@ test("project branch inspect and accept-actual are targeted, canonical, and tran
     matches: false,
     worktreeClean: true,
     registeredBranchExists: true,
+    remoteBranchCandidates: [],
   });
   assert.doesNotMatch(JSON.stringify(inspectionEnvelope.data), /configuredBranch|previousBranch|expectedBranch|requestedBranch|savedBranch/);
   const inspectionText = run(root, ["project", "branch", "inspect", "service"]);
@@ -635,6 +636,76 @@ test("project branch use-registered enforces safety and leaves configuration unc
   assert.equal(missing.status, 1);
   assert.equal(JSON.parse(missing.stdout).diagnostics[0].code, "PROJECT_REGISTERED_BRANCH_MISSING");
   assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "feature/work");
+});
+
+test("project branch use-registered can explicitly use a remote-tracking branch or fetch a remote", () => {
+  const parent = temporaryRoot();
+  const root = path.join(parent, "workspace");
+  const source = path.join(parent, "source");
+  const remote = path.join(parent, "origin.git");
+  const repository = path.join(parent, "service");
+  fs.mkdirSync(root);
+  fs.mkdirSync(source);
+  fs.writeFileSync(path.join(source, "tracked.txt"), "initial\n");
+  spawnSync("git", ["init", "-b", "main"], { cwd: source, stdio: "ignore" });
+  spawnSync("git", ["add", "tracked.txt"], { cwd: source, stdio: "ignore" });
+  spawnSync("git", ["-c", "user.name=Code Workspace", "-c", "user.email=workspace@example.invalid", "commit", "-m", "initial"], { cwd: source, stdio: "ignore" });
+  spawnSync("git", ["clone", "--bare", source, remote], { stdio: "ignore" });
+
+  spawnSync("git", ["clone", remote, repository], { stdio: "ignore" });
+  spawnSync("git", ["switch", "-c", "feature/work"], { cwd: repository, stdio: "ignore" });
+  spawnSync("git", ["branch", "-D", "main"], { cwd: repository, stdio: "ignore" });
+  writeConfig(root, [
+    "schemaVersion: 2",
+    "workspace:",
+    "  name: remote-branch",
+    "  uuid: 123e4567-e89b-42d3-a456-426614174000",
+    "monitor:",
+    "  url: http://127.0.0.1:3211",
+    "projects:",
+    `  - name: service\n    location: ${repository}\n    branch: main\n    type: backend\n    context: service`,
+    "",
+  ].join("\n"));
+
+  const conflicting = run(root, ["project", "branch", "use-registered", "service", "--allow-remote", "--remote", "origin", "--yes", "--json"]);
+  assert.equal(conflicting.status, 1);
+  assert.equal(JSON.parse(conflicting.stdout).diagnostics[0].code, "CLI_OPTION_CONFLICT");
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "feature/work");
+
+  const unconfirmed = run(root, ["project", "branch", "use-registered", "service", "--allow-remote", "--json"]);
+  assert.equal(unconfirmed.status, 1);
+  assert.equal(JSON.parse(unconfirmed.stdout).diagnostics[0].code, "CLI_CONFIRMATION_REQUIRED");
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "feature/work");
+
+  const tracked = run(root, ["project", "branch", "use-registered", "service", "--allow-remote", "--yes", "--json"]);
+  assert.equal(tracked.status, 0, tracked.stderr);
+  const trackedEnvelope = JSON.parse(tracked.stdout);
+  assert.equal(trackedEnvelope.data.acquisition.mode, "remote-tracking");
+  assert.equal(trackedEnvelope.data.acquisition.remoteBranch, "origin/main");
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: repository, encoding: "utf8" }).stdout.trim(), "main");
+
+  const fetchRoot = path.join(parent, "fetch-workspace");
+  const fetchRepository = path.join(parent, "fetch-service");
+  fs.mkdirSync(fetchRoot);
+  spawnSync("git", ["clone", remote, fetchRepository], { stdio: "ignore" });
+  spawnSync("git", ["switch", "-c", "feature/work"], { cwd: fetchRepository, stdio: "ignore" });
+  spawnSync("git", ["branch", "-D", "main"], { cwd: fetchRepository, stdio: "ignore" });
+  spawnSync("git", ["update-ref", "-d", "refs/remotes/origin/main"], { cwd: fetchRepository, stdio: "ignore" });
+  writeConfig(fetchRoot, [
+    "schemaVersion: 2",
+    "workspace:",
+    "  name: fetch-branch",
+    "  uuid: 123e4567-e89b-42d3-a456-426614174001",
+    "monitor:",
+    "  url: http://127.0.0.1:3212",
+    "projects:",
+    `  - name: service\n    location: ${fetchRepository}\n    branch: main\n    type: backend\n    context: service`,
+    "",
+  ].join("\n"));
+  const fetched = run(fetchRoot, ["project", "branch", "use-registered", "service", "--remote", "origin", "--yes", "--json"]);
+  assert.equal(fetched.status, 0, fetched.stderr);
+  assert.equal(JSON.parse(fetched.stdout).data.acquisition.mode, "fetched");
+  assert.equal(spawnSync("git", ["branch", "--show-current"], { cwd: fetchRepository, encoding: "utf8" }).stdout.trim(), "main");
 });
 
 test("batch branch commands continue after project failures and report one ordered summary", () => {

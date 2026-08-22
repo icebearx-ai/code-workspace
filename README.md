@@ -81,11 +81,11 @@ code-workspace permissions apply --yes --json
 code-workspace doctor --json
 ```
 
-`project branch inspect` reports `registeredBranch`, `actualBranch`, whether they match, worktree cleanliness, and local registered-branch availability for only the named project. `project branch verify` is the narrower assertion used after reconciliation: it checks only whether the registered and actual branches match, without running overall project-health validation. A `PROJECT_BRANCH_MISMATCH` diagnostic uses `registeredBranch`, `actualBranch`, and `location`; consumers of older branch diagnostic/result fields must migrate to this canonical state contract.
+`project branch inspect` reports `registeredBranch`, `actualBranch`, whether they match, worktree cleanliness, local registered-branch availability, and remote-tracking candidates for only the named project. `project branch verify` is the narrower assertion used after reconciliation: it checks only whether the registered and actual branches match, without running overall project-health validation. A `PROJECT_BRANCH_MISMATCH` diagnostic uses `registeredBranch`, `actualBranch`, and `location`; consumers of older branch diagnostic/result fields must migrate to this canonical state contract.
 
 The two reconciliation directions are deliberately separate:
 
-- `project branch use-registered` switches the selected worktree to its registered branch. It requires confirmation, a clean worktree, and an existing local branch.
+- `project branch use-registered` switches the selected worktree to its registered branch. By default it requires confirmation, a clean worktree, and an existing local branch. `--allow-remote` permits creating a local tracking branch from one existing remote-tracking branch; `--remote <name>` explicitly authorizes fetching the registered branch from that remote before creating and switching the local tracking branch.
 - `project branch accept-actual` updates only the selected registry record so its registered branch accepts the actual branch. Existing branch-adoption scripts should migrate to this command.
 
 Both commands detect plan drift and verify postconditions. `project branch update-latest` is the separate, opt-in path for projects with `updateLatest: true`; it only fetches the configured upstream and fast-forwards a clean matching branch. Code Workspace never creates or downloads a branch and never performs stash, reset, rebase, non-fast-forward merge, production-code edits, or conflict resolution.

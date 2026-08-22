@@ -79,14 +79,14 @@ flowchart LR
 
 ```bash
 code-workspace project branch inspect "<project-name>" --json
-code-workspace project branch use-registered "<project-name>" --yes --json
+code-workspace project branch use-registered "<project-name>" --allow-remote --yes --json
 code-workspace project branch accept-actual "<project-name>" --yes --json
 code-workspace project branch verify "<project-name>" --json
 code-workspace project branch update-latest "<project-name>" --json
 code-workspace project verify "<project-name>" --json
 ```
 
-注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支要求干净 worktree 和已存在的本地分支；接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 根据 `projects[].updateLatest` 调用 `project branch update-latest`，最后使用定向 `project verify` 接管项目整体健康校验。
+注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支默认要求干净 worktree 和已存在的本地分支；`--allow-remote` 可从唯一已有远程跟踪分支创建本地 tracking 分支，`--remote <name>` 经确认后仅 fetch 指定远程的注册分支。接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 根据 `projects[].updateLatest` 调用 `project branch update-latest`，最后使用定向 `project verify` 接管项目整体健康校验。
 
 ## 责任边界
 

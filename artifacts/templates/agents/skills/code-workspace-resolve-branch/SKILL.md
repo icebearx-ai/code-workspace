@@ -15,7 +15,7 @@ Run one command from the Workspace for all selected projects whose targeted veri
 code-w project branch inspect "<project-a>" "<project-b>" --json
 ```
 
-For one project, require the existing standard envelope whose `data` contains all of: `project.name`, `project.location`, `registeredBranch`, `actualBranch`, `matches`, `worktreeClean`, and `registeredBranchExists`. For several projects, read the ordered `data.results`; each successful result contains those facts in its `data`, while failed results are explained by the top-level diagnostics. Do not infer or independently inspect missing values.
+For one project, require the existing standard envelope whose `data` contains all of: `project.name`, `project.location`, `registeredBranch`, `actualBranch`, `matches`, `worktreeClean`, `registeredBranchExists`, and `remoteBranchCandidates`. For several projects, read the ordered `data.results`; each successful result contains those facts in its `data`, while failed results are explained by the top-level diagnostics. Do not infer or independently inspect missing values.
 
 Keep failed inspections paused and exclude them from the choice, but continue with every project whose canonical facts were returned. If no project was inspected successfully, report the collected diagnostics and stop.
 
@@ -59,7 +59,7 @@ Different models may choose different wording, but preserve the following presen
 Ask rules:
 
 - Replace the bracketed instructions with user-facing text without exposing them. Keep inspection order, three non-bulleted lines per project, blank lines between projects, and only the two abnormal annotations shown in the template.
-- Choice 1 is available only when the registered branch exists locally and the worktree is clean. Choices 2 and 3 remain available. Do not recommend a default or invent another recovery direction.
+- Choice 1 is available when the worktree is clean and either the registered branch exists locally or exactly one `remoteBranchCandidates` entry is available. When only a remote-tracking candidate is available, explain that choosing 1 will create a local tracking branch; do not fetch implicitly. Choices 2 and 3 remain available. Do not recommend a default or invent another recovery direction.
 - For one project, omit everything marked multi-project only, state that only available choices are shown, and preserve the semantic numbers of those choices.
 - For several projects, keep stable letter labels and all three choices. Include every applicable unavailable reason, with one project and one reason per line.
 - Accept either one bare number for every project or labelled selections, never both. In labelled mode, accept partial replies, but treat unknown labels or options and duplicate or conflicting labels as invalid. Retain other valid selections and re-ask only for missing, unavailable, or invalid projects.
@@ -67,9 +67,11 @@ Ask rules:
 
 ## Apply valid choices through the CLI
 
-- Group every project that selected choice 1 into one `code-w project branch use-registered "<project-a>" "<project-b>" --yes --json` invocation. Include only projects for which choice 1 is available.
+- Group every project that selected choice 1 into one `code-w project branch use-registered "<project-a>" "<project-b>" --allow-remote --yes --json` invocation. Include only projects for which choice 1 is available. `--allow-remote` is harmless for projects whose local registered branch already exists and permits creation only from an existing unique remote-tracking branch.
 - Group every project that selected choice 2 into one `code-w project branch accept-actual "<project-a>" "<project-b>" --yes --json` invocation.
 - For choice 3, keep that project paused until the user confirms manual resolution is complete. Do not reuse any pre-resolution branch facts.
+
+If the registered branch is absent both locally and from remote-tracking refs, do not add `--remote` automatically. Tell the user that an explicit direct CLI invocation such as `project branch use-registered <name> --remote origin --yes --json` is required to authorize network fetch.
 
 After all choices are valid and complete, run each non-empty automatic direction group once. A batch command can return `ok: false` after still completing other projects, so inspect its ordered results instead of treating the whole group as unprocessed. Continue with the other automatic direction group even when the first group contains failures. Do not fall back to direct Git commands, direct Workspace configuration editing, or an improvised recovery direction.
 

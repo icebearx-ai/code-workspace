@@ -24,10 +24,10 @@ const README_FILES = [
   "README.zh-CN.md",
 ];
 
-function executeGit(location, args) {
+function executeGit(location, args, options = {}) {
   const result = spawnSync("git", ["-C", location, ...args], {
     encoding: "utf8",
-    timeout: 5000,
+    timeout: options.timeout || 5000,
   });
   if (result.error) {
     throw new WorkspaceError("GIT_COMMAND_FAILED", result.error.message, {
@@ -39,8 +39,8 @@ function executeGit(location, args) {
   return result;
 }
 
-function runGit(location, args) {
-  const result = executeGit(location, args);
+function runGit(location, args, options = {}) {
+  const result = executeGit(location, args, options);
   if (result.status !== 0) {
     const detail = String(result.stderr || result.stdout || "").trim().split(/\r?\n/)[0];
     throw new WorkspaceError("GIT_COMMAND_FAILED", detail || `git ${args.join(" ")} failed`, {
@@ -67,6 +67,85 @@ function gitLocalBranchExists(location, branch) {
     args,
     exitCode: result.status,
   });
+}
+
+function gitRemoteTrackingBranches(location, branch, options = {}) {
+  const prefix = "refs/remotes/";
+  const result = executeGit(location, ["for-each-ref", "--format=%(refname)", "refs/remotes"], options);
+  if (result.status !== 0) {
+    const detail = String(result.stderr || result.stdout || "").trim().split(/\r?\n/)[0];
+    throw new WorkspaceError("GIT_COMMAND_FAILED", detail || "git for-each-ref failed", {
+      location,
+      args: ["for-each-ref", "--format=%(refname)", "refs/remotes"],
+      exitCode: result.status,
+    });
+  }
+  const suffix = `/${branch}`;
+  return String(result.stdout || "").trim().split(/\r?\n/)
+    .filter((ref) => ref.startsWith(prefix) && ref.endsWith(suffix))
+    .map((ref) => {
+      const remoteBranch = ref.slice(prefix.length);
+      return {
+        remote: remoteBranch.slice(0, -suffix.length),
+        remoteBranch,
+      };
+    })
+    .filter((entry) => entry.remote && entry.remoteBranch !== `${entry.remote}/HEAD`);
+}
+
+function gitRemotes(location, options = {}) {
+  return runGit(location, ["remote"], options).split(/\r?\n/).filter(Boolean);
+}
+
+function gitRemoteBranchHead(location, remoteBranch, options = {}) {
+  return runGit(location, ["rev-parse", `refs/remotes/${remoteBranch}`], options);
+}
+
+function fetchRegisteredBranch(location, remote, branch, options = {}) {
+  try {
+    if (!gitRemotes(location, options).includes(remote)) {
+      throw new WorkspaceError("PROJECT_BRANCH_REMOTE_MISSING", `Configured Git remote does not exist: ${remote}.`, {
+        location,
+        remote,
+        branch,
+        remediation: "Choose an existing Git remote, then retry.",
+      });
+    }
+    runGit(location, [
+      "fetch",
+      "--no-tags",
+      remote,
+      `refs/heads/${branch}:refs/remotes/${remote}/${branch}`,
+    ], { ...options, timeout: options.fetchTimeout || 30000 });
+  } catch (error) {
+    if (error.code === "PROJECT_BRANCH_REMOTE_MISSING") throw error;
+    throw new WorkspaceError("PROJECT_BRANCH_FETCH_FAILED", `Could not fetch ${remote}/${branch}: ${error.message}`, {
+      location,
+      remote,
+      branch,
+      cause: error.code || error.name,
+      remediation: "Check network access and Git credentials, then retry.",
+    });
+  }
+  return {
+    remote,
+    remoteBranch: `${remote}/${branch}`,
+    targetHead: gitRemoteBranchHead(location, `${remote}/${branch}`, options),
+  };
+}
+
+function createTrackingBranch(location, branch, remoteBranch, options = {}) {
+  try {
+    runGit(location, ["switch", "--track", "-c", branch, remoteBranch], options);
+  } catch (error) {
+    throw new WorkspaceError("PROJECT_BRANCH_CREATE_FAILED", `Could not create local branch ${branch} tracking ${remoteBranch}: ${error.message}`, {
+      location,
+      branch,
+      remoteBranch,
+      cause: error.code || error.name,
+      remediation: "Inspect the local Git branches and resolve the conflict manually before retrying.",
+    });
+  }
 }
 
 function switchGitBranch(location, branch) {
@@ -130,7 +209,7 @@ function inspectProjectBranchState(project, options = {}) {
     const worktreeClean = (options.gitWorktreeClean || gitWorktreeClean)(project.location);
     const registeredBranchExists = actual.branch === project.branch
       || (options.gitLocalBranchExists || gitLocalBranchExists)(project.location, project.branch);
-    return {
+    const result = {
       project: {
         name: project.name,
         location: actual.realPath || project.location,
@@ -141,6 +220,10 @@ function inspectProjectBranchState(project, options = {}) {
       worktreeClean,
       registeredBranchExists,
     };
+    if (options.includeRemoteBranchCandidates) {
+      result.remoteBranchCandidates = (options.gitRemoteTrackingBranches || gitRemoteTrackingBranches)(project.location, project.branch, options);
+    }
+    return result;
   } catch (error) {
     if (error.code === "PROJECT_BRANCH_INSPECTION_FAILED") throw error;
     throw new WorkspaceError(
@@ -216,6 +299,79 @@ function assertRegisteredBranchSwitchAvailable(state) {
   return state;
 }
 
+function assertRemoteOptions(options = {}) {
+  if (options.allowRemote === true && options.remote !== undefined) {
+    throw new WorkspaceError("CLI_OPTION_CONFLICT", "--allow-remote and --remote cannot be used together.", {
+      options: ["allow-remote", "remote"],
+      remediation: "Use --allow-remote for an existing remote-tracking branch, or --remote <name> to fetch.",
+    });
+  }
+}
+
+function planRegisteredBranchAcquisition(state, options = {}) {
+  assertRemoteOptions(options);
+  if (state.registeredBranchExists) {
+    return {
+      mode: "local",
+      remote: null,
+      remoteBranch: null,
+      targetHead: null,
+      localBranchCreated: false,
+    };
+  }
+  if (options.remote !== undefined) {
+    const remotes = options.gitRemotes ? options.gitRemotes(state.project.location, options) : gitRemotes(state.project.location, options);
+    if (!remotes.includes(options.remote)) {
+      throw new WorkspaceError("PROJECT_BRANCH_REMOTE_MISSING", `Configured Git remote does not exist: ${options.remote}.`, {
+        project: state.project.name,
+        location: state.project.location,
+        remote: options.remote,
+        registeredBranch: state.registeredBranch,
+        remediation: "Choose an existing Git remote, then retry.",
+      });
+    }
+    return {
+      mode: "fetched",
+      remote: options.remote,
+      remoteBranch: `${options.remote}/${state.registeredBranch}`,
+      targetHead: null,
+      localBranchCreated: true,
+    };
+  }
+  if (options.allowRemote === true) {
+    const candidates = options.gitRemoteTrackingBranches
+      ? options.gitRemoteTrackingBranches(state.project.location, state.registeredBranch, options)
+      : (state.remoteBranchCandidates || []);
+    if (candidates.length > 1) {
+      throw new WorkspaceError("PROJECT_BRANCH_REMOTE_AMBIGUOUS", `Multiple remote-tracking branches match ${state.registeredBranch} for project ${state.project.name}.`, {
+        project: state.project.name,
+        location: state.project.location,
+        registeredBranch: state.registeredBranch,
+        candidates,
+        remediation: "Specify --remote <name> to select a remote and fetch explicitly.",
+      });
+    }
+    if (candidates.length === 1) {
+      const candidate = candidates[0];
+      return {
+        mode: "remote-tracking",
+        remote: candidate.remote,
+        remoteBranch: candidate.remoteBranch,
+        targetHead: (options.gitRemoteBranchHead || gitRemoteBranchHead)(state.project.location, candidate.remoteBranch, options),
+        localBranchCreated: true,
+      };
+    }
+    throw new WorkspaceError("PROJECT_BRANCH_REMOTE_UNAVAILABLE", `No remote-tracking branch exists locally for ${state.registeredBranch} in project ${state.project.name}.`, {
+      project: state.project.name,
+      location: state.project.location,
+      registeredBranch: state.registeredBranch,
+      remediation: "Use --remote <name> to fetch the registered branch, or create/fetch it manually.",
+    });
+  }
+  assertRegisteredBranchSwitchAvailable(state);
+  return null;
+}
+
 function sameBranchPlan(expected, observed) {
   return expected.registeredBranch === observed.registeredBranch
     && expected.actualBranch === observed.actualBranch
@@ -246,7 +402,9 @@ function staleBranchPlanError(expected, observed) {
 }
 
 function switchProjectToRegisteredBranch(plan, options = {}) {
-  assertRegisteredBranchSwitchAvailable(plan);
+  const acquisition = plan.acquisition || planRegisteredBranchAcquisition(plan, options);
+  if (acquisition?.mode === "local") assertRegisteredBranchSwitchAvailable(plan);
+  else if (!plan.worktreeClean) assertRegisteredBranchSwitchAvailable(plan);
   if (plan.matches) {
     return {
       action: "skip",
@@ -255,6 +413,7 @@ function switchProjectToRegisteredBranch(plan, options = {}) {
       after: canonicalBranchState(plan),
       worktreeClean: plan.worktreeClean,
       registeredBranchExists: plan.registeredBranchExists,
+      acquisition,
     };
   }
   const project = {
@@ -264,16 +423,47 @@ function switchProjectToRegisteredBranch(plan, options = {}) {
   };
   const observe = () => (options.inspectProjectBranchState || inspectProjectBranchState)(project, options);
   const switchBranch = options.switchGitBranch || switchGitBranch;
+  let createdLocalBranch = false;
   const observedBefore = observe();
   if (!sameBranchPlan(plan, observedBefore)) throw staleBranchPlanError(plan, observedBefore);
-  assertRegisteredBranchSwitchAvailable(observedBefore);
+  if (!observedBefore.worktreeClean) assertRegisteredBranchSwitchAvailable(observedBefore);
+
+  let effectiveAcquisition = { ...acquisition };
+  if (effectiveAcquisition.mode === "fetched") {
+    const fetched = (options.fetchRegisteredBranch || fetchRegisteredBranch)(project.location, effectiveAcquisition.remote, plan.registeredBranch, options);
+    effectiveAcquisition = { ...effectiveAcquisition, ...fetched };
+  }
+  if (effectiveAcquisition.mode === "remote-tracking" || effectiveAcquisition.mode === "fetched") {
+    const remoteBranch = effectiveAcquisition.remoteBranch;
+    const targetHead = effectiveAcquisition.targetHead || (options.gitRemoteBranchHead || gitRemoteBranchHead)(project.location, remoteBranch, options);
+    effectiveAcquisition = { ...effectiveAcquisition, targetHead };
+    const afterFetch = observe();
+    if (effectiveAcquisition.mode === "remote-tracking") {
+      const candidate = afterFetch.remoteBranchCandidates?.find((entry) => entry.remoteBranch === remoteBranch);
+      const observedHead = candidate && (options.gitRemoteBranchHead || gitRemoteBranchHead)(project.location, remoteBranch, options);
+      if (!candidate || observedHead !== targetHead) throw staleBranchPlanError(plan, afterFetch);
+    }
+    if (afterFetch.registeredBranchExists) {
+      throw new WorkspaceError("PROJECT_BRANCH_PLAN_STALE", `Project ${project.name} acquired a local branch while preparing to switch.`, {
+        project: project.name,
+        location: project.location,
+        registeredBranch: plan.registeredBranch,
+        remediation: "Inspect the selected project branch state again before retrying.",
+      });
+    }
+  }
 
   let switched = false;
   try {
     options.injectFailure?.("before-switch", observedBefore);
     switched = true;
     try {
-      switchBranch(project.location, plan.registeredBranch);
+      if (effectiveAcquisition.mode === "remote-tracking" || effectiveAcquisition.mode === "fetched") {
+        (options.createTrackingBranch || createTrackingBranch)(project.location, plan.registeredBranch, effectiveAcquisition.remoteBranch, options);
+        createdLocalBranch = true;
+      } else {
+        switchBranch(project.location, plan.registeredBranch);
+      }
     } catch (switchError) {
       throw new WorkspaceError(
         "PROJECT_BRANCH_SWITCH_FAILED",
@@ -318,6 +508,7 @@ function switchProjectToRegisteredBranch(plan, options = {}) {
       after: canonicalBranchState(observedAfter),
       worktreeClean: observedAfter.worktreeClean,
       registeredBranchExists: observedAfter.registeredBranchExists,
+      acquisition: effectiveAcquisition,
     };
   } catch (error) {
     if (!switched) {
@@ -371,6 +562,23 @@ function switchProjectToRegisteredBranch(plan, options = {}) {
           restoredState: canonicalBranchState(compensated),
         },
       };
+      if (createdLocalBranch) {
+        const retainedEffect = {
+          kind: "git-branch-created",
+          status: "possibly-applied",
+          retained: true,
+          project: project.name,
+          location: project.location,
+          branch: plan.registeredBranch,
+          remoteBranch: effectiveAcquisition.remoteBranch,
+          remediation: `Remove local branch ${plan.registeredBranch} manually only after verifying it is no longer needed.`,
+        };
+        failure.details = {
+          ...(failure.details || {}),
+          retainedEffects: [retainedEffect],
+        };
+        attachRetainedEffects(failure, [retainedEffect]);
+      }
       throw failure;
     } catch (compensationError) {
       if (compensationError === failure) throw failure;
@@ -405,6 +613,26 @@ function switchProjectToRegisteredBranch(plan, options = {}) {
         },
         remediation: `Restore project ${project.name} to branch ${plan.actualBranch} manually, verify a clean worktree, then retry targeted verification.`,
       };
+      if (createdLocalBranch) {
+        const retainedEffect = {
+          kind: "git-branch-created",
+          status: "possibly-applied",
+          retained: true,
+          project: project.name,
+          location: project.location,
+          branch: plan.registeredBranch,
+          remoteBranch: effectiveAcquisition.remoteBranch,
+          remediation: `Remove local branch ${plan.registeredBranch} manually only after verifying it is no longer needed.`,
+        };
+        failure.details.retainedEffects = [retainedEffect];
+        failure.details.effects = {
+          ...(failure.details.effects || {}),
+          retained: [
+            ...(failure.details.effects?.retained || []),
+            retainedEffect,
+          ],
+        };
+      }
       throw attachRetainedEffects(failure, [{
         kind: "git-branch-switch",
         status: "possibly-applied",
@@ -426,12 +654,19 @@ module.exports = {
   canonicalBranchState,
   findRegisteredProject,
   gitLocalBranchExists,
+  gitRemoteBranchHead,
+  gitRemoteTrackingBranches,
+  gitRemotes,
   gitWorktreeClean,
+  fetchRegisteredBranch,
+  createTrackingBranch,
   inspectGitWorktree,
   inspectProject,
   inspectProjectBranch,
   inspectProjectBranchMatch,
   inspectProjectBranchState,
+  planRegisteredBranchAcquisition,
+  assertRemoteOptions,
   runGit,
   sameBranchPlan,
   switchGitBranch,
