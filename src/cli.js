@@ -6,6 +6,7 @@ const { failure } = require("./cli/result");
 const { executeCompletion } = require("./cli/commands/completion");
 const { executeHelp, executeVersion } = require("./cli/commands/help");
 const { executeInit } = require("./cli/commands/init");
+const { executeExtension } = require("./cli/commands/extension");
 const { executeMonitor, readStdinJson } = require("./cli/commands/monitor");
 const { executePermissions } = require("./cli/commands/permissions");
 const { executeProject } = require("./cli/commands/project");
@@ -20,6 +21,7 @@ const {
 async function dispatch(invocation) {
   const key = invocation.definition.path.join(" ");
   if (key === "init") return executeInit(invocation);
+  if (key.startsWith("extension ")) return executeExtension(invocation);
   if (key === "monitor" || key === "monitor report") return executeMonitor(invocation);
   if (key === "project branch update-latest") return executeProjectBranchUpdateLatest(invocation);
   if (key.startsWith("project branch ")) return executeProjectBranch(invocation);

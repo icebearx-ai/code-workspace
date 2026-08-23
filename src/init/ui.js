@@ -3,18 +3,20 @@ async function createInteractiveUi(options = {}) {
   const input = options.input || process.stdin;
   const output = options.output || process.stdout;
   const common = { input, output };
+  const cancelMessage = options.cancelMessage || "Initialization cancelled. No changes were made.";
+  const cancelCode = options.cancelCode || "INIT_CANCELLED";
 
   function unwrap(value) {
     if (!clack.isCancel(value)) return value;
-    clack.cancel("Initialization cancelled. No changes were made.", common);
-    const error = new Error("Initialization cancelled. No changes were made.");
-    error.code = "INIT_CANCELLED";
+    clack.cancel(cancelMessage, common);
+    const error = new Error(cancelMessage);
+    error.code = cancelCode;
     throw error;
   }
 
   return {
-    intro() {
-      clack.intro("Code Workspace setup", common);
+    intro(message = "Code Workspace setup") {
+      clack.intro(message, common);
     },
     note(title, lines) {
       clack.note(lines.join("\n"), title, common);

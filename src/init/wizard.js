@@ -7,6 +7,7 @@ const { DEFAULT_WORKSPACE_LANGUAGE, SUPPORTED_LANGUAGES, resolveWorkspaceLanguag
 const { createInitPlan } = require("./plan");
 const { createInteractiveUi } = require("./ui");
 const { formatPermissionPlan, planPermissionChanges } = require("../core/permissions");
+const { resolveExtensionPlans } = require("../core/extensions");
 
 async function collectInitPlan(root, manifest, options = {}) {
   const ui = options.ui || await createInteractiveUi(options);
@@ -42,6 +43,24 @@ async function collectInitPlan(root, manifest, options = {}) {
     toolChoices,
     options.initialTools || ["claude", "codex"]
   );
+  const extensionCatalog = options.extensionCatalog || [];
+  const compatibleExtensions = extensionCatalog.filter((entry) => entry.latestCompatible);
+  const extensionNames = options.extensions !== undefined
+    ? options.extensions
+    : compatibleExtensions.length > 0
+      ? await ui.multiselect(
+        "Extensions (experimental, select any)",
+        compatibleExtensions.map((entry) => ({
+          value: entry.id,
+          label: `${entry.name} · latest compatible: ${entry.latestCompatible.version}`,
+        })),
+        options.initialExtensions || []
+      )
+      : [];
+  const extensions = resolveExtensionPlans(extensionCatalog, extensionNames, {
+    tools,
+    state: options.extensionState,
+  });
   let monitorEnabled = options.monitor !== undefined ? options.monitor : existing?.monitor?.enable;
   if (tools.includes("codex") && monitorEnabled === undefined) monitorEnabled = await ui.confirm("Enable Codex Agent monitor?", true);
   const monitor = {
@@ -49,12 +68,13 @@ async function collectInitPlan(root, manifest, options = {}) {
     url: options.monitorUrl || existing?.monitor?.url || DEFAULT_MONITOR_URL,
   };
   const workspace = existing?.workspace || { name, uuid: randomUUID() };
-  const plan = createInitPlan({ root, workspace, tools, monitor, language });
+  const plan = createInitPlan({ root, workspace, tools, monitor, language, extensions });
   ui.note("Ready to initialize", [
     `Workspace  ${workspace.name}`,
     `Language   ${language}`,
     `Tools      ${tools.length ? tools.join(", ") : "none"}`,
     `Monitor    ${monitor.enable ? monitor.url : "disabled"}`,
+    `Extensions ${extensions.length ? extensions.map((entry) => `${entry.id}@${entry.version} (${entry.manifestSha256})`).join(", ") : "none"}`,
   ]);
   if (existing?.projects?.length) {
     const permissionPlan = planPermissionChanges({

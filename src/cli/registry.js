@@ -21,13 +21,15 @@ const COMMAND_SUMMARIES = {
   "project show": "Show one local project",
   "project verify": "Validate all local projects or selected projects",
   "permissions apply": "Apply registered project directory authorization",
+  "extension install": "Install one or more built-in extensions into the Workspace",
+  "extension uninstall": "Uninstall one built-in extension from the Workspace",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
 };
 
 const COMMANDS = [
   { path: ["init"], args: [{ name: "path", required: false }], workspace: "target", config: [], interaction: "optional", effects: "planned-write", options: {
-    tools: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" },
+    tools: { type: "string" }, extensions: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" },
     monitor: { type: "boolean" }, "no-monitor": { type: "boolean" }, "monitor-url": { type: "string" }, yes: { type: "boolean" }, force: { type: "boolean" },
   } },
   { path: ["monitor"], args: [], workspace: "none", config: [], interaction: "never", effects: "external", options: { port: { type: "string", aliases: ["p"] } } },
@@ -53,6 +55,8 @@ const COMMANDS = [
   { path: ["permissions", "apply"], args: [], workspace: "required", config: ["projects"], interaction: "required", effects: "planned-write", options: {
     tools: { type: "string" }, yes: { type: "boolean" },
   } },
+  { path: ["extension", "install"], args: [{ name: "name", required: false, variadic: true }], workspace: "required", config: ["identity", "language"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
+  { path: ["extension", "uninstall"], args: [{ name: "name", required: true }], workspace: "required", config: [], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
   { path: ["completion"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: { shell: { type: "string" } } },
   { path: ["help"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },

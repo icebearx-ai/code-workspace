@@ -67,6 +67,21 @@ test("semantic parser accepts targeted project verification with valid option or
   assert.deepEqual(parse(argv("project", "verify", "service", "api", "--json")).args, ["service", "api"]);
 });
 
+test("extension install is an optional variadic planned-write contract", () => {
+  const definition = getCommand("extension install");
+  assert(definition);
+  assert.equal(definition.workspace, "required");
+  assert.deepEqual(definition.config, ["identity", "language"]);
+  assert.equal(definition.interaction, "required");
+  assert.equal(definition.effects, "planned-write");
+  assert.deepEqual(definition.args, [{ name: "name", required: false, variadic: true }]);
+  assert.deepEqual(Object.keys(definition.options), ["yes"]);
+  assert.deepEqual(parse(argv("extension", "install")).args, []);
+  assert.deepEqual(parse(argv("extension", "install", "alpha", "beta", "--yes", "--json")).args, ["alpha", "beta"]);
+  assert.deepEqual(parse(argv("extension", "install", "--yes", "alpha")).args, ["alpha"]);
+  assert.throws(() => parse(argv("extension", "install", "alpha", "--force")), (error) => error.code === "CLI_UNKNOWN_OPTION");
+});
+
 test("project branch commands are registry-driven three-segment contracts", () => {
   const contracts = {
     "project branch inspect": { interaction: "never", effects: "read-only", options: [] },
@@ -141,6 +156,8 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /accept-actual/);
     assert.match(script, /use-registered/);
     assert.match(script, /update-latest/);
+    assert.match(script, /install/);
+    assert.match(script, /uninstall/);
     assert.doesNotMatch(script, /sync-branch/);
   }
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
@@ -203,6 +220,7 @@ test("documentation references are validated by the real semantic parser", () =>
   assert.equal(validateCommandReference('project branch use-registered "<name>" --yes --json').valid, true);
   assert.equal(validateCommandReference('project branch update-latest "<name>" --json').valid, true);
   assert.equal(validateCommandReference("permissions apply --tools claude,codex --yes --json").valid, true);
+  assert.equal(validateCommandReference("extension install <name> <name> --yes --json").valid, true);
   assert.equal(validateCommandReference("update --tools").valid, false);
   assert.match(validateCommandReference("update --froce").reason, /CLI_UNKNOWN_OPTION/);
 });
