@@ -4,9 +4,10 @@
   "title": "Code Workspace extension init context v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "extension", "workspace", "tools"],
+  "required": ["schemaVersion", "extensionSpecVersion", "extension", "workspace", "tools"],
   "properties": {
     "schemaVersion": { "const": 1 },
+    "extensionSpecVersion": { "const": 1 },
     "extension": {
       "type": "object",
       "additionalProperties": false,

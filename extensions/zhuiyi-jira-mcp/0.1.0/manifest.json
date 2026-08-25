@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
   "experimental": true,
   "id": "zhuiyi-jira-mcp",
   "name": "Zhuiyi Jira MCP",
   "version": "0.1.0",
   "entry": "init.js",
-  "entrySha256": "c547561869fcbee6e2a92559ced275a00b130bf26afce6747992b95e57b6a789",
-  "codeWorkspace": ">=0.1.0-beta.0 <0.2.0",
+  "entrySha256": "af7f4a71835402235b3d763418ee1b4135da0125a85aff1153bfaa0f6c83a022",
   "timeoutMs": 120000,
   "capabilities": {
     "networkHosts": ["gitee.com", "raw.giteeusercontent.com"]

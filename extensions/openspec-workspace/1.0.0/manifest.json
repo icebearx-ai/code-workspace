@@ -1,12 +1,12 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
   "experimental": true,
   "id": "openspec-workspace",
   "name": "OpenSpec Workspace",
   "version": "1.0.0",
   "entry": "init.js",
-  "entrySha256": "3528b75b5971cb25c7056aab9eb7b163ae23f7495b60ba7f45b1286c82514bc1",
-  "codeWorkspace": ">=0.1.0-beta.3 <0.2.0",
+  "entrySha256": "5d95dc6261ef686f81a61cc09f0cf1d87bbb5014512be8665df2cc9f9b9dae24",
   "timeoutMs": 60000,
   "outputs": [
     {

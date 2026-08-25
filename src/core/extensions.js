@@ -3,7 +3,6 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-const packageJson = require("../../package.json");
 const { OBSOLETE_ASSETS } = require("./assets");
 const { CONFIG_FILE, LOCAL_DIRECTORY, STATE_FILE, configPath } = require("./config");
 const { WorkspaceError } = require("./errors");
@@ -30,6 +29,7 @@ const EXTENSION_STATE_FILE = "ext-manifest.json";
 const EXTENSION_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const SUPPORTED_TOOLS = new Set(["claude", "codex"]);
+const SUPPORTED_EXTENSION_SPEC_VERSIONS = Object.freeze([1]);
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 function extensionError(code, message, details = {}) {
@@ -84,35 +84,8 @@ function compareSemver(leftValue, rightValue) {
   return 0;
 }
 
-function comparatorMatches(version, comparator) {
-  const match = comparator.match(/^(>=|<=|>|<|=)?(.+)$/);
-  const operator = match[1] || "=";
-  const compared = compareSemver(version, parseSemver(match[2]));
-  return operator === ">=" ? compared >= 0
-    : operator === "<=" ? compared <= 0
-      : operator === ">" ? compared > 0
-        : operator === "<" ? compared < 0
-          : compared === 0;
-}
-
-function satisfiesSemverRange(versionValue, rangeValue) {
-  const version = parseSemver(versionValue);
-  const range = String(rangeValue || "").trim();
-  if (!range) throw extensionError("EXTENSION_SEMVER_RANGE_INVALID", "Extension compatibility range is required");
-  const alternatives = range.split(/\s*\|\|\s*/);
-  if (alternatives.some((entry) => !entry)) throw extensionError("EXTENSION_SEMVER_RANGE_INVALID", `Invalid semantic version range: ${range}`, { range });
-  try {
-    return alternatives.some((alternative) => {
-      const comparators = alternative.split(/\s+/).filter(Boolean);
-      if (comparators.length === 0) return false;
-      return comparators.every((comparator) => comparatorMatches(version, comparator));
-    });
-  } catch (error) {
-    if (error.code === "EXTENSION_SEMVER_INVALID") {
-      throw extensionError("EXTENSION_SEMVER_RANGE_INVALID", `Invalid semantic version range: ${range}`, { range });
-    }
-    throw error;
-  }
+function supportsExtensionSpec(version, supportedVersions = SUPPORTED_EXTENSION_SPEC_VERSIONS) {
+  return Number.isInteger(version) && supportedVersions.includes(version);
 }
 
 function validateExtensionName(value, label = "extension") {
@@ -222,14 +195,13 @@ function validateNetworkHosts(value, id) {
   return Object.freeze(hosts);
 }
 
-function validateManifest(value, options = {}) {
+function validateManifestEnvelope(value, options = {}) {
   const manifest = value;
   if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", "Extension manifest must be a JSON object");
   }
-  assertOnlyKeys(manifest, new Set(["schemaVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "codeWorkspace", "timeoutMs", "capabilities", "outputs"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
-  if (manifest.schemaVersion !== 2 || manifest.experimental !== true) {
-    throw extensionError("EXTENSION_MANIFEST_INVALID", "Extension manifest must use schemaVersion 2 and experimental true");
+  if (!Number.isInteger(manifest.extensionSpecVersion) || manifest.extensionSpecVersion < 1) {
+    throw extensionError("EXTENSION_MANIFEST_INVALID", "Extension manifest requires a positive integer extensionSpecVersion", { extensionSpecVersion: manifest.extensionSpecVersion ?? null });
   }
   const id = validateExtensionName(manifest.id);
   if (options.expectedId && id !== options.expectedId) {
@@ -242,13 +214,37 @@ function validateManifest(value, options = {}) {
   if (options.expectedVersion && version !== options.expectedVersion) {
     throw extensionError("EXTENSION_MANIFEST_VERSION_MISMATCH", `Extension manifest version ${version} does not match directory ${options.expectedVersion}`, { extension: id, version, expected: options.expectedVersion });
   }
+  return Object.freeze({
+    extensionSpecVersion: manifest.extensionSpecVersion,
+    id,
+    name: manifest.name.trim(),
+    version,
+  });
+}
+
+function validateManifest(value, options = {}) {
+  const manifest = value;
+  const envelope = validateManifestEnvelope(manifest, options);
+  const supportedVersions = options.supportedExtensionSpecVersions || SUPPORTED_EXTENSION_SPEC_VERSIONS;
+  if (!supportsExtensionSpec(envelope.extensionSpecVersion, supportedVersions)) {
+    throw extensionError("EXTENSION_SPEC_UNSUPPORTED", `Extension ${envelope.id}@${envelope.version} requires unsupported Extension Spec ${envelope.extensionSpecVersion}`, {
+      extension: envelope.id,
+      version: envelope.version,
+      extensionSpecVersion: envelope.extensionSpecVersion,
+      supportedExtensionSpecVersions: [...supportedVersions],
+    });
+  }
+  assertOnlyKeys(manifest, new Set(["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs", "capabilities", "outputs"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
+  if (manifest.schemaVersion !== 3 || manifest.experimental !== true) {
+    throw extensionError("EXTENSION_MANIFEST_INVALID", "Extension Spec v1 manifest must use schemaVersion 3 and experimental true");
+  }
+  const { id, version } = envelope;
   if (manifest.entry !== "init.js") {
     throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} entry must be init.js`, { extension: id, entry: manifest.entry });
   }
   if (!SHA256_PATTERN.test(manifest.entrySha256 || "")) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} entrySha256 is invalid`, { extension: id });
   }
-  satisfiesSemverRange(options.codeWorkspaceVersion || packageJson.version, manifest.codeWorkspace);
   if (!Number.isInteger(manifest.timeoutMs) || manifest.timeoutMs < 1 || manifest.timeoutMs > 300000) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} timeoutMs must be an integer from 1 to 300000`, { extension: id, timeoutMs: manifest.timeoutMs });
   }
@@ -315,14 +311,14 @@ function validateManifest(value, options = {}) {
     return Object.freeze(normalized);
   });
   return Object.freeze({
-    schemaVersion: 2,
+    schemaVersion: 3,
+    extensionSpecVersion: envelope.extensionSpecVersion,
     experimental: true,
     id,
-    name: manifest.name.trim(),
+    name: envelope.name,
     version,
     entry: manifest.entry,
     entrySha256: manifest.entrySha256,
-    codeWorkspace: manifest.codeWorkspace,
     timeoutMs: manifest.timeoutMs,
     capabilities: Object.freeze({ networkHosts }),
     outputs: Object.freeze(outputs),
@@ -347,7 +343,7 @@ function assertRegularFile(file, code, label) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw extensionError(code, `${label} must be a regular file: ${file}`, { file });
 }
 
-function discoverExtensionEntry(extensionsRoot, extensionEntry, codeWorkspaceVersion, options = {}) {
+function discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensionSpecVersions, options = {}) {
     if (!extensionEntry.isDirectory() || extensionEntry.isSymbolicLink()) {
       throw extensionError("EXTENSION_REPOSITORY_INVALID", `Extension repository entry must be a directory: ${extensionEntry.name}`, { entry: extensionEntry.name });
     }
@@ -366,7 +362,26 @@ function discoverExtensionEntry(extensionsRoot, extensionEntry, codeWorkspaceVer
       assertRegularFile(manifestFile, "EXTENSION_MANIFEST_MISSING", "extension manifest");
       const manifestBytes = fs.readFileSync(manifestFile);
       const rawManifest = readJson(manifestFile, "EXTENSION_MANIFEST_PARSE_FAILED");
-      const manifest = validateManifest(rawManifest, { expectedId: id, expectedVersion: version, codeWorkspaceVersion, ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}) });
+      const envelope = validateManifestEnvelope(rawManifest, { expectedId: id, expectedVersion: version });
+      if (!supportsExtensionSpec(envelope.extensionSpecVersion, supportedExtensionSpecVersions)) {
+        versions.push(Object.freeze({
+          id,
+          version,
+          sourceRoot,
+          manifestFile,
+          manifest: envelope,
+          manifestSha256: sha256(manifestBytes),
+          extensionSpecVersion: envelope.extensionSpecVersion,
+          supported: false,
+        }));
+        continue;
+      }
+      const manifest = validateManifest(rawManifest, {
+        expectedId: id,
+        expectedVersion: version,
+        supportedExtensionSpecVersions,
+        ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}),
+      });
       const entryFile = path.join(sourceRoot, ...manifest.entry.split("/"));
       assertRegularFile(entryFile, "EXTENSION_ENTRY_MISSING", "extension entry");
       const entrySha256 = sha256(fs.readFileSync(entryFile));
@@ -384,28 +399,30 @@ function discoverExtensionEntry(extensionsRoot, extensionEntry, codeWorkspaceVer
         manifestSha256: sha256(manifestBytes),
         entrySha256,
         packageSha256,
-        compatible: satisfiesSemverRange(codeWorkspaceVersion, manifest.codeWorkspace),
+        extensionSpecVersion: manifest.extensionSpecVersion,
+        supported: true,
       }));
     }
     versions.sort((left, right) => compareSemver(right.version, left.version));
+    const latestSupported = versions.find((entry) => entry.supported) || null;
     return Object.freeze({
       id,
-      name: versions[0].manifest.name,
+      name: (latestSupported || versions[0]).manifest.name,
       versions: Object.freeze(versions),
-      latestCompatible: versions.find((entry) => entry.compatible) || null,
+      latestSupported,
     });
 }
 
 function discoverExtensions(options = {}) {
   const extensionsRoot = path.resolve(options.extensionsRoot || EXTENSIONS_ROOT);
-  const codeWorkspaceVersion = options.codeWorkspaceVersion || packageJson.version;
+  const supportedExtensionSpecVersions = Object.freeze([...(options.supportedExtensionSpecVersions || SUPPORTED_EXTENSION_SPEC_VERSIONS)]);
   if (!fs.existsSync(extensionsRoot)) return options.tolerant ? { catalog: [], invalid: [] } : [];
   const entries = fs.readdirSync(extensionsRoot, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
   const catalog = [];
   const invalid = [];
   for (const extensionEntry of entries) {
     try {
-      catalog.push(discoverExtensionEntry(extensionsRoot, extensionEntry, codeWorkspaceVersion, options));
+      catalog.push(discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensionSpecVersions, options));
     } catch (error) {
       if (!options.tolerant) throw error;
       invalid.push({ id: EXTENSION_NAME_PATTERN.test(extensionEntry.name) ? extensionEntry.name : null, entry: extensionEntry.name, code: error.code || "EXTENSION_REPOSITORY_INVALID", message: error.message });
@@ -432,8 +449,11 @@ function validateInstalledState(id, installed) {
     throw extensionError("EXTENSION_STATE_INVALID", `Invalid installed state for ${id}`, { extension: id });
   }
   const protocolVersion = installed.protocolVersion || 1;
-  if (![1, 2].includes(protocolVersion) || (protocolVersion === 2 && !SHA256_PATTERN.test(installed.packageSha256 || ""))) {
+  if (![1, 2, 3].includes(protocolVersion) || (protocolVersion >= 2 && !SHA256_PATTERN.test(installed.packageSha256 || ""))) {
     throw extensionError("EXTENSION_STATE_INVALID", `Invalid installed protocol state for ${id}`, { extension: id, protocolVersion });
+  }
+  if (protocolVersion === 3 && (!Number.isInteger(installed.extensionSpecVersion) || installed.extensionSpecVersion < 1)) {
+    throw extensionError("EXTENSION_STATE_INVALID", `Installed protocol v3 state for ${id} requires extensionSpecVersion`, { extension: id, extensionSpecVersion: installed.extensionSpecVersion ?? null });
   }
   const ids = new Set();
   const declaredArtifacts = [];
@@ -453,7 +473,7 @@ function validateInstalledState(id, installed) {
     if (protocolVersion === 1 && !["file", ...LEGACY_ARTIFACT_KINDS].includes(kind)) {
       throw extensionError("EXTENSION_STATE_INVALID", `Installed protocol v1 state for ${id} cannot contain ${kind}`, { extension: id, artifact: artifactId, kind });
     }
-    if (protocolVersion === 2) {
+    if (protocolVersion >= 2) {
       const expectedOwnership = ["file", "directory"].includes(kind) ? "exclusive" : "shared";
       if (artifact.ownership !== expectedOwnership) throw extensionError("EXTENSION_STATE_INVALID", `Invalid installed ownership for ${id}/${artifactId}`, { extension: id, artifact: artifactId, kind, ownership: artifact.ownership });
     } else if (kind === "file" && artifact.ownership !== undefined && artifact.ownership !== "exclusive") {
@@ -495,6 +515,9 @@ function loadExtensionState(root) {
         throw extensionError("EXTENSION_STATE_INVALID", `Invalid lastAttempt state for ${id}`, { extension: id });
       }
       parseSemver(attempt.version);
+      if (attempt.extensionSpecVersion !== undefined && (!Number.isInteger(attempt.extensionSpecVersion) || attempt.extensionSpecVersion < 1)) {
+        throw extensionError("EXTENSION_STATE_INVALID", `Invalid lastAttempt Extension Spec for ${id}`, { extension: id, extensionSpecVersion: attempt.extensionSpecVersion });
+      }
       if (attempt.status === "failed" && (!attempt.code || !attempt.message)) throw extensionError("EXTENSION_STATE_INVALID", `Failed lastAttempt for ${id} requires code and message`, { extension: id });
     }
     for (const artifact of installed?.artifacts || []) {
@@ -576,10 +599,14 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
   for (const id of requested) {
     const extension = byId.get(id);
     if (!extension) throw extensionError("EXTENSION_NOT_FOUND", `Unknown built-in extension: ${id}`, { extension: id });
-    if (!extension.latestCompatible) {
-      throw extensionError("EXTENSION_VERSION_INCOMPATIBLE", `No compatible version of ${id} is available for Code Workspace ${packageJson.version}`, { extension: id, codeWorkspaceVersion: packageJson.version });
+    if (!extension.latestSupported) {
+      throw extensionError("EXTENSION_SPEC_UNSUPPORTED", `No version of ${id} implements an Extension Spec supported by this Host`, {
+        extension: id,
+        supportedExtensionSpecVersions: [...SUPPORTED_EXTENSION_SPEC_VERSIONS],
+        availableExtensionSpecVersions: [...new Set(extension.versions.map((entry) => entry.extensionSpecVersion))].sort((left, right) => left - right),
+      });
     }
-    const resolved = extension.latestCompatible;
+    const resolved = extension.latestSupported;
     const artifacts = applicableArtifacts(resolved.manifest, tools);
     if (artifacts.length === 0) throw extensionError("EXTENSION_NO_APPLICABLE_OUTPUTS", `Extension ${id} has no outputs for the selected tools`, { extension: id, tools });
     for (const artifact of artifacts) {
@@ -598,6 +625,7 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
       id,
       name: resolved.manifest.name,
       version: resolved.version,
+      extensionSpecVersion: resolved.extensionSpecVersion,
       sourceRoot: resolved.sourceRoot,
       entryFile: resolved.entryFile,
       manifestFile: resolved.manifestFile,
@@ -691,8 +719,8 @@ function listOutputEntries(root) {
 
 function validateInitResult(value, plan) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw extensionError("EXTENSION_RESULT_INVALID", `Extension ${plan.id} result must be a JSON object`, { extension: plan.id });
-  assertOnlyKeys(value, new Set(["schemaVersion", "extension", "outputs"]), "EXTENSION_RESULT_INVALID", `Extension ${plan.id} result`);
-  if (value.schemaVersion !== 1 || !value.extension || typeof value.extension !== "object" || Array.isArray(value.extension)) {
+  assertOnlyKeys(value, new Set(["schemaVersion", "extensionSpecVersion", "extension", "outputs"]), "EXTENSION_RESULT_INVALID", `Extension ${plan.id} result`);
+  if (value.schemaVersion !== 1 || value.extensionSpecVersion !== plan.extensionSpecVersion || !value.extension || typeof value.extension !== "object" || Array.isArray(value.extension)) {
     throw extensionError("EXTENSION_RESULT_INVALID", `Extension ${plan.id} result must use schemaVersion 1`, { extension: plan.id });
   }
   assertOnlyKeys(value.extension, new Set(["id", "version"]), "EXTENSION_RESULT_INVALID", `Extension ${plan.id} result identity`);
@@ -725,8 +753,8 @@ function validateInitResult(value, plan) {
 
 function validateInitContext(value, plan) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context must be an object`, { extension: plan.id });
-  assertOnlyKeys(value, new Set(["schemaVersion", "extension", "workspace", "tools"]), "EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context`);
-  if (value.schemaVersion !== 1 || !value.extension || typeof value.extension !== "object" || Array.isArray(value.extension)) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context must use schemaVersion 1`, { extension: plan.id });
+  assertOnlyKeys(value, new Set(["schemaVersion", "extensionSpecVersion", "extension", "workspace", "tools"]), "EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context`);
+  if (value.schemaVersion !== 1 || value.extensionSpecVersion !== plan.extensionSpecVersion || !value.extension || typeof value.extension !== "object" || Array.isArray(value.extension)) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context must use schemaVersion 1 and Extension Spec ${plan.extensionSpecVersion}`, { extension: plan.id, extensionSpecVersion: plan.extensionSpecVersion });
   assertOnlyKeys(value.extension, new Set(["id", "version"]), "EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context identity`);
   if (value.extension.id !== plan.id || value.extension.version !== plan.version) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension context identity does not match ${plan.id}@${plan.version}`, { extension: plan.id, version: plan.version });
   const workspace = value.workspace;
@@ -736,6 +764,7 @@ function validateInitContext(value, plan) {
   if (!Array.isArray(value.tools) || new Set(value.tools).size !== value.tools.length || value.tools.some((tool) => !SUPPORTED_TOOLS.has(tool))) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context tools are invalid`, { extension: plan.id });
   return Object.freeze({
     schemaVersion: 1,
+    extensionSpecVersion: plan.extensionSpecVersion,
     extension: Object.freeze({ id: plan.id, version: plan.version }),
     workspace: Object.freeze({ name: workspace.name, uuid: workspace.uuid, language: workspace.language }),
     tools: Object.freeze(value.tools.slice()),
@@ -744,7 +773,7 @@ function validateInitContext(value, plan) {
 
 function verifyExtensionOutput(outputRoot, result, artifactsOrPlan) {
   const plan = Array.isArray(artifactsOrPlan)
-    ? { id: result?.extension?.id || "extension", version: result?.extension?.version || "0.0.0", artifacts: artifactsOrPlan }
+    ? { id: result?.extension?.id || "extension", version: result?.extension?.version || "0.0.0", extensionSpecVersion: result?.extensionSpecVersion || 1, artifacts: artifactsOrPlan }
     : artifactsOrPlan;
   const outputs = validateInitResult(result, plan);
   const declared = new Map(plan.artifacts.map((artifact) => [artifact.id, artifact]));
@@ -809,7 +838,7 @@ function stateFingerprint(root) {
 }
 
 function installedIsCurrent(root, plan, installed, state) {
-  if (!installed || installed.protocolVersion !== 2 || installed.version !== plan.version || installed.manifestSha256 !== plan.manifestSha256 || installed.packageSha256 !== plan.packageSha256) return false;
+  if (!installed || installed.protocolVersion !== 3 || installed.extensionSpecVersion !== plan.extensionSpecVersion || installed.version !== plan.version || installed.manifestSha256 !== plan.manifestSha256 || installed.packageSha256 !== plan.packageSha256) return false;
   if (installed.artifacts.length !== plan.artifacts.length) return false;
   const byId = new Map(installed.artifacts.map((artifact) => [artifact.id, artifact]));
   return plan.artifacts.every((artifact) => {
@@ -859,14 +888,14 @@ function recordFailedAttempt(root, plan, error, options = {}) {
     const previous = next.extensions[plan.id]?.installed ?? null;
     next.extensions[plan.id] = {
       installed: previous,
-      lastAttempt: { version: plan.version, status: "failed", code: error.code || "EXTENSION_INIT_FAILED", message: error.message },
+      lastAttempt: { version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "failed", code: error.code || "EXTENSION_INIT_FAILED", message: error.message },
     };
     transaction = createFileTransaction([extensionStatePath(root)]);
     saveExtensionState(root, next, options);
     options.injectFailure?.("after-failure-state-save", plan);
     const verified = loadExtensionState(root);
     const attempt = verified.extensions[plan.id]?.lastAttempt;
-    if (!attempt || attempt.status !== "failed" || attempt.version !== plan.version || attempt.code !== (error.code || "EXTENSION_INIT_FAILED")) {
+    if (!attempt || attempt.status !== "failed" || attempt.version !== plan.version || attempt.extensionSpecVersion !== plan.extensionSpecVersion || attempt.code !== (error.code || "EXTENSION_INIT_FAILED")) {
       throw extensionError("EXTENSION_STATE_VERIFY_FAILED", `Failed extension attempt state could not be verified for ${plan.id}`, { extension: plan.id });
     }
     transaction.commit();
@@ -960,13 +989,14 @@ function installVerifiedArtifacts(root, plan, verified, previousState, options =
   const next = structuredClone(previousState);
   next.extensions[plan.id] = {
     installed: {
-      protocolVersion: 2,
+      protocolVersion: 3,
+      extensionSpecVersion: plan.extensionSpecVersion,
       version: plan.version,
       manifestSha256: plan.manifestSha256,
       packageSha256: plan.packageSha256,
       artifacts: installedArtifacts,
     },
-    lastAttempt: { version: plan.version, status: "installed" },
+    lastAttempt: { version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "installed" },
   };
   const transition = planArtifactTransition(root, plan.id, previousInstalled, next.extensions[plan.id].installed, previousState, next, verifiedById);
   const directoryTransition = createDirectoryTransition(root, previousInstalled, next.extensions[plan.id].installed, verifiedById);
@@ -985,7 +1015,7 @@ function installVerifiedArtifacts(root, plan, verified, previousState, options =
     verifyArtifactTransition(transition);
     directoryTransition.verify();
     const persisted = loadExtensionState(root).extensions[plan.id];
-    if (!persisted || persisted.lastAttempt?.status !== "installed" || persisted.installed?.manifestSha256 !== plan.manifestSha256 || persisted.installed?.packageSha256 !== plan.packageSha256) {
+    if (!persisted || persisted.lastAttempt?.status !== "installed" || persisted.installed?.extensionSpecVersion !== plan.extensionSpecVersion || persisted.installed?.manifestSha256 !== plan.manifestSha256 || persisted.installed?.packageSha256 !== plan.packageSha256) {
       throw extensionError("EXTENSION_STATE_VERIFY_FAILED", `Installed extension state could not be verified for ${plan.id}`, { extension: plan.id });
     }
     options.injectFailure?.("after-verify", plan);
@@ -1014,15 +1044,17 @@ function executeExtension(root, plan, context, options = {}) {
     }
     const currentPackageSha = directoryDigest(plan.sourceRoot);
     if (currentPackageSha !== plan.packageSha256) throw extensionError("EXTENSION_PLAN_STALE", `Extension package changed after planning: ${plan.id}`, { extension: plan.id, expectedSha256: plan.packageSha256, actualSha256: currentPackageSha });
-    validateManifest(readJson(plan.manifestFile, "EXTENSION_MANIFEST_PARSE_FAILED"), {
+    const currentManifest = validateManifest(readJson(plan.manifestFile, "EXTENSION_MANIFEST_PARSE_FAILED"), {
       expectedId: plan.id,
       expectedVersion: plan.version,
-      codeWorkspaceVersion: packageJson.version,
     });
+    if (currentManifest.extensionSpecVersion !== plan.extensionSpecVersion) {
+      throw extensionError("EXTENSION_PLAN_STALE", `Extension Spec changed after planning: ${plan.id}`, { extension: plan.id, expectedExtensionSpecVersion: plan.extensionSpecVersion, actualExtensionSpecVersion: currentManifest.extensionSpecVersion });
+    }
     const state = loadExtensionState(root);
     const installed = state.extensions[plan.id]?.installed || null;
     if (installedIsCurrent(root, plan, installed, state)) {
-      executionResult = { id: plan.id, version: plan.version, status: "skipped", reason: "current" };
+      executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "skipped", reason: "current" };
       return executionResult;
     }
     assertInstallOwnership(root, plan, state);
@@ -1042,12 +1074,12 @@ function executeExtension(root, plan, context, options = {}) {
     options.injectFailure?.("after-output-verify", plan);
     if (stateFingerprint(root) !== beforeState) throw extensionError("EXTENSION_STATE_CONFLICT", `Extension state changed while ${plan.id} was running`, { extension: plan.id });
     const installedState = installVerifiedArtifacts(root, plan, verified, state, options);
-    executionResult = { id: plan.id, version: plan.version, status: "installed", artifacts: installedState.artifacts };
+    executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "installed", artifacts: installedState.artifacts };
     return executionResult;
   } catch (error) {
     const normalized = error.code ? error : extensionError("EXTENSION_INIT_FAILED", `Extension ${plan.id} failed: ${error.message}`, { extension: plan.id, cause: error.name });
     const statePersisted = recordFailedAttempt(root, plan, normalized, options);
-    executionResult = { id: plan.id, version: plan.version, status: "failed", code: normalized.code, message: normalized.message, statePersisted };
+    executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "failed", code: normalized.code, message: normalized.message, statePersisted };
     return executionResult;
   } finally {
     if (temporaryRoot) {
@@ -1070,6 +1102,7 @@ function runExtensionBatch(root, plans, context, options = {}) {
   for (const plan of plans) {
     const executionContext = typeof context === "function" ? context(plan) : {
       ...(context || {}),
+      extensionSpecVersion: plan.extensionSpecVersion,
       extension: { id: plan.id, version: plan.version },
     };
     executed.push(executeExtension(root, plan, executionContext, options));
@@ -1153,6 +1186,7 @@ module.exports = {
   EXTENSIONS_ROOT,
   EXTENSION_NAME_PATTERN,
   EXTENSION_STATE_FILE,
+  SUPPORTED_EXTENSION_SPEC_VERSIONS,
   applicableArtifacts,
   applyExtensionUninstall,
   assertSafeWorkspaceTarget,
@@ -1174,8 +1208,9 @@ module.exports = {
   prepareExtensionPlans,
   resolveExtensionPlans,
   runExtensionBatch,
-  satisfiesSemverRange,
   saveExtensionState,
+  supportsExtensionSpec,
   validateManifest,
+  validateManifestEnvelope,
   verifyExtensionOutput,
 };

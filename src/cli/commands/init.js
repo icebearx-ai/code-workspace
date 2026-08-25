@@ -80,7 +80,7 @@ async function executeInitUnlocked(invocation, root) {
   }
   const interactiveExplicitExtensions = explicitExtensions === null
     ? undefined
-    : explicitExtensions.filter((id) => extensionCatalog.some((entry) => entry.id === id && entry.latestCompatible));
+    : explicitExtensions.filter((id) => extensionCatalog.some((entry) => entry.id === id && entry.latestSupported));
   let plan = null;
   if (interactive) {
     try {
@@ -127,6 +127,7 @@ async function executeInitUnlocked(invocation, root) {
   });
   const extensionResult = runExtensionBatch(root, extensionPlans, (extension) => ({
     schemaVersion: 1,
+    extensionSpecVersion: extension.extensionSpecVersion,
     extension: { id: extension.id, version: extension.version },
     workspace: {
       name: result.workspaceConfig.workspace.name,

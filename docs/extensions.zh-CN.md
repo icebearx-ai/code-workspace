@@ -2,13 +2,13 @@
 
 Code Workspace 扩展是随发布包提供、位于 `extensions/<id>/<semver>/` 下的可信版本化软件包。扩展进程具有故障隔离，但不是安全沙箱：内置扩展代码仍以当前用户的操作系统权限运行。
 
-每个版本包含 `manifest.json`、`init.js`，以及扩展需要的私有模板、元数据或辅助代码。新扩展包遵循：
+每个版本包含 `manifest.json`、`init.js`，以及扩展需要的私有模板、元数据或辅助代码。当前 Host 明确支持 Extension Spec v1；中文规范位于 `spec/extension/v1/specification.zh-CN.md`，英文规范位于 `spec/extension/v1/specification.en-US.md`，其组件 schema 为：
 
-- `schemas/extension-manifest-v2.json`
+- `schemas/extension-manifest-v3.json`
 - `schemas/extension-init-context-v1.json`
 - `schemas/extension-init-result-v1.json`
 
-静态 manifest 声明扩展身份、Host 兼容范围、入口摘要和超时、声明性网络 host，以及最大输出范围。Code Workspace 在确认前冻结 manifest、入口和完整扩展版本目录摘要，并在执行前重新验证三者。
+静态 manifest 通过 `extensionSpecVersion` 声明扩展实现的开发规范，并声明扩展身份、入口摘要和超时、声明性网络 host，以及最大输出范围。Host 只执行其明确支持的规范版本；Code Workspace 产品版本不参与扩展兼容判断。Code Workspace 在确认前冻结规范版本、manifest、入口和完整扩展版本目录摘要，并在执行前重新验证。
 
 Host 使用相互独立的临时路径启动入口：
 
@@ -16,7 +16,7 @@ Host 使用相互独立的临时路径启动入口：
 node init.js --context <context-file> --output <staging-directory> --result <result-file>
 ```
 
-context 只包含扩展身份、Workspace 显示元数据和所选工具，不提供真实 Workspace 路径。result 只包含扩展身份和 `{ id, source }`。它必须完整返回本次工具选择所适用的全部 manifest 输出，不能重新声明 target、kind、ownership、selector 或摘要。
+context 只包含规范版本、扩展身份、Workspace 显示元数据和所选工具，不提供真实 Workspace 路径。result 回显同一规范版本，并只包含扩展身份和 `{ id, source }`。它必须完整返回本次工具选择所适用的全部 manifest 输出，不能重新声明 target、kind、ownership、selector 或摘要。
 
 Host 递归验证 staging，拒绝未声明内容、路径逃逸、符号链接和特殊文件，并独立计算已安装文件或目录摘要。扩展不直接写入真实 Workspace 或 installed 状态，也不提供卸载脚本。
 
@@ -31,9 +31,9 @@ Host 递归验证 staging，拒绝未声明内容、路径逃逸、符号链接�
 
 下载协议、归档格式、包管理器、Jira、MCP 和具体 Agent 产品都不是公共输出类型。扩展可以在私有实现中使用这些知识，在 staging 中准备候选文件或目录。声明的 `networkHosts` 会展示在计划中供用户确认，但不代表操作系统级网络出口强制隔离。
 
-installed manifest 是唯一安装事实。它记录协议版本、扩展版本、冻结的扩展包和 manifest 摘要、通用输出所有权、Host 计算的摘要及共享 contribution 数据。幂等判断同时验证状态和真实 Workspace。升级在单扩展可恢复事务中处理保留、新增、替换和移除的输出。卸载只读取 installed 状态，因此扩展包已经不存在时仍可工作。发现未知本地修改时，升级或卸载会停止；基础版不提供强制模式。
+installed manifest 是唯一安装事实。新记录包含 installed record 版本、Extension Spec 版本、扩展版本、冻结的扩展包和 manifest 摘要、通用输出所有权、Host 计算的摘要及共享 contribution 数据。幂等判断同时验证状态和真实 Workspace。升级在单扩展可恢复事务中处理保留、新增、替换和移除的输出。卸载只读取 installed 状态，因此扩展包或执行规范已经不存在时仍可工作。发现未知本地修改时，升级或卸载会停止；基础版不提供强制模式。
 
-已经发布的协议 v1 文件、Codex 配置块和 Codex Hooks installed 记录仍可读取和卸载；它们只属于兼容状态，不再是 manifest v2 的新输出类型。
+已经发布的 installed protocol v1/v2 文件、Codex 配置块和 Codex Hooks 记录仍可读取和卸载；它们只属于兼容状态，不再是 Extension Spec v1 的新输出类型。
 
 `init`、`extension install` 和 `extension uninstall` 共用同一个非阻塞 Workspace 操作锁。多扩展安装只确认一次，每个扩展使用独立事务；单个失败不会阻止后续扩展，但整体命令会报告失败。
 

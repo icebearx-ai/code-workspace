@@ -23,7 +23,7 @@ async function main() {
   const resultFile = option("--result");
   if (!contextFile || !outputRoot || !resultFile) throw new Error("Usage: init.js --context <file> --output <directory> --result <file>");
   const context = JSON.parse(fs.readFileSync(contextFile, "utf8"));
-  if (context.schemaVersion !== 1 || context.extension?.id !== "zhuiyi-jira-mcp" || context.extension.version !== "0.1.0" || !Array.isArray(context.tools)) throw new Error("Invalid extension context");
+  if (context.schemaVersion !== 1 || context.extensionSpecVersion !== 1 || context.extension?.id !== "zhuiyi-jira-mcp" || context.extension.version !== "0.1.0" || !Array.isArray(context.tools)) throw new Error("Invalid extension context");
 
   const outputs = [];
   const runtime = path.join(outputRoot, "runtime");
@@ -41,6 +41,7 @@ async function main() {
 
   fs.writeFileSync(resultFile, `${JSON.stringify({
     schemaVersion: 1,
+    extensionSpecVersion: 1,
     extension: { id: "zhuiyi-jira-mcp", version: "0.1.0" },
     outputs,
   }, null, 2)}\n`, { mode: 0o600 });

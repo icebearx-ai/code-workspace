@@ -29,7 +29,7 @@ function formatInstallPlan(plans) {
   return [
     `Install ${plans.length} extension${plans.length === 1 ? "" : "s"}:`,
     ...plans.flatMap((plan) => [
-      `  ${plan.id}@${plan.version} (manifest ${plan.manifestSha256})`,
+      `  ${plan.id}@${plan.version} [Extension Spec ${plan.extensionSpecVersion}] (manifest ${plan.manifestSha256})`,
       ...(plan.capabilities.networkHosts || []).map((host) => `    NETWORK https://${host}`),
       ...plan.artifacts.map((artifact) => `    WRITE ${artifact.target} (${artifact.kind})`),
     ]),
@@ -45,8 +45,8 @@ async function collectExtensionInstallSelection(catalog, state, options = {}) {
   const installed = new Set(Object.entries(state.extensions || {}).filter(([, value]) => value.installed).map(([id]) => id));
   const choices = catalog.map((entry) => ({
     value: entry.id,
-    label: `${entry.id} · ${entry.name} · ${entry.latestCompatible ? `latest compatible: ${entry.latestCompatible.version}` : "no compatible version"}${installed.has(entry.id) ? " · installed" : ""}`,
-    ...(entry.latestCompatible ? {} : { disabled: true }),
+    label: `${entry.id} · ${entry.name} · ${entry.latestSupported ? `latest supported: ${entry.latestSupported.version} · Extension Spec ${entry.latestSupported.extensionSpecVersion}` : "no supported Extension Spec"}${installed.has(entry.id) ? " · installed" : ""}`,
+    ...(entry.latestSupported ? {} : { disabled: true }),
   }));
   ui.intro("Code Workspace extensions");
   if (choices.length === 0) {
@@ -66,6 +66,7 @@ function installResultEntry(entry) {
     action: entry.status === "skipped" ? "skip" : "install",
     status: entry.status,
     version: entry.version,
+    extensionSpecVersion: entry.extensionSpecVersion,
     ...(entry.reason ? { reason: entry.reason } : {}),
     ...(entry.artifacts ? { artifacts: entry.artifacts } : {}),
     ...(entry.code ? { code: entry.code } : {}),
@@ -129,6 +130,7 @@ async function executeExtensionInstall(invocation) {
   const workspace = invocation.config.workspace;
   const batch = runExtensionBatch(invocation.root, preparation.plans, (extension) => ({
     schemaVersion: 1,
+    extensionSpecVersion: extension.extensionSpecVersion,
     extension: { id: extension.id, version: extension.version },
     workspace: { name: workspace.name, uuid: workspace.uuid, language: workspace.language },
     tools,

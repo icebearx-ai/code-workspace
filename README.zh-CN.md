@@ -59,7 +59,7 @@ code-w extension uninstall openspec-workspace --yes
 
 `init`、扩展安装和扩展卸载共享的 Workspace 操作锁配置在 Code Workspace 项目自身的 `.env` 中（不在目标 Workspace 中）。`CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` 默认值为 `5000`，`CODE_WORKSPACE_INIT_LOCK_STALE_MS` 默认值为 `30000`；进程环境变量优先于 `.env`。配置项名称见 `.env.example`。
 
-用户只选择扩展名，不能选择版本；`openspec-workspace@1.0.0` 会被明确拒绝。Code Workspace 在确认前解析最高兼容 SemVer。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装扩展；已有 Workspace 重新初始化时，默认选择已安装扩展，并在存在更高兼容内置版本时升级。`none` 只跳过本次扩展初始化，不会卸载已有制品。
+用户只选择扩展名，不能选择版本；`openspec-workspace@1.0.0` 会被明确拒绝。Code Workspace 在确认前，从 Host 明确支持的 Extension Spec 实现中解析最高扩展 SemVer。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装扩展；已有 Workspace 重新初始化时，默认选择已安装扩展，并在存在更高受支持内置版本时升级。`none` 只跳过本次扩展初始化，不会卸载已有制品。
 
 `extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。
 

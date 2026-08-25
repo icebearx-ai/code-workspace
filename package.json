@@ -28,6 +28,7 @@
     "artifacts",
     "extensions",
     "docs/extension-architecture.zh-CN.md",
+    "spec",
     "docs/extensions.md",
     "docs/extensions.zh-CN.md",
     "schemas",

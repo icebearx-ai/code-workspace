@@ -5,8 +5,6 @@ const path = require("node:path");
 const test = require("node:test");
 const zlib = require("node:zlib");
 
-require("../../package.json").version = "0.1.0-beta.3";
-
 const JIRA_EXTENSION_ROOT = path.resolve(__dirname, "..", "..", "extensions", "zhuiyi-jira-mcp", "0.1.0");
 const release = require(path.join(JIRA_EXTENSION_ROOT, "release.json"));
 const {
@@ -98,13 +96,14 @@ function jiraRepository() {
 
 function jiraPlan(tools = ["codex", "claude"]) {
   const repository = jiraRepository();
-  const catalog = discoverExtensions({ extensionsRoot: repository, codeWorkspaceVersion: "0.1.0-beta.3" });
+  const catalog = discoverExtensions({ extensionsRoot: repository });
   return resolveExtensionPlans(catalog, ["zhuiyi-jira-mcp"], { tools, state: emptyExtensionState() })[0];
 }
 
 function context(plan, tools = ["codex", "claude"]) {
   return {
     schemaVersion: 1,
+    extensionSpecVersion: plan.extensionSpecVersion,
     extension: { id: plan.id, version: plan.version },
     workspace: { name: "test", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "zh-CN" },
     tools,
@@ -113,7 +112,7 @@ function context(plan, tools = ["codex", "claude"]) {
 
 test("Jira manifest declares only generic outputs while private release metadata freezes download constraints", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(JIRA_EXTENSION_ROOT, "manifest.json"), "utf8"));
-  const validated = validateManifest(manifest, { protectedTargets: new Set(), codeWorkspaceVersion: "0.1.0-beta.3" });
+  const validated = validateManifest(manifest, { protectedTargets: new Set() });
   assert.deepEqual(validated.outputs.map((output) => output.kind), ["directory", "text-block", "json-member"]);
   assert.deepEqual(validated.capabilities.networkHosts, ["gitee.com", "raw.giteeusercontent.com"]);
   assert.equal(release.url, "https://gitee.com/liutaigang/zhuiyi-jira-mcp/raw/master/release/zhuiyi-jira-mcp-0.1.0.tar.gz");
@@ -194,7 +193,8 @@ test("Jira init installs a generic runtime directory and shared Codex and Claude
   assert.equal(claude.mcpServers.existing.command, "existing");
   assert.equal(claude.mcpServers["zhuiyi-jira"].command, "node");
   const installed = loadExtensionState(root).extensions[plan.id].installed;
-  assert.equal(installed.protocolVersion, 2);
+  assert.equal(installed.protocolVersion, 3);
+  assert.equal(installed.extensionSpecVersion, 1);
   assert.deepEqual(installed.artifacts.map((artifact) => artifact.kind), ["directory", "text-block", "json-member"]);
   assert.equal(executeExtension(root, plan, context(plan)).status, "skipped");
 

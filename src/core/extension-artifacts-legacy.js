@@ -141,7 +141,7 @@ function planLegacyArtifactTransition(root, extensionId, previousInstalled, next
     const file = path.join(root, CODEX_CONFIG_TARGET);
     let content = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
     for (const artifact of previousConfig) content = removeConfigBlock(content, extensionId, artifact);
-    if (nextConfig.length > 0) throw artifactError("EXTENSION_STATE_INVALID", "Legacy config blocks cannot be newly installed by manifest v2", { extension: extensionId });
+    if (nextConfig.length > 0) throw artifactError("EXTENSION_STATE_INVALID", "Legacy config blocks cannot be newly installed by Extension Spec v1", { extension: extensionId });
     if (content) {
       try { TOML.parse(content); } catch (error) { throw artifactError("EXTENSION_CONFIG_CONFLICT", `Removing legacy config block produces invalid TOML: ${error.message}`, { extension: extensionId, target: CODEX_CONFIG_TARGET }); }
       writes.set(file, content);

@@ -1,5 +1,7 @@
 # Code Workspace 扩展架构
 
+> 本文是面向维护者的说明性架构文档。Extension Spec 的规范性定义以 `spec/extension/v1/specification.zh-CN.md` 及其引用的 JSON Schema 为准；本文不单独建立兼容性或一致性规则。
+
 本文定义 Code Workspace 扩展的基础架构、核心术语、职责边界和最小生命周期协议。它是后续扩展实现与评审的共同基线。
 
 本文追求的是一版基础、稳健、务实且完整闭环的架构。它只覆盖当前已经出现并能够验证的需求，不试图一次解决未知的扩展市场、安全沙箱、任意外部副作用或所有配置格式。
@@ -77,15 +79,15 @@ extensions/<extension-id>/<version>/
 
 ### 4.4 静态 manifest
 
-`manifest.json` 是扩展执行前可读取和验证的静态合同。它声明：
+`manifest.json` 是扩展执行前可读取和验证的静态合同。扩展与 Host 的兼容性由 Extension Spec 版本决定，而不是由任一方的产品版本决定。它声明：
 
-- 扩展身份、版本和 Host 兼容范围；
+- 扩展实现的 Extension Spec 版本、身份和扩展版本；
 - 初始化入口、入口摘要和执行超时；
 - 扩展有意使用的能力，例如网络目标；
 - 可能产生的输出及其最大目标范围；
 - 不同工具选择下哪些输出适用。
 
-静态 manifest 用于发现、规划、冲突预检和用户确认。它不描述扩展业务实现，不包含需要由 Host 理解的下载 URL、npm 包信息或归档格式。
+Host 明确声明自己支持的 Extension Spec 版本集合，只有 manifest 的 `extensionSpecVersion` 属于该集合时才会执行扩展。静态 manifest 用于发现、规划、冲突预检和用户确认。它不描述扩展业务实现，不包含需要由 Host 理解的下载 URL、npm 包信息或归档格式。
 
 入口可能继续读取扩展包内的辅助代码、模板和私有元数据，因此仅校验 `init.js` 不能冻结完整执行输入。Host 在规划时还需要计算整个扩展版本目录的规范摘要，并在执行前重新验证，以防 manifest、入口、辅助代码或模板在计划确认后发生变化。
 
@@ -218,12 +220,12 @@ Host 负责：
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
   "id": "zhuiyi-jira-mcp",
   "version": "0.1.0",
   "entry": "init.js",
   "entrySha256": "<sha256>",
-  "codeWorkspace": ">=0.1.0-beta.0 <0.2.0",
   "timeoutMs": 120000,
   "capabilities": {
     "networkHosts": ["gitee.com", "raw.giteeusercontent.com"]
@@ -287,7 +289,7 @@ node init.js --context <context-file> --output <staging-directory> --result <res
 
 ```text
 发现扩展并验证静态 manifest
-→ 解析兼容版本和适用输出
+→ 从 Host 支持的 Extension Spec 实现中解析最高扩展版本和适用输出
 → 检查声明能力、目标范围和已知冲突
 → 展示计划并确认
 → 获取 Workspace 操作锁并重新验证计划
@@ -392,8 +394,9 @@ installed manifest、日志和诊断不得记录 Cookie、Token 或其他真实�
 - 新能力是跨扩展可复用的副作用语义，而不是某个产品或扩展名称；
 - Host 对该能力具有完整的安装、验证、升级和卸载闭环；
 - schema、实现、错误码、状态和测试一起版本化；
-- 扩展通过 Host 兼容范围声明所需能力；
-- 未知能力安全失败，不进行猜测性兼容。
+- Host 以明确集合声明支持的 Extension Spec，扩展声明唯一规范版本；
+- 产品版本和规范版本之间不存在推测性映射；
+- 未知规范或能力安全失败，不进行数值范围猜测。
 
 ## 11. 当前实现对应关系
 

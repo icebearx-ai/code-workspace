@@ -32,8 +32,8 @@ const {
   prepareExtensionPlans,
   resolveExtensionPlans,
   runExtensionBatch,
-  satisfiesSemverRange,
   saveExtensionState,
+  supportsExtensionSpec,
   validateManifest,
   verifyExtensionOutput,
 } = require("../core/extensions");
@@ -103,20 +103,20 @@ function writeExtension(repository, options = {}) {
   const resultFooter = options.rawScript ? "" : [
     'const extensionResultIndex = process.argv.indexOf("--result");',
     'const extensionResultFile = process.argv[extensionResultIndex + 1];',
-    `require("node:fs").writeFileSync(extensionResultFile, JSON.stringify({ schemaVersion: 1, extension: { id: ${JSON.stringify(id)}, version: ${JSON.stringify(version)} }, outputs: ${JSON.stringify(resultOutputs)} }, null, 2) + "\\n");`,
+    `require("node:fs").writeFileSync(extensionResultFile, JSON.stringify({ schemaVersion: 1, extensionSpecVersion: ${JSON.stringify(options.extensionSpecVersion || 1)}, extension: { id: ${JSON.stringify(id)}, version: ${JSON.stringify(version)} }, outputs: ${JSON.stringify(resultOutputs)} }, null, 2) + "\\n");`,
     "",
   ].join("\n");
   const script = `${body}${body.endsWith("\n") ? "" : "\n"}${resultFooter}`;
   fs.writeFileSync(path.join(versionRoot, "init.js"), script);
   fs.writeFileSync(path.join(versionRoot, "manifest.json"), `${JSON.stringify({
-    schemaVersion: 2,
+    schemaVersion: 3,
+    extensionSpecVersion: options.extensionSpecVersion || 1,
     experimental: true,
     id,
     name: options.name || id,
     version,
     entry: "init.js",
     entrySha256: sha256(Buffer.from(script)),
-    codeWorkspace: options.codeWorkspace || ">=0.1.0-beta.3 <0.2.0",
     timeoutMs: options.timeoutMs || 1000,
     ...(options.networkHosts ? { capabilities: { networkHosts: options.networkHosts } } : {}),
     outputs,
@@ -127,6 +127,7 @@ function writeExtension(repository, options = {}) {
 function context(plan) {
   return {
     schemaVersion: 1,
+    extensionSpecVersion: plan.extensionSpecVersion,
     extension: { id: plan.id, version: plan.version },
     workspace: { name: "test", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "zh-CN" },
     tools: ["codex"],
@@ -137,38 +138,48 @@ function runCli(root, args) {
   return spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8" });
 }
 
-test("strict SemVer comparison includes prerelease precedence and compatibility ranges", () => {
+test("strict SemVer comparison is used only for extension version ordering", () => {
   assert.equal(compareSemver("1.0.0-beta.3", "1.0.0-beta.11"), -1);
   assert.equal(compareSemver("1.0.0", "1.0.0-rc.1"), 1);
   assert.equal(compareSemver("1.0.0+build.1", "1.0.0+build.2"), 0);
-  assert.equal(satisfiesSemverRange("0.1.0-beta.3", ">=0.1.0-beta.3 <0.2.0"), true);
-  assert.equal(satisfiesSemverRange("0.2.0", ">=0.1.0-beta.3 <0.2.0"), false);
+  assert.equal(supportsExtensionSpec(1), true);
+  assert.equal(supportsExtensionSpec(2), false);
   assert.throws(() => parseSemver("01.0.0"), (error) => error.code === "EXTENSION_SEMVER_INVALID");
-  assert.throws(() => satisfiesSemverRange("1.0.0", "^1.0.0"), (error) => error.code === "EXTENSION_SEMVER_RANGE_INVALID");
 });
 
-test("discovery selects the highest compatible version and freezes manifest and package hashes", () => {
+test("discovery selects the highest version using a Host-supported Extension Spec and freezes hashes", () => {
   const repository = temporaryRoot();
-  writeExtension(repository, { version: "1.0.0", codeWorkspace: ">=1.0.0 <2.0.0" });
-  writeExtension(repository, { version: "1.2.0", codeWorkspace: ">=1.0.0 <2.0.0" });
-  writeExtension(repository, { version: "2.0.0", codeWorkspace: ">=2.0.0 <3.0.0" });
-  const catalog = discoverExtensions({ extensionsRoot: repository, codeWorkspaceVersion: "1.5.0" });
-  assert.equal(catalog[0].latestCompatible.version, "1.2.0");
-  assert.equal(catalog[0].latestCompatible.manifestSha256, sha256(fs.readFileSync(path.join(repository, "example-extension", "1.2.0", "manifest.json"))));
-  assert.match(catalog[0].latestCompatible.packageSha256, /^[a-f0-9]{64}$/);
-  assert(Object.isFrozen(catalog[0].latestCompatible.manifest));
+  writeExtension(repository, { version: "1.0.0", extensionSpecVersion: 1 });
+  writeExtension(repository, { version: "1.2.0", extensionSpecVersion: 1 });
+  writeExtension(repository, { version: "2.0.0", extensionSpecVersion: 2 });
+  const catalog = discoverExtensions({ extensionsRoot: repository });
+  assert.equal(catalog[0].latestSupported.version, "1.2.0");
+  assert.equal(catalog[0].latestSupported.extensionSpecVersion, 1);
+  assert.equal(catalog[0].latestSupported.manifestSha256, sha256(fs.readFileSync(path.join(repository, "example-extension", "1.2.0", "manifest.json"))));
+  assert.match(catalog[0].latestSupported.packageSha256, /^[a-f0-9]{64}$/);
+  assert(Object.isFrozen(catalog[0].latestSupported.manifest));
+  assert.equal(catalog[0].versions[0].version, "2.0.0");
+  assert.equal(catalog[0].versions[0].supported, false);
+
+  const unsupportedRepository = temporaryRoot();
+  writeExtension(unsupportedRepository, { version: "2.0.0", extensionSpecVersion: 2 });
+  const unsupportedCatalog = discoverExtensions({ extensionsRoot: unsupportedRepository });
+  assert.throws(
+    () => resolveExtensionPlans(unsupportedCatalog, ["example-extension"], { tools: ["codex"], state: emptyExtensionState() }),
+    (error) => error.code === "EXTENSION_SPEC_UNSUPPORTED" && error.details.supportedExtensionSpecVersions[0] === 1 && error.details.availableExtensionSpecVersions[0] === 2
+  );
 });
 
-test("manifest v2 validation rejects unsafe, duplicate, core-owned, and invalid output declarations", () => {
+test("Extension Spec v1 manifest validation rejects unsafe, duplicate, core-owned, and invalid output declarations", () => {
   const base = {
-    schemaVersion: 2,
+    schemaVersion: 3,
+    extensionSpecVersion: 1,
     experimental: true,
     id: "example-extension",
     name: "Example",
     version: "1.0.0",
     entry: "init.js",
     entrySha256: "b".repeat(64),
-    codeWorkspace: ">=0.1.0-beta.3 <0.2.0",
     timeoutMs: 1000,
     outputs: [{ id: "artifact-one", kind: "file", ownership: "exclusive", target: ".example/one.txt" }],
   };
@@ -239,6 +250,7 @@ test("context and result validation reject identity changes, unknown fields, dup
   const extensionPlan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
   const invalidContext = { ...context(extensionPlan), workspace: { ...context(extensionPlan).workspace, root: "/secret" } };
   assert.equal(executeExtension(temporaryRoot(), extensionPlan, invalidContext).code, "EXTENSION_CONTEXT_INVALID");
+  assert.equal(executeExtension(temporaryRoot(), extensionPlan, { ...context(extensionPlan), extensionSpecVersion: 2 }).code, "EXTENSION_CONTEXT_INVALID");
 
   const root = temporaryRoot();
   fs.mkdirSync(path.join(root, "one"), { recursive: true });
@@ -247,24 +259,26 @@ test("context and result validation reject identity changes, unknown fields, dup
   const plan = {
     id: "example-extension",
     version: "1.0.0",
+    extensionSpecVersion: 1,
     artifacts: [
       { id: "one", kind: "file", ownership: "exclusive", target: ".example/one.txt" },
       { id: "two", kind: "file", ownership: "exclusive", target: ".example/two.txt" },
     ],
   };
-  const result = (outputs, extension = { id: plan.id, version: plan.version }) => ({ schemaVersion: 1, extension, outputs });
+  const result = (outputs, extension = { id: plan.id, version: plan.version }) => ({ schemaVersion: 1, extensionSpecVersion: plan.extensionSpecVersion, extension, outputs });
   assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "unknown", source: "two.txt" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_UNDECLARED");
   assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "one", source: "two.txt" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_DUPLICATE");
   assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one" }, { id: "two", source: "one/file.txt" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_DUPLICATE");
   assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "two", source: "../escape" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_TARGET_INVALID");
   assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "two", source: "two.txt" }], { id: "other-extension", version: "1.0.0" }), plan), (error) => error.code === "EXTENSION_RESULT_IDENTITY_MISMATCH");
+  assert.throws(() => verifyExtensionOutput(root, { ...result([{ id: "one", source: "one/file.txt" }, { id: "two", source: "two.txt" }]), extensionSpecVersion: 2 }, plan), (error) => error.code === "EXTENSION_RESULT_INVALID");
 });
 
 test("result and staging verification reject missing, extra, and symlinked outputs while Host computes the digest", (t) => {
   const root = temporaryRoot();
   const artifact = { id: "artifact", kind: "file", ownership: "exclusive", target: "safe/file.txt" };
-  const plan = { id: "example-extension", version: "1.0.0", artifacts: [artifact] };
-  const result = { schemaVersion: 1, extension: { id: plan.id, version: plan.version }, outputs: [{ id: artifact.id, source: "safe/file.txt" }] };
+  const plan = { id: "example-extension", version: "1.0.0", extensionSpecVersion: 1, artifacts: [artifact] };
+  const result = { schemaVersion: 1, extensionSpecVersion: plan.extensionSpecVersion, extension: { id: plan.id, version: plan.version }, outputs: [{ id: artifact.id, source: "safe/file.txt" }] };
   assert.throws(() => verifyExtensionOutput(root, result, plan), (error) => error.code === "EXTENSION_ARTIFACT_MISSING");
   fs.mkdirSync(path.join(root, "safe"));
   fs.writeFileSync(path.join(root, "safe", "extra.txt"), "extra\n");
@@ -291,7 +305,10 @@ test("extension execution installs verified output, persists state, cleans stagi
   assert.equal(fs.readFileSync(path.join(root, definition.target), "utf8"), definition.content);
   assert.deepEqual(fs.readdirSync(tempParent), []);
   const state = loadExtensionState(root).extensions[definition.id];
+  assert.equal(state.installed.protocolVersion, 3);
+  assert.equal(state.installed.extensionSpecVersion, 1);
   assert.equal(state.installed.version, "1.0.0");
+  assert.equal(state.lastAttempt.extensionSpecVersion, 1);
   assert.equal(state.lastAttempt.status, "installed");
   assert.equal(executeExtension(root, plan, context(plan)).status, "skipped");
 });
@@ -366,7 +383,9 @@ test("crash and timeout failures are recorded while a batch continues", () => {
   const persisted = loadExtensionState(root);
   assert.equal(persisted.extensions.crashing.installed, null);
   assert.equal(persisted.extensions.crashing.lastAttempt.status, "failed");
+  assert.equal(persisted.extensions.crashing.lastAttempt.extensionSpecVersion, 1);
   assert.equal(persisted.extensions.working.lastAttempt.status, "installed");
+  assert.equal(persisted.extensions.working.lastAttempt.extensionSpecVersion, 1);
 });
 
 test("a result missing an applicable output leaves real targets untouched and records the specific failure", () => {
@@ -374,7 +393,7 @@ test("a result missing an applicable output leaves real targets untouched and re
   const script = [
     'const fs = require("node:fs");',
     'const result = process.argv[process.argv.indexOf("--result") + 1];',
-    'fs.writeFileSync(result, JSON.stringify({ schemaVersion: 1, extension: { id: "example-extension", version: "1.0.0" }, outputs: [] }));',
+    'fs.writeFileSync(result, JSON.stringify({ schemaVersion: 1, extensionSpecVersion: 1, extension: { id: "example-extension", version: "1.0.0" }, outputs: [] }));',
     '',
   ].join("\n");
   const definition = writeExtension(repository, { script, rawScript: true });
@@ -417,7 +436,7 @@ test("upgrade failure restores old artifacts and installed state while recording
   assert.equal(state.lastAttempt.status, "failed");
 });
 
-test("protocol v2 upgrade adds, replaces, and removes every generic output transactionally", () => {
+test("Extension Spec v1 upgrade adds, replaces, and removes every generic output transactionally", () => {
   const repository = temporaryRoot();
   const outputsV1 = [
     { id: "old-file", kind: "file", ownership: "exclusive", target: ".example/old.txt", source: "old.txt" },
@@ -783,6 +802,37 @@ test("legacy installed file, Codex block, and Hook state can be uninstalled with
   assert.equal(loadExtensionState(root).extensions[extensionId], undefined);
 });
 
+test("installed protocol v2 remains readable and uninstallable after Extension Spec versioning", () => {
+  const root = temporaryRoot();
+  const extensionId = "legacy-v2-extension";
+  const target = ".legacy-v2/file.txt";
+  const content = "legacy v2\n";
+  fs.mkdirSync(path.dirname(path.join(root, target)), { recursive: true });
+  fs.writeFileSync(path.join(root, target), content);
+  const state = emptyExtensionState();
+  state.extensions[extensionId] = {
+    installed: {
+      protocolVersion: 2,
+      version: "1.0.0",
+      manifestSha256: "a".repeat(64),
+      packageSha256: "b".repeat(64),
+      artifacts: [{
+        id: "legacy-file",
+        kind: "file",
+        ownership: "exclusive",
+        target,
+        installedSha256: sha256(Buffer.from(content)),
+      }],
+    },
+    lastAttempt: { version: "1.0.0", status: "installed" },
+  };
+  saveExtensionState(root, state);
+
+  assert.equal(loadExtensionState(root).extensions[extensionId].installed.protocolVersion, 2);
+  assert.equal(applyExtensionUninstall(planExtensionUninstall(root, extensionId)).status, "uninstalled");
+  assert.equal(fs.existsSync(path.join(root, target)), false);
+});
+
 test("ext-manifest rejects core claims and duplicate ownership from persisted state", () => {
   const root = temporaryRoot();
   const artifact = { id: "artifact", target: ".example/shared.txt", installedSha256: "a".repeat(64) };
@@ -833,16 +883,16 @@ test("interactive init offers extension names and confirms frozen versions and m
   });
   assert.equal(offered.label, "Extensions (experimental, select any)");
   assert.deepEqual(offered.choices.map((entry) => entry.value), ["openspec-workspace", "zhuiyi-jira-mcp"]);
-  assert.match(offered.choices[0].label, /latest compatible: 1\.0\.0/);
+  assert.match(offered.choices[0].label, /latest supported: 1\.0\.0 · Extension Spec 1/);
   assert.equal(plan.extensions[0].version, "1.0.0");
   assert.match(readyLines.find((line) => line.startsWith("Extensions")), /[a-f0-9]{64}/);
 });
 
-test("interactive extension install lists all valid built-ins and disables incompatible versions", async () => {
+test("interactive extension install lists built-ins and disables unsupported Extension Specs", async () => {
   const repository = temporaryRoot();
-  writeExtension(repository, { id: "alpha", name: "Alpha", codeWorkspace: ">=1.0.0 <2.0.0" });
-  writeExtension(repository, { id: "beta", name: "Beta", codeWorkspace: ">=2.0.0 <3.0.0" });
-  const catalog = discoverExtensions({ extensionsRoot: repository, codeWorkspaceVersion: "1.5.0" });
+  writeExtension(repository, { id: "alpha", name: "Alpha", extensionSpecVersion: 1 });
+  writeExtension(repository, { id: "beta", name: "Beta", extensionSpecVersion: 2 });
+  const catalog = discoverExtensions({ extensionsRoot: repository });
   let intro;
   let offered;
   let closed;

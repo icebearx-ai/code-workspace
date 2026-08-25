@@ -2,13 +2,13 @@
 
 Code Workspace extensions are trusted, versioned packages shipped under `extensions/<id>/<semver>/`. The extension process is fault-isolated, but it is not a security sandbox: bundled extension code runs with the current user's operating-system permissions.
 
-Each version contains `manifest.json`, `init.js`, and any private templates, metadata, or helper code it needs. New packages follow:
+Each version contains `manifest.json`, `init.js`, and any private templates, metadata, or helper code it needs. The current Host explicitly supports Extension Spec v1, defined in English at `spec/extension/v1/specification.en-US.md` and in Chinese at `spec/extension/v1/specification.zh-CN.md`, with these component schemas:
 
-- `schemas/extension-manifest-v2.json`
+- `schemas/extension-manifest-v3.json`
 - `schemas/extension-init-context-v1.json`
 - `schemas/extension-init-result-v1.json`
 
-The static manifest declares identity, Host compatibility, the entry hash and timeout, declarative network hosts, and the maximum output scope. Code Workspace freezes the manifest, entry, and complete extension-version directory digest before confirmation, then verifies all three again before execution.
+The static manifest declares its `extensionSpecVersion`, identity, entry hash and timeout, declarative network hosts, and maximum output scope. The Host executes only explicitly supported specification versions; the Code Workspace product version is not an extension compatibility key. Code Workspace freezes the specification version, manifest, entry, and complete extension-version directory digest before confirmation, then verifies them again before execution.
 
 The Host starts the entry with independent temporary paths:
 
@@ -16,7 +16,7 @@ The Host starts the entry with independent temporary paths:
 node init.js --context <context-file> --output <staging-directory> --result <result-file>
 ```
 
-The context contains only extension identity, Workspace display metadata, and selected tools. It does not expose the real Workspace path. The result contains only the extension identity and `{ id, source }` entries. It must return exactly every manifest output applicable to the selected tools; it cannot redefine target, kind, ownership, selector, or digest.
+The context contains the specification version, extension identity, Workspace display metadata, and selected tools. It does not expose the real Workspace path. The result echoes the same specification version and contains only the extension identity and `{ id, source }` entries. It must return exactly every manifest output applicable to the selected tools; it cannot redefine target, kind, ownership, selector, or digest.
 
 The Host recursively validates staging, rejects undeclared content, path escapes, symbolic links, and special files, and independently computes installed file and directory digests. Extensions never write the real Workspace or installed state directly and never provide uninstall code.
 
@@ -31,9 +31,9 @@ Exclusive targets cannot overlap core-managed paths or another extension's targe
 
 Download protocols, archive formats, package managers, Jira, MCP, and individual Agent products are not public output kinds. An extension may use those details privately to prepare a candidate file or directory in staging. Declarative `networkHosts` are shown in the plan for review; they are not operating-system-level egress enforcement.
 
-The installed manifest is the only installation fact. It records the protocol version, extension version, frozen package and manifest digests, generic output ownership, Host-computed digests, and shared contribution data. Idempotency verifies both this state and the real Workspace. Upgrade handles retained, added, replaced, and removed outputs in one per-extension recoverable transaction. Uninstall reads only installed state, so it still works when the bundled package is absent. Unknown local changes stop upgrade or uninstall; there is no force mode.
+The installed manifest is the only installation fact. New records contain the installed-record version, Extension Spec version, extension version, frozen package and manifest digests, generic output ownership, Host-computed digests, and shared contribution data. Idempotency verifies both this state and the real Workspace. Upgrade handles retained, added, replaced, and removed outputs in one per-extension recoverable transaction. Uninstall reads only installed state, so it still works when the bundled package or execution specification is absent. Unknown local changes stop upgrade or uninstall; there is no force mode.
 
-Previously published protocol-v1 installed records for files, Codex configuration blocks, and Codex Hooks remain readable and uninstallable. They are compatibility state, not new manifest-v2 output kinds.
+Previously published installed protocol-v1/v2 records for files, Codex configuration blocks, and Codex Hooks remain readable and uninstallable. They are compatibility state, not new Extension Spec v1 output kinds.
 
 `init`, `extension install`, and `extension uninstall` share one non-blocking per-Workspace operation lock. A multi-extension install uses one confirmation boundary and an independent transaction per extension; a failure does not stop later extensions, but the overall command reports failure.
 

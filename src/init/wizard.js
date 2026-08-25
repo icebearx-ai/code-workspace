@@ -44,15 +44,15 @@ async function collectInitPlan(root, manifest, options = {}) {
     options.initialTools || ["claude", "codex"]
   );
   const extensionCatalog = options.extensionCatalog || [];
-  const compatibleExtensions = extensionCatalog.filter((entry) => entry.latestCompatible);
+  const supportedExtensions = extensionCatalog.filter((entry) => entry.latestSupported);
   const extensionNames = options.extensions !== undefined
     ? options.extensions
-    : compatibleExtensions.length > 0
+    : supportedExtensions.length > 0
       ? await ui.multiselect(
         "Extensions (experimental, select any)",
-        compatibleExtensions.map((entry) => ({
+        supportedExtensions.map((entry) => ({
           value: entry.id,
-          label: `${entry.name} · latest compatible: ${entry.latestCompatible.version}`,
+          label: `${entry.name} · latest supported: ${entry.latestSupported.version} · Extension Spec ${entry.latestSupported.extensionSpecVersion}`,
         })),
         options.initialExtensions || []
       )
@@ -74,7 +74,7 @@ async function collectInitPlan(root, manifest, options = {}) {
     `Language   ${language}`,
     `Tools      ${tools.length ? tools.join(", ") : "none"}`,
     `Monitor    ${monitor.enable ? monitor.url : "disabled"}`,
-    `Extensions ${extensions.length ? extensions.map((entry) => `${entry.id}@${entry.version} (${entry.manifestSha256})`).join(", ") : "none"}`,
+    `Extensions ${extensions.length ? extensions.map((entry) => `${entry.id}@${entry.version} [Spec ${entry.extensionSpecVersion}] (${entry.manifestSha256})`).join(", ") : "none"}`,
   ]);
   if (existing?.projects?.length) {
     const permissionPlan = planPermissionChanges({
