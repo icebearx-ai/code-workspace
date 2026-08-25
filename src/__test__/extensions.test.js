@@ -85,18 +85,31 @@ function writeExtension(repository, options = {}) {
   const content = options.content || `${id}@${version}\n`;
   const versionRoot = path.join(repository, id, version);
   fs.mkdirSync(versionRoot, { recursive: true });
-  const script = options.script || defaultScript(target, content);
-  fs.writeFileSync(path.join(versionRoot, "init.js"), script);
-  const artifacts = options.artifacts || [{
+  const rawOutputs = options.outputs || options.artifacts || [{
     id: "example-artifact",
     kind: "file",
+    ownership: "exclusive",
     target,
-    output: target,
-    sha256: options.sha256 || sha256(Buffer.from(content)),
+    source: target,
     ...(options.tools ? { tools: options.tools } : {}),
   }];
+  const resultOutputs = rawOutputs.map((output) => ({ id: output.id, source: output.source || output.output || output.target }));
+  const outputs = rawOutputs.map((output) => {
+    const { source, output: legacyOutput, sha256: legacySha256, ...manifestOutput } = output;
+    if (manifestOutput.kind === "file" && manifestOutput.ownership === undefined) manifestOutput.ownership = "exclusive";
+    return manifestOutput;
+  });
+  const body = options.script || defaultScript(resultOutputs[0].source, content);
+  const resultFooter = options.rawScript ? "" : [
+    'const extensionResultIndex = process.argv.indexOf("--result");',
+    'const extensionResultFile = process.argv[extensionResultIndex + 1];',
+    `require("node:fs").writeFileSync(extensionResultFile, JSON.stringify({ schemaVersion: 1, extension: { id: ${JSON.stringify(id)}, version: ${JSON.stringify(version)} }, outputs: ${JSON.stringify(resultOutputs)} }, null, 2) + "\\n");`,
+    "",
+  ].join("\n");
+  const script = `${body}${body.endsWith("\n") ? "" : "\n"}${resultFooter}`;
+  fs.writeFileSync(path.join(versionRoot, "init.js"), script);
   fs.writeFileSync(path.join(versionRoot, "manifest.json"), `${JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
     experimental: true,
     id,
     name: options.name || id,
@@ -105,9 +118,10 @@ function writeExtension(repository, options = {}) {
     entrySha256: sha256(Buffer.from(script)),
     codeWorkspace: options.codeWorkspace || ">=0.1.0-beta.3 <0.2.0",
     timeoutMs: options.timeoutMs || 1000,
-    artifacts,
+    ...(options.networkHosts ? { capabilities: { networkHosts: options.networkHosts } } : {}),
+    outputs,
   }, null, 2)}\n`);
-  return { id, version, target, content, versionRoot };
+  return { id, version, target, content, versionRoot, outputs, resultOutputs };
 }
 
 function context(plan) {
@@ -133,7 +147,7 @@ test("strict SemVer comparison includes prerelease precedence and compatibility 
   assert.throws(() => satisfiesSemverRange("1.0.0", "^1.0.0"), (error) => error.code === "EXTENSION_SEMVER_RANGE_INVALID");
 });
 
-test("discovery selects the highest compatible version and freezes the manifest hash", () => {
+test("discovery selects the highest compatible version and freezes manifest and package hashes", () => {
   const repository = temporaryRoot();
   writeExtension(repository, { version: "1.0.0", codeWorkspace: ">=1.0.0 <2.0.0" });
   writeExtension(repository, { version: "1.2.0", codeWorkspace: ">=1.0.0 <2.0.0" });
@@ -141,12 +155,13 @@ test("discovery selects the highest compatible version and freezes the manifest 
   const catalog = discoverExtensions({ extensionsRoot: repository, codeWorkspaceVersion: "1.5.0" });
   assert.equal(catalog[0].latestCompatible.version, "1.2.0");
   assert.equal(catalog[0].latestCompatible.manifestSha256, sha256(fs.readFileSync(path.join(repository, "example-extension", "1.2.0", "manifest.json"))));
+  assert.match(catalog[0].latestCompatible.packageSha256, /^[a-f0-9]{64}$/);
   assert(Object.isFrozen(catalog[0].latestCompatible.manifest));
 });
 
-test("manifest validation rejects unsafe, duplicate, core-owned, and invalid artifact declarations", () => {
+test("manifest v2 validation rejects unsafe, duplicate, core-owned, and invalid output declarations", () => {
   const base = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     experimental: true,
     id: "example-extension",
     name: "Example",
@@ -155,14 +170,34 @@ test("manifest validation rejects unsafe, duplicate, core-owned, and invalid art
     entrySha256: "b".repeat(64),
     codeWorkspace: ">=0.1.0-beta.3 <0.2.0",
     timeoutMs: 1000,
-    artifacts: [{ id: "artifact-one", kind: "file", target: ".example/one.txt", output: ".example/one.txt", sha256: "a".repeat(64) }],
+    outputs: [{ id: "artifact-one", kind: "file", ownership: "exclusive", target: ".example/one.txt" }],
   };
   for (const target of ["../escape", "/absolute", "dir\\file", "dir//file", "dir/./file"]) {
-    assert.throws(() => validateManifest({ ...base, artifacts: [{ ...base.artifacts[0], target }] }), (error) => error.code === "EXTENSION_ARTIFACT_TARGET_INVALID", target);
+    assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], target }] }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_ARTIFACT_TARGET_INVALID", target);
   }
-  assert.throws(() => validateManifest({ ...base, artifacts: [base.artifacts[0], { ...base.artifacts[0], id: "artifact-two", output: ".example/two.txt" }] }), (error) => error.code === "EXTENSION_TARGET_CONFLICT");
-  assert.throws(() => validateManifest({ ...base, artifacts: [{ ...base.artifacts[0], target: "AGENTS.md" }] }), (error) => error.code === "EXTENSION_CORE_TARGET_FORBIDDEN");
-  assert.throws(() => validateManifest({ ...base, artifacts: [{ ...base.artifacts[0], tools: ["unknown"] }] }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
+  assert.throws(() => validateManifest({ ...base, outputs: [base.outputs[0], { ...base.outputs[0], id: "artifact-two" }] }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_TARGET_CONFLICT");
+  assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], target: "AGENTS.md" }] }, { protectedTargets: new Set(["AGENTS.md"]) }), (error) => error.code === "EXTENSION_CORE_TARGET_FORBIDDEN");
+  assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], tools: ["unknown"] }] }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
+  assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], kind: "remote-archive" }] }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
+  assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], kind: "directory", target: ".code-workspace" }] }), (error) => error.code === "EXTENSION_CORE_TARGET_FORBIDDEN");
+  assert.throws(() => validateManifest({
+    ...base,
+    outputs: [
+      { id: "runtime", kind: "directory", ownership: "exclusive", target: ".example/runtime" },
+      { id: "entry", kind: "file", ownership: "exclusive", target: ".example/runtime/index.js" },
+    ],
+  }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_TARGET_CONFLICT");
+  assert.throws(() => validateManifest({
+    ...base,
+    outputs: [
+      { id: "servers", kind: "json-member", ownership: "shared", target: ".mcp.json", selector: "/mcpServers" },
+      { id: "server", kind: "json-member", ownership: "shared", target: ".mcp.json", selector: "/mcpServers/example" },
+    ],
+  }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_TARGET_CONFLICT");
+  assert.doesNotThrow(() => validateManifest({
+    ...base,
+    outputs: [{ id: "config", kind: "text-block", ownership: "shared", target: ".codex/config.toml", format: "toml" }],
+  }));
 });
 
 test("selection accepts names only and plans reject extension ownership conflicts", () => {
@@ -178,6 +213,16 @@ test("selection accepts names only and plans reject extension ownership conflict
   writeExtension(repository, { id: "beta", target: ".example/shared.txt" });
   const catalog = discoverExtensions({ extensionsRoot: repository });
   assert.throws(() => resolveExtensionPlans(catalog, ["alpha", "beta"], { tools: ["codex"], state: emptyExtensionState() }), (error) => error.code === "EXTENSION_TARGET_CONFLICT");
+
+  const nestedRepository = temporaryRoot();
+  writeExtension(nestedRepository, { id: "parent-owner", outputs: [{ id: "runtime", kind: "directory", ownership: "exclusive", target: ".shared/runtime", source: "runtime" }], script: outputScript({ "runtime/index.js": "parent\n" }) });
+  writeExtension(nestedRepository, { id: "child-owner", target: ".shared/runtime/index.js" });
+  assert.throws(() => resolveExtensionPlans(discoverExtensions({ extensionsRoot: nestedRepository }), ["parent-owner", "child-owner"], { tools: ["codex"], state: emptyExtensionState() }), (error) => error.code === "EXTENSION_TARGET_CONFLICT");
+
+  const jsonRepository = temporaryRoot();
+  writeExtension(jsonRepository, { id: "parent-json", outputs: [{ id: "servers", kind: "json-member", ownership: "shared", target: ".mcp.json", source: "server.json", selector: "/mcpServers" }], script: outputScript({ "server.json": "{}\n" }) });
+  writeExtension(jsonRepository, { id: "child-json", outputs: [{ id: "server", kind: "json-member", ownership: "shared", target: ".mcp.json", source: "server.json", selector: "/mcpServers/example" }], script: outputScript({ "server.json": "{}\n" }) });
+  assert.throws(() => resolveExtensionPlans(discoverExtensions({ extensionsRoot: jsonRepository }), ["parent-json", "child-json"], { tools: ["codex"], state: emptyExtensionState() }), (error) => error.code === "EXTENSION_TARGET_CONFLICT");
 });
 
 test("workspace target validation refuses symbolic-link traversal", (t) => {
@@ -188,22 +233,51 @@ test("workspace target validation refuses symbolic-link traversal", (t) => {
   assert.throws(() => assertSafeWorkspaceTarget(root, "linked/file.txt"), (error) => error.code === "EXTENSION_ARTIFACT_SYMLINK");
 });
 
-test("output verification rejects missing, extra, symlinked, and hash-mismatched files", (t) => {
+test("context and result validation reject identity changes, unknown fields, duplicates, overlaps, and escapes", () => {
+  const repository = temporaryRoot();
+  const definition = writeExtension(repository);
+  const extensionPlan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
+  const invalidContext = { ...context(extensionPlan), workspace: { ...context(extensionPlan).workspace, root: "/secret" } };
+  assert.equal(executeExtension(temporaryRoot(), extensionPlan, invalidContext).code, "EXTENSION_CONTEXT_INVALID");
+
   const root = temporaryRoot();
-  const artifact = { id: "artifact", target: "safe/file.txt", sha256: sha256(Buffer.from("expected\n")) };
-  assert.throws(() => verifyExtensionOutput(root, [artifact]), (error) => error.code === "EXTENSION_ARTIFACT_MISSING");
+  fs.mkdirSync(path.join(root, "one"), { recursive: true });
+  fs.writeFileSync(path.join(root, "one", "file.txt"), "one\n");
+  fs.writeFileSync(path.join(root, "two.txt"), "two\n");
+  const plan = {
+    id: "example-extension",
+    version: "1.0.0",
+    artifacts: [
+      { id: "one", kind: "file", ownership: "exclusive", target: ".example/one.txt" },
+      { id: "two", kind: "file", ownership: "exclusive", target: ".example/two.txt" },
+    ],
+  };
+  const result = (outputs, extension = { id: plan.id, version: plan.version }) => ({ schemaVersion: 1, extension, outputs });
+  assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "unknown", source: "two.txt" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_UNDECLARED");
+  assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "one", source: "two.txt" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_DUPLICATE");
+  assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one" }, { id: "two", source: "one/file.txt" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_DUPLICATE");
+  assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "two", source: "../escape" }]), plan), (error) => error.code === "EXTENSION_ARTIFACT_TARGET_INVALID");
+  assert.throws(() => verifyExtensionOutput(root, result([{ id: "one", source: "one/file.txt" }, { id: "two", source: "two.txt" }], { id: "other-extension", version: "1.0.0" }), plan), (error) => error.code === "EXTENSION_RESULT_IDENTITY_MISMATCH");
+});
+
+test("result and staging verification reject missing, extra, and symlinked outputs while Host computes the digest", (t) => {
+  const root = temporaryRoot();
+  const artifact = { id: "artifact", kind: "file", ownership: "exclusive", target: "safe/file.txt" };
+  const plan = { id: "example-extension", version: "1.0.0", artifacts: [artifact] };
+  const result = { schemaVersion: 1, extension: { id: plan.id, version: plan.version }, outputs: [{ id: artifact.id, source: "safe/file.txt" }] };
+  assert.throws(() => verifyExtensionOutput(root, result, plan), (error) => error.code === "EXTENSION_ARTIFACT_MISSING");
   fs.mkdirSync(path.join(root, "safe"));
   fs.writeFileSync(path.join(root, "safe", "extra.txt"), "extra\n");
-  assert.throws(() => verifyExtensionOutput(root, [artifact]), (error) => error.code === "EXTENSION_ARTIFACT_UNDECLARED");
+  assert.throws(() => verifyExtensionOutput(root, result, plan), (error) => error.code === "EXTENSION_ARTIFACT_UNDECLARED");
   fs.unlinkSync(path.join(root, "safe", "extra.txt"));
-  fs.writeFileSync(path.join(root, "safe", "file.txt"), "wrong\n");
-  assert.throws(() => verifyExtensionOutput(root, [artifact]), (error) => error.code === "EXTENSION_ARTIFACT_HASH_MISMATCH");
+  fs.writeFileSync(path.join(root, "safe", "file.txt"), "actual\n");
+  assert.equal(verifyExtensionOutput(root, result, plan)[0].installedSha256, sha256(Buffer.from("actual\n")));
   fs.unlinkSync(path.join(root, "safe", "file.txt"));
   const outside = path.join(temporaryRoot(), "outside.txt");
   fs.writeFileSync(outside, "expected\n");
   fs.symlinkSync(outside, path.join(root, "safe", "file.txt"));
   t.after(() => fs.unlinkSync(path.join(root, "safe", "file.txt")));
-  assert.throws(() => verifyExtensionOutput(root, [artifact]), (error) => error.code === "EXTENSION_OUTPUT_SYMLINK");
+  assert.throws(() => verifyExtensionOutput(root, result, plan), (error) => error.code === "EXTENSION_OUTPUT_SYMLINK");
 });
 
 test("extension execution installs verified output, persists state, cleans staging, and then skips", () => {
@@ -255,6 +329,25 @@ test("an occupied or locally modified target is never overwritten", () => {
   assert.equal(fs.readFileSync(path.join(root, definition.target), "utf8"), "local edit\n");
 });
 
+test("a directory target that appears while an extension is running is preserved", () => {
+  const repository = temporaryRoot();
+  const outputs = [{ id: "runtime", kind: "directory", ownership: "exclusive", target: ".example/runtime", source: "runtime" }];
+  const definition = writeExtension(repository, { outputs, script: outputScript({ "runtime/index.js": "extension\n" }) });
+  const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
+  const root = temporaryRoot();
+  const result = executeExtension(root, plan, context(plan), {
+    injectFailure(stage) {
+      if (stage === "after-output-verify") {
+        fs.mkdirSync(path.join(root, ".example", "runtime"), { recursive: true });
+        fs.writeFileSync(path.join(root, ".example", "runtime", "user.txt"), "user\n");
+      }
+    },
+  });
+  assert.equal(result.code, "EXTENSION_TARGET_OCCUPIED");
+  assert.equal(fs.readFileSync(path.join(root, ".example", "runtime", "user.txt"), "utf8"), "user\n");
+  assert.equal(fs.existsSync(path.join(root, ".example", "runtime", "index.js")), false);
+});
+
 test("crash and timeout failures are recorded while a batch continues", () => {
   const repository = temporaryRoot();
   writeExtension(repository, { id: "crashing", script: 'process.stderr.write("boom\\n"); process.exit(2);\n' });
@@ -276,15 +369,21 @@ test("crash and timeout failures are recorded while a batch continues", () => {
   assert.equal(persisted.extensions.working.lastAttempt.status, "installed");
 });
 
-test("hash mismatch leaves real targets untouched and records the specific failure", () => {
+test("a result missing an applicable output leaves real targets untouched and records the specific failure", () => {
   const repository = temporaryRoot();
-  const definition = writeExtension(repository, { sha256: "f".repeat(64) });
+  const script = [
+    'const fs = require("node:fs");',
+    'const result = process.argv[process.argv.indexOf("--result") + 1];',
+    'fs.writeFileSync(result, JSON.stringify({ schemaVersion: 1, extension: { id: "example-extension", version: "1.0.0" }, outputs: [] }));',
+    '',
+  ].join("\n");
+  const definition = writeExtension(repository, { script, rawScript: true });
   const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
   const root = temporaryRoot();
   const result = executeExtension(root, plan, context(plan));
-  assert.equal(result.code, "EXTENSION_ARTIFACT_HASH_MISMATCH");
+  assert.equal(result.code, "EXTENSION_ARTIFACT_MISSING");
   assert.equal(fs.existsSync(path.join(root, definition.target)), false);
-  assert.equal(loadExtensionState(root).extensions[definition.id].lastAttempt.code, "EXTENSION_ARTIFACT_HASH_MISMATCH");
+  assert.equal(loadExtensionState(root).extensions[definition.id].lastAttempt.code, "EXTENSION_ARTIFACT_MISSING");
 });
 
 test("upgrade failure restores old artifacts and installed state while recording the new attempt", () => {
@@ -316,6 +415,80 @@ test("upgrade failure restores old artifacts and installed state while recording
   assert.equal(state.installed.version, "0.9.0");
   assert.equal(state.lastAttempt.version, "1.0.0");
   assert.equal(state.lastAttempt.status, "failed");
+});
+
+test("protocol v2 upgrade adds, replaces, and removes every generic output transactionally", () => {
+  const repository = temporaryRoot();
+  const outputsV1 = [
+    { id: "old-file", kind: "file", ownership: "exclusive", target: ".example/old.txt", source: "old.txt" },
+    { id: "runtime", kind: "directory", ownership: "exclusive", target: ".example/runtime", source: "runtime" },
+    { id: "config", kind: "text-block", ownership: "shared", target: ".codex/config.toml", source: "config.toml", format: "toml" },
+    { id: "server", kind: "json-member", ownership: "shared", target: ".mcp.json", source: "server.json", selector: "/mcpServers/example" },
+  ];
+  writeExtension(repository, {
+    version: "1.0.0",
+    outputs: outputsV1,
+    script: outputScript({
+      "old.txt": "old file\n",
+      "runtime/index.js": "runtime one\n",
+      "config.toml": '[mcp_servers.example]\ncommand = "one"\n',
+      "server.json": '{"command":"one"}\n',
+    }),
+  });
+  const planV1 = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), ["example-extension"], { tools: ["codex"], state: emptyExtensionState() })[0];
+  const root = temporaryRoot();
+  fs.mkdirSync(path.join(root, ".codex"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".codex", "config.toml"), 'model = "gpt-5"\n');
+  fs.writeFileSync(path.join(root, ".mcp.json"), '{"custom":true}\n');
+  assert.equal(executeExtension(root, planV1, context(planV1)).status, "installed");
+
+  const outputsV2 = [
+    { id: "new-file", kind: "file", ownership: "exclusive", target: ".example/new.txt", source: "new.txt" },
+    { id: "runtime", kind: "directory", ownership: "exclusive", target: ".example/runtime", source: "runtime" },
+    { id: "config", kind: "text-block", ownership: "shared", target: ".codex/config.toml", source: "config.toml", format: "toml" },
+    { id: "server", kind: "json-member", ownership: "shared", target: ".mcp.json", source: "server.json", selector: "/mcpServers/example" },
+  ];
+  writeExtension(repository, {
+    version: "1.1.0",
+    outputs: outputsV2,
+    script: outputScript({
+      "new.txt": "new file\n",
+      "runtime/index.js": "runtime two\n",
+      "config.toml": '[mcp_servers.example]\ncommand = "two"\n',
+      "server.json": '{"command":"two"}\n',
+    }),
+  });
+  const planV2 = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), ["example-extension"], { tools: ["codex"], state: loadExtensionState(root) })[0];
+  const failed = executeExtension(root, planV2, context(planV2), {
+    injectFailure(stage) {
+      if (stage === "after-state-save") throw new Error("injected v2 failure");
+    },
+  });
+  assert.equal(failed.status, "failed");
+  assert.equal(fs.readFileSync(path.join(root, ".example", "old.txt"), "utf8"), "old file\n");
+  assert.equal(fs.readFileSync(path.join(root, ".example", "runtime", "index.js"), "utf8"), "runtime one\n");
+  assert.match(fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8"), /command = "one"/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8")).mcpServers.example.command, "one");
+  assert.equal(loadExtensionState(root).extensions[planV1.id].installed.version, "1.0.0");
+
+  assert.equal(executeExtension(root, planV2, context(planV2)).status, "installed");
+  assert.equal(fs.existsSync(path.join(root, ".example", "old.txt")), false);
+  assert.equal(fs.readFileSync(path.join(root, ".example", "new.txt"), "utf8"), "new file\n");
+  assert.equal(fs.readFileSync(path.join(root, ".example", "runtime", "index.js"), "utf8"), "runtime two\n");
+  const config = fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8");
+  assert.match(config, /model = "gpt-5"/);
+  assert.match(config, /command = "two"/);
+  assert.doesNotMatch(config, /command = "one"/);
+  const mcp = JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"));
+  assert.equal(mcp.custom, true);
+  assert.equal(mcp.mcpServers.example.command, "two");
+  assert.deepEqual(loadExtensionState(root).extensions[planV2.id].installed.artifacts.map((artifact) => artifact.id), ["new-file", "runtime", "config", "server"]);
+
+  applyExtensionUninstall(planExtensionUninstall(root, planV2.id));
+  assert.equal(fs.existsSync(path.join(root, ".example", "new.txt")), false);
+  assert.equal(fs.existsSync(path.join(root, ".example", "runtime")), false);
+  assert.equal(fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8"), 'model = "gpt-5"\n\n');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8")), { custom: true });
 });
 
 test("postcondition drift is detected before commit and rolled back", () => {
@@ -400,6 +573,18 @@ test("stale frozen manifests fail before executing their entry", () => {
   assert.equal(fs.existsSync(path.join(root, definition.target)), false);
 });
 
+test("stale extension helper files fail before executing the entry", () => {
+  const repository = temporaryRoot();
+  const definition = writeExtension(repository);
+  fs.writeFileSync(path.join(definition.versionRoot, "helper.json"), "{}\n");
+  const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
+  fs.writeFileSync(path.join(definition.versionRoot, "helper.json"), "{\"changed\":true}\n");
+  const root = temporaryRoot();
+  const result = executeExtension(root, plan, context(plan));
+  assert.equal(result.code, "EXTENSION_PLAN_STALE");
+  assert.equal(fs.existsSync(path.join(root, definition.target)), false);
+});
+
 test("stale frozen entries fail before execution and child environments omit parent PWD", () => {
   const repository = temporaryRoot();
   const target = ".example/environment.txt";
@@ -452,40 +637,33 @@ test("tolerant discovery and state inspection isolate extension preparation fail
   assert.equal(stateFailure.failures[0].code, "EXTENSION_STATE_PARSE_FAILED");
 });
 
-test("Host-managed config blocks and Hooks install and uninstall without removing core or user content", () => {
+test("Host-managed text blocks and JSON members install and uninstall without removing user content", () => {
   const repository = temporaryRoot();
   const configOutput = "[mcp_servers.example]\ncommand = \"example\"\n";
-  const hooksOutput = JSON.stringify({
-    schemaVersion: 1,
-    hooks: {
-      SessionStart: [{ matcher: "*", hooks: [{ type: "command", command: "example hook", timeout: 5 }] }],
-    },
-  }, null, 2) + "\n";
-  const outputs = {
+  const serverOutput = JSON.stringify({ command: "node", args: ["server.js"] }, null, 2) + "\n";
+  const staged = {
     "contributions/config.toml": configOutput,
-    "contributions/hooks.json": hooksOutput,
+    "contributions/server.json": serverOutput,
   };
-  const artifacts = [
-    { id: "config", kind: "codex-config-block", output: "contributions/config.toml", sha256: sha256(Buffer.from(configOutput)), tools: ["codex"] },
-    { id: "hooks", kind: "codex-hooks", output: "contributions/hooks.json", sha256: sha256(Buffer.from(hooksOutput)), tools: ["codex"] },
+  const outputs = [
+    { id: "config", kind: "text-block", ownership: "shared", target: ".codex/config.toml", source: "contributions/config.toml", format: "toml", tools: ["codex"] },
+    { id: "server", kind: "json-member", ownership: "shared", target: ".mcp.json", source: "contributions/server.json", selector: "/mcpServers/example", tools: ["codex"] },
   ];
-  const definition = writeExtension(repository, { artifacts, script: outputScript(outputs) });
+  const definition = writeExtension(repository, { outputs, script: outputScript(staged) });
   const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
   const root = temporaryRoot();
   fs.mkdirSync(path.join(root, ".codex"), { recursive: true });
   fs.writeFileSync(path.join(root, ".codex", "config.toml"), "model = \"gpt-5\"\n");
-  const coreHooks = fs.readFileSync(path.resolve(__dirname, "..", "..", "artifacts", "templates", "codex", "hooks.json"));
-  fs.writeFileSync(path.join(root, ".codex", "hooks.json"), coreHooks);
+  fs.writeFileSync(path.join(root, ".mcp.json"), `${JSON.stringify({ project: "example", mcpServers: { other: { command: "other" } } }, null, 2)}\n`);
 
   assert.equal(executeExtension(root, plan, context(plan)).status, "installed");
   const config = fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8");
   assert.match(config, /model = "gpt-5"/);
   assert.match(config, /BEGIN code-workspace-extension:example-extension:config/);
-  const installedHooks = JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"));
-  assert(installedHooks.hooks.UserPromptSubmit);
-  assert(installedHooks.hooks.SessionStart);
-  const managed = installManagedFiles(root, loadInitManifest(), ["codex"], { capabilities: ["monitor"], extensionState: loadExtensionState(root) });
-  assert.equal(managed.find((entry) => entry.target === ".codex/hooks.json").action, "skip");
+  const installedMcp = JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"));
+  assert.equal(installedMcp.project, "example");
+  assert.equal(installedMcp.mcpServers.other.command, "other");
+  assert.equal(installedMcp.mcpServers.example.command, "node");
 
   fs.rmSync(repository, { recursive: true, force: true });
   const uninstallPlan = planExtensionUninstall(root, definition.id);
@@ -494,23 +672,24 @@ test("Host-managed config blocks and Hooks install and uninstall without removin
   const remainingConfig = fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8");
   assert.match(remainingConfig, /model = "gpt-5"/);
   assert.doesNotMatch(remainingConfig, /code-workspace-extension/);
-  const remainingHooks = JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"));
-  assert(remainingHooks.hooks.UserPromptSubmit);
-  assert.equal(remainingHooks.hooks.SessionStart, undefined);
+  const remainingMcp = JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"));
+  assert.equal(remainingMcp.project, "example");
+  assert.equal(remainingMcp.mcpServers.other.command, "other");
+  assert.equal(remainingMcp.mcpServers.example, undefined);
   assert.equal(loadExtensionState(root).extensions[definition.id], undefined);
 });
 
 test("uninstall rejects modified shared contributions and rolls back failures", () => {
   const repository = temporaryRoot();
   const configOutput = "[mcp_servers.example]\ncommand = \"example\"\n";
-  const artifacts = [{ id: "config", kind: "codex-config-block", output: "config.toml", sha256: sha256(Buffer.from(configOutput)), tools: ["codex"] }];
-  const definition = writeExtension(repository, { artifacts, script: outputScript({ "config.toml": configOutput }) });
+  const outputs = [{ id: "config", kind: "text-block", ownership: "shared", target: ".codex/config.toml", source: "config.toml", format: "toml", tools: ["codex"] }];
+  const definition = writeExtension(repository, { outputs, script: outputScript({ "config.toml": configOutput }) });
   const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
   const root = temporaryRoot();
   assert.equal(executeExtension(root, plan, context(plan)).status, "installed");
   const configFile = path.join(root, ".codex", "config.toml");
   fs.writeFileSync(configFile, fs.readFileSync(configFile, "utf8").replace('command = "example"', 'command = "changed"'));
-  assert.throws(() => planExtensionUninstall(root, definition.id), (error) => error.code === "EXTENSION_CONFIG_BLOCK_MODIFIED");
+  assert.throws(() => planExtensionUninstall(root, definition.id), (error) => error.code === "EXTENSION_TEXT_BLOCK_MODIFIED");
   assert(loadExtensionState(root).extensions[definition.id].installed);
 
   fs.writeFileSync(configFile, fs.readFileSync(configFile, "utf8").replace('command = "changed"', 'command = "example"'));
@@ -524,21 +703,84 @@ test("uninstall rejects modified shared contributions and rolls back failures", 
   assert(loadExtensionState(root).extensions[definition.id].installed);
 });
 
-test("uninstall removes an extension-only Hook target", () => {
+test("uninstall removes an extension-only JSON target", () => {
   const repository = temporaryRoot();
-  const hooksOutput = JSON.stringify({
-    schemaVersion: 1,
-    hooks: { Stop: [{ hooks: [{ type: "command", command: "example stop" }] }] },
-  }, null, 2) + "\n";
-  const artifacts = [{ id: "hooks", kind: "codex-hooks", output: "hooks.json", sha256: sha256(Buffer.from(hooksOutput)), tools: ["codex"] }];
-  const definition = writeExtension(repository, { artifacts, script: outputScript({ "hooks.json": hooksOutput }) });
+  const serverOutput = JSON.stringify({ command: "node" }, null, 2) + "\n";
+  const outputs = [{ id: "server", kind: "json-member", ownership: "shared", target: ".mcp.json", source: "server.json", selector: "/mcpServers/example", tools: ["codex"] }];
+  const definition = writeExtension(repository, { outputs, script: outputScript({ "server.json": serverOutput }) });
   const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
   const root = temporaryRoot();
   assert.equal(executeExtension(root, plan, context(plan)).status, "installed");
-  const hooksFile = path.join(root, ".codex", "hooks.json");
-  assert(fs.existsSync(hooksFile));
+  const targetFile = path.join(root, ".mcp.json");
+  assert(fs.existsSync(targetFile));
   applyExtensionUninstall(planExtensionUninstall(root, definition.id));
-  assert.equal(fs.existsSync(hooksFile), false);
+  assert.equal(fs.existsSync(targetFile), false);
+});
+
+test("a second protocol extension installs through existing generic capabilities without Host changes", () => {
+  const repository = temporaryRoot();
+  writeExtension(repository, { id: "first-extension", target: ".example/first.txt", content: "first\n" });
+  writeExtension(repository, {
+    id: "second-extension",
+    outputs: [
+      { id: "runtime", kind: "directory", ownership: "exclusive", target: ".example/second", source: "runtime" },
+      { id: "config", kind: "text-block", ownership: "shared", target: ".codex/config.toml", source: "config.toml", format: "toml" },
+    ],
+    script: outputScript({ "runtime/index.js": "second\n", "config.toml": '[second]\nenabled = true\n' }),
+  });
+  const plans = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), ["first-extension", "second-extension"], { tools: ["codex"], state: emptyExtensionState() });
+  const root = temporaryRoot();
+  const result = runExtensionBatch(root, plans, (plan) => context(plan));
+  assert.deepEqual(result.results.map((entry) => entry.status), ["installed", "installed"]);
+  assert.equal(fs.readFileSync(path.join(root, ".example", "first.txt"), "utf8"), "first\n");
+  assert.equal(fs.readFileSync(path.join(root, ".example", "second", "index.js"), "utf8"), "second\n");
+  assert.match(fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8"), /BEGIN code-workspace-extension:second-extension:config/);
+});
+
+test("legacy installed file, Codex block, and Hook state can be uninstalled without the extension package", () => {
+  const root = temporaryRoot();
+  const extensionId = "legacy-extension";
+  const fileTarget = ".legacy/file.txt";
+  const fileContent = "legacy file\n";
+  const configFragment = "[legacy]\nenabled = true\n";
+  const managedHook = { matcher: "Bash", hooks: [{ type: "command", command: "echo managed" }] };
+  const userHook = { matcher: "Read", hooks: [{ type: "command", command: "echo user" }] };
+  fs.mkdirSync(path.join(root, ".legacy"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".codex"), { recursive: true });
+  fs.writeFileSync(path.join(root, fileTarget), fileContent);
+  fs.writeFileSync(path.join(root, ".codex", "config.toml"), [
+    'model = "gpt-5"',
+    '',
+    `# BEGIN code-workspace-extension:${extensionId}:legacy-config`,
+    configFragment.trimEnd(),
+    `# END code-workspace-extension:${extensionId}:legacy-config`,
+    '',
+  ].join("\n"));
+  fs.writeFileSync(path.join(root, ".codex", "hooks.json"), `${JSON.stringify({ hooks: { PreToolUse: [userHook, managedHook] } }, null, 2)}\n`);
+  const state = emptyExtensionState();
+  state.extensions[extensionId] = {
+    installed: {
+      version: "1.0.0",
+      manifestSha256: "a".repeat(64),
+      artifacts: [
+        { id: "legacy-file", target: fileTarget, installedSha256: sha256(Buffer.from(fileContent)) },
+        { id: "legacy-config", kind: "codex-config-block", target: ".codex/config.toml", installedSha256: sha256(Buffer.from(configFragment)) },
+        { id: "legacy-hooks", kind: "codex-hooks", target: ".codex/hooks.json", installedSha256: "b".repeat(64), payload: { schemaVersion: 1, hooks: { PreToolUse: [managedHook] } } },
+      ],
+    },
+    lastAttempt: { version: "1.0.0", status: "installed" },
+  };
+  saveExtensionState(root, state);
+
+  const plan = planExtensionUninstall(root, extensionId);
+  assert.equal(plan.action, "remove");
+  assert.equal(applyExtensionUninstall(plan).status, "uninstalled");
+  assert.equal(fs.existsSync(path.join(root, fileTarget)), false);
+  const config = fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8");
+  assert.match(config, /model = "gpt-5"/);
+  assert.doesNotMatch(config, /legacy-extension|\[legacy\]/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8")).hooks.PreToolUse, [userHook]);
+  assert.equal(loadExtensionState(root).extensions[extensionId], undefined);
 });
 
 test("ext-manifest rejects core claims and duplicate ownership from persisted state", () => {
@@ -590,7 +832,7 @@ test("interactive init offers extension names and confirms frozen versions and m
     extensionState: emptyExtensionState(),
   });
   assert.equal(offered.label, "Extensions (experimental, select any)");
-  assert.deepEqual(offered.choices.map((entry) => entry.value), ["openspec-workspace"]);
+  assert.deepEqual(offered.choices.map((entry) => entry.value), ["openspec-workspace", "zhuiyi-jira-mcp"]);
   assert.match(offered.choices[0].label, /latest compatible: 1\.0\.0/);
   assert.equal(plan.extensions[0].version, "1.0.0");
   assert.match(readyLines.find((line) => line.startsWith("Extensions")), /[a-f0-9]{64}/);
@@ -699,7 +941,7 @@ test("CLI reinstalls an uninstalled extension and repeated install is idempotent
 
 test("standalone extension install preserves ordered best-effort results and fails when one extension fails", async () => {
   const repository = temporaryRoot();
-  writeExtension(repository, { id: "broken", sha256: "0".repeat(64) });
+  writeExtension(repository, { id: "broken", rawScript: true, script: 'process.stderr.write("broken\\n"); process.exit(2);\n' });
   const working = writeExtension(repository, { id: "working" });
   const root = temporaryRoot();
   assert.equal(runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]).status, 0);
@@ -714,7 +956,7 @@ test("standalone extension install preserves ordered best-effort results and fai
   assert.deepEqual(result.data.requested, ["broken", "working"]);
   assert.deepEqual(result.data.results.map((entry) => entry.status), ["failed", "installed"]);
   assert.deepEqual(result.data.summary, { total: 2, succeeded: 1, skipped: 0, failed: 1 });
-  assert.equal(result.diagnostics[0].code, "EXTENSION_ARTIFACT_HASH_MISMATCH");
+  assert.equal(result.diagnostics[0].code, "EXTENSION_INIT_FAILED");
   assert.equal(fs.existsSync(path.join(root, working.target)), true);
 });
 

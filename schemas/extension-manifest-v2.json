@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://icebearx.ai/code-workspace/extension-manifest-v2.json",
+  "title": "Code Workspace built-in extension manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "codeWorkspace", "timeoutMs", "outputs"],
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "experimental": { "const": true },
+    "id": { "$ref": "#/$defs/id" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "version": { "type": "string" },
+    "entry": { "const": "init.js" },
+    "entrySha256": { "$ref": "#/$defs/sha256" },
+    "codeWorkspace": { "type": "string", "minLength": 1 },
+    "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 300000 },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "networkHosts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/hostname" }
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "ownership", "target"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "kind": { "enum": ["file", "directory", "text-block", "json-member"] },
+          "ownership": { "enum": ["exclusive", "shared"] },
+          "target": { "$ref": "#/$defs/relativePath" },
+          "selector": { "type": "string", "pattern": "^/(?:[^~/]|~[01])+(?:/(?:[^~/]|~[01])+)*$" },
+          "format": { "enum": ["text", "toml"] },
+          "tools": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["claude", "codex"] }
+          }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "kind": { "enum": ["file", "directory"] } } },
+            "then": { "properties": { "ownership": { "const": "exclusive" } } }
+          },
+          {
+            "if": { "properties": { "kind": { "enum": ["text-block", "json-member"] } } },
+            "then": { "properties": { "ownership": { "const": "shared" } } }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "json-member" } } },
+            "then": { "required": ["selector"] },
+            "else": { "properties": { "selector": false } }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "text-block" } } },
+            "then": { "properties": { "format": { "enum": ["text", "toml"] } } },
+            "else": { "properties": { "format": false } }
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "hostname": { "type": "string", "pattern": "^(?=.{1,253}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$" },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+$"
+    }
+  }
+}

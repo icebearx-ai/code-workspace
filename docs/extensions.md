@@ -1,31 +1,64 @@
 # Built-in Extension Contract
 
-Code Workspace extensions are trusted, versioned packages shipped inside the npm package under `extensions/<id>/<semver>/`. They are not downloaded from external sources and are not a security sandbox.
+Code Workspace extensions are trusted, versioned packages shipped under `extensions/<id>/<semver>/`. The extension process is fault-isolated, but it is not a security sandbox: bundled extension code runs with the current user's operating-system permissions.
 
-Each version contains `manifest.json` and `init.js`. The manifest follows `schemas/extension-manifest-v1.json`. Code Workspace freezes both file hashes before confirmation and verifies them again before execution.
+Each version contains `manifest.json`, `init.js`, and any private templates, metadata, or helper code it needs. New packages follow:
 
-The Host starts the entry with:
+- `schemas/extension-manifest-v2.json`
+- `schemas/extension-init-context-v1.json`
+- `schemas/extension-init-result-v1.json`
+
+The static manifest declares identity, Host compatibility, the entry hash and timeout, declarative network hosts, and the maximum output scope. Code Workspace freezes the manifest, entry, and complete extension-version directory digest before confirmation, then verifies all three again before execution.
+
+The Host starts the entry with independent temporary paths:
 
 ```text
-node init.js --context <json-file> --output <empty-directory>
+node init.js --context <context-file> --output <staging-directory> --result <result-file>
 ```
 
-The context contains only schema version, extension identity, Workspace display identity/language, and selected tools. The child receives a small environment allowlist and never receives the real Workspace path through the contract.
+The context contains only extension identity, Workspace display metadata, and selected tools. It does not expose the real Workspace path. The result contains only the extension identity and `{ id, source }` entries. It must return exactly every manifest output applicable to the selected tools; it cannot redefine target, kind, ownership, selector, or digest.
 
-The entry writes exactly the selected artifacts to their declared `output` paths. `file` defaults `output` to `target`; shared artifact kinds require an explicit output. Every output must be a regular file with the declared SHA-256.
+The Host recursively validates staging, rejects undeclared content, path escapes, symbolic links, and special files, and independently computes installed file and directory digests. Extensions never write the real Workspace or installed state directly and never provide uninstall code.
 
-Supported artifact kinds:
+## Generic output kinds
 
-- `file`: an extension-owned Workspace-relative file. It cannot target a core-managed or shared Host target.
-- `codex-config-block`: a TOML fragment installed inside stable extension markers in `.codex/config.toml`. The Host preserves content outside the block and validates the complete TOML document.
-- `codex-hooks`: a JSON Hook fragment merged into `.codex/hooks.json`. The Host preserves unrelated hooks and stores the normalized contribution for upgrades and uninstall.
+- `file`: one extension-owned Workspace-relative regular file.
+- `directory`: one extension-owned Workspace-relative directory tree containing only regular files and directories.
+- `text-block`: a Host-marked fragment in a shared text file. `format: "toml"` validates both the fragment and the complete composed document.
+- `json-member`: one JSON value owned at a declared JSON Pointer in a shared object document.
 
-Extensions never write the real Workspace directly and never provide uninstall code. The Host owns planning, conflicts, transactions, verification, state, rollback, and removal.
+Exclusive targets cannot overlap core-managed paths or another extension's targets. Shared text blocks can coexist in the same text target. JSON member ownership rejects equal or parent/child selectors. The Host preserves user, core, and other extension content during install, upgrade, rollback, and uninstall.
 
-`code-w extension install <id> --yes` installs or upgrades the highest compatible bundled version without rerunning core Workspace initialization. It accepts multiple ids. Without ids, an interactive TTY lists all valid bundled extensions for multiselect; ESC or an empty selection exits without changes. JSON, non-TTY, and `--yes` calls require at least one id. A batch uses one confirmation boundary and an independent transaction per extension; failures do not stop later extensions but make the standalone install command fail.
+Download protocols, archive formats, package managers, Jira, MCP, and individual Agent products are not public output kinds. An extension may use those details privately to prepare a candidate file or directory in staging. Declarative `networkHosts` are shown in the plan for review; they are not operating-system-level egress enforcement.
 
-`code-w extension uninstall <id> --yes` removes an installed extension from recorded state. It works even when the bundled extension version is no longer present. Unknown local changes stop uninstall; the initial contract intentionally has no force mode.
+The installed manifest is the only installation fact. It records the protocol version, extension version, frozen package and manifest digests, generic output ownership, Host-computed digests, and shared contribution data. Idempotency verifies both this state and the real Workspace. Upgrade handles retained, added, replaced, and removed outputs in one per-extension recoverable transaction. Uninstall reads only installed state, so it still works when the bundled package is absent. Unknown local changes stop upgrade or uninstall; there is no force mode.
 
-Init, install, and uninstall share one per-Workspace operation lock so they cannot concurrently change extension artifacts or state.
+Previously published protocol-v1 installed records for files, Codex configuration blocks, and Codex Hooks remain readable and uninstallable. They are compatibility state, not new manifest-v2 output kinds.
 
-Stable ownership keys are the extension id plus artifact id. Artifact ids and output paths must remain stable across compatible upgrades when they represent the same logical contribution.
+`init`, `extension install`, and `extension uninstall` share one non-blocking per-Workspace operation lock. A multi-extension install uses one confirmation boundary and an independent transaction per extension; a failure does not stop later extensions, but the overall command reports failure.
+
+## Zhuiyi Jira MCP
+
+Install it with:
+
+```bash
+code-w extension install zhuiyi-jira-mcp --yes
+```
+
+The Jira extension privately downloads the pinned Gitee release, verifies its fixed SHA-256, safely extracts it, and validates the npm package name, version, and `dist/index.js` entry inside staging. The archive already contains `dist` and runtime dependencies; initialization never runs `npm install`, `npm ci`, a build, or an archive script.
+
+After validation, the Host installs only generic outputs:
+
+```text
+.code-workspace/extensions/zhuiyi-jira-mcp/0.1.0/   # directory
+.codex/config.toml                                  # text-block when Codex is selected
+.mcp.json#/mcpServers/zhuiyi-jira                   # json-member when Claude is selected
+```
+
+The generated configuration contains non-secret defaults only. It never persists a Jira cookie, token, email, or password; provide credentials in the environment that launches the Agent, for example:
+
+```bash
+export JIRA_COOKIE='JSESSIONID=...; atlassian.xsrf.token=...'
+```
+
+Downloaded attachments default to `.jira-attachments/` in the Workspace. They are runtime user data, not installation artifacts, and are retained when the extension is upgraded or uninstalled.

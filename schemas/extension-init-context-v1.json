@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://icebearx.ai/code-workspace/extension-init-context-v1.json",
+  "title": "Code Workspace extension init context v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "extension", "workspace", "tools"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "uuid", "language"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "uuid": { "type": "string", "minLength": 1 },
+        "language": { "type": "string", "minLength": 1 }
+      }
+    },
+    "tools": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["claude", "codex"] }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" }
+  }
+}

@@ -3,12 +3,20 @@ const path = require("node:path");
 
 const TOML = require("@iarna/toml");
 
+const { directoryDigest } = require("./directory-digest");
 const { WorkspaceError } = require("./errors");
 const { sha256 } = require("./fs");
+const {
+  CODEX_CONFIG_TARGET,
+  CODEX_HOOKS_TARGET,
+  LEGACY_ARTIFACT_KINDS,
+  composeHookContent,
+  legacyArtifactsCurrent,
+  planLegacyArtifactTransition,
+  targetForLegacyArtifact,
+} = require("./extension-artifacts-legacy");
 
-const CODEX_CONFIG_TARGET = ".codex/config.toml";
-const CODEX_HOOKS_TARGET = ".codex/hooks.json";
-const ARTIFACT_KINDS = new Set(["file", "codex-config-block", "codex-hooks"]);
+const ARTIFACT_KINDS = new Set(["file", "directory", "text-block", "json-member"]);
 
 function artifactError(code, message, details = {}) {
   return new WorkspaceError(code, message, details);
@@ -25,241 +33,212 @@ function canonicalJson(value) {
 }
 
 function targetForArtifact(artifact) {
-  if (artifact.kind === "codex-config-block") return CODEX_CONFIG_TARGET;
-  if (artifact.kind === "codex-hooks") return CODEX_HOOKS_TARGET;
-  return artifact.target;
+  return LEGACY_ARTIFACT_KINDS.has(artifact.kind) ? targetForLegacyArtifact(artifact) : artifact.target;
 }
 
-function configMarkers(extensionId, artifactId) {
+function textMarkers(extensionId, artifactId) {
   return {
     start: `# BEGIN code-workspace-extension:${extensionId}:${artifactId}`,
     end: `# END code-workspace-extension:${extensionId}:${artifactId}`,
   };
 }
 
-function normalizeConfigFragment(content, artifact) {
+function normalizeTextFragment(content, artifact) {
   const text = Buffer.isBuffer(content) ? content.toString("utf8") : String(content);
   if (!text.trim() || !text.endsWith("\n") || text.includes("# BEGIN code-workspace-extension:") || text.includes("# END code-workspace-extension:")) {
-    throw artifactError("EXTENSION_CONFIG_BLOCK_INVALID", `Extension config block ${artifact.id} must be non-empty, newline-terminated TOML without Host markers`, { artifact: artifact.id });
+    throw artifactError("EXTENSION_TEXT_BLOCK_INVALID", `Extension text block ${artifact.id} must be non-empty, newline-terminated text without Host markers`, { artifact: artifact.id });
   }
-  try {
-    TOML.parse(text);
-  } catch (error) {
-    throw artifactError("EXTENSION_CONFIG_BLOCK_INVALID", `Extension config block ${artifact.id} is invalid TOML: ${error.message}`, { artifact: artifact.id });
+  if ((artifact.format || "text") === "toml") {
+    try { TOML.parse(text); } catch (error) { throw artifactError("EXTENSION_TEXT_BLOCK_INVALID", `Extension text block ${artifact.id} is invalid TOML: ${error.message}`, { artifact: artifact.id }); }
   }
   return text;
 }
 
-function configBlock(extensionId, artifactId, fragment) {
-  const markers = configMarkers(extensionId, artifactId);
+function textBlock(extensionId, artifactId, fragment) {
+  const markers = textMarkers(extensionId, artifactId);
   return `${markers.start}\n${fragment}${markers.end}\n`;
 }
 
-function findConfigBlock(text, extensionId, artifactId) {
-  const markers = configMarkers(extensionId, artifactId);
+function findTextBlock(text, extensionId, artifactId) {
+  const markers = textMarkers(extensionId, artifactId);
   const start = text.indexOf(`${markers.start}\n`);
   if (start < 0) return null;
   const contentStart = start + markers.start.length + 1;
   const end = text.indexOf(markers.end, contentStart);
   if (end < 0 || text.indexOf(`${markers.start}\n`, contentStart) >= 0) {
-    throw artifactError("EXTENSION_CONFIG_BLOCK_MODIFIED", `Extension config block markers are invalid for ${extensionId}/${artifactId}`, { extension: extensionId, artifact: artifactId });
+    throw artifactError("EXTENSION_TEXT_BLOCK_MODIFIED", `Extension text block markers are invalid for ${extensionId}/${artifactId}`, { extension: extensionId, artifact: artifactId });
   }
   const after = end + markers.end.length;
-  const blockEnd = text[after] === "\n" ? after + 1 : after;
-  return { start, end: blockEnd, fragment: text.slice(contentStart, end) };
+  return { start, end: text[after] === "\n" ? after + 1 : after, fragment: text.slice(contentStart, end) };
 }
 
-function removeConfigBlock(text, extensionId, artifact) {
-  const found = findConfigBlock(text, extensionId, artifact.id);
-  if (!found) throw artifactError("EXTENSION_CONFIG_BLOCK_MODIFIED", `Installed extension config block is missing: ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id });
-  const actualSha256 = sha256(Buffer.from(found.fragment));
-  if (actualSha256 !== artifact.installedSha256) {
-    throw artifactError("EXTENSION_CONFIG_BLOCK_MODIFIED", `Installed extension config block contains local changes: ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id, expectedSha256: artifact.installedSha256, actualSha256 });
+function removeTextBlock(text, extensionId, artifact) {
+  const found = findTextBlock(text, extensionId, artifact.id);
+  if (!found || sha256(Buffer.from(found.fragment)) !== artifact.installedSha256) {
+    throw artifactError("EXTENSION_TEXT_BLOCK_MODIFIED", `Installed extension text block contains local changes: ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id, target: artifact.target });
   }
   return `${text.slice(0, found.start)}${text.slice(found.end)}`;
 }
 
-function validateHookEntry(entry, event, artifact) {
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw artifactError("EXTENSION_HOOKS_INVALID", `Invalid Hook entry for ${event}`, { artifact: artifact.id, event });
-  if (entry.matcher !== undefined && typeof entry.matcher !== "string") throw artifactError("EXTENSION_HOOKS_INVALID", `Invalid Hook matcher for ${event}`, { artifact: artifact.id, event });
-  if (!Array.isArray(entry.hooks) || entry.hooks.length === 0) throw artifactError("EXTENSION_HOOKS_INVALID", `Hook entry for ${event} must contain hooks`, { artifact: artifact.id, event });
-  for (const hook of entry.hooks) {
-    if (!hook || typeof hook !== "object" || Array.isArray(hook) || hook.type !== "command" || typeof hook.command !== "string" || !hook.command.trim()) {
-      throw artifactError("EXTENSION_HOOKS_INVALID", `Only non-empty command Hooks are supported for ${event}`, { artifact: artifact.id, event });
-    }
-    if (hook.timeout !== undefined && (!Number.isInteger(hook.timeout) || hook.timeout < 1 || hook.timeout > 300)) {
-      throw artifactError("EXTENSION_HOOKS_INVALID", `Hook timeout for ${event} must be an integer from 1 to 300`, { artifact: artifact.id, event });
-    }
+function decodePointer(selector) {
+  if (typeof selector !== "string" || !selector.startsWith("/") || selector === "/") {
+    throw artifactError("EXTENSION_JSON_SELECTOR_INVALID", `Invalid JSON member selector: ${selector || "<missing>"}`, { selector: selector || null });
+  }
+  return selector.slice(1).split("/").map((segment) => {
+    if (!segment || /~(?![01])/.test(segment)) throw artifactError("EXTENSION_JSON_SELECTOR_INVALID", `Invalid JSON member selector: ${selector}`, { selector });
+    return segment.replace(/~1/g, "/").replace(/~0/g, "~");
+  });
+}
+
+function readJsonDocument(file) {
+  if (!fs.existsSync(file)) return {};
+  try {
+    const value = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("document root must be an object");
+    return structuredClone(value);
+  } catch (error) {
+    throw artifactError("EXTENSION_JSON_TARGET_INVALID", `Cannot parse shared JSON target ${file}: ${error.message}`, { file });
   }
 }
 
-function normalizeHookFragment(content, artifact) {
-  let value;
-  try {
-    value = JSON.parse(Buffer.isBuffer(content) ? content.toString("utf8") : String(content));
-  } catch (error) {
-    throw artifactError("EXTENSION_HOOKS_INVALID", `Cannot parse Hook fragment ${artifact.id}: ${error.message}`, { artifact: artifact.id });
-  }
-  if (value?.schemaVersion !== 1 || !value.hooks || typeof value.hooks !== "object" || Array.isArray(value.hooks)) {
-    throw artifactError("EXTENSION_HOOKS_INVALID", `Hook fragment ${artifact.id} must use schemaVersion 1 and a hooks object`, { artifact: artifact.id });
-  }
-  const hooks = {};
-  for (const event of Object.keys(value.hooks).sort()) {
-    if (!/^[A-Za-z][A-Za-z0-9]*$/.test(event) || !Array.isArray(value.hooks[event]) || value.hooks[event].length === 0) {
-      throw artifactError("EXTENSION_HOOKS_INVALID", `Invalid Hook event ${event}`, { artifact: artifact.id, event });
+function removeJsonMember(document, extensionId, artifact) {
+  const segments = decodePointer(artifact.selector);
+  const parents = [];
+  let current = document;
+  for (const segment of segments.slice(0, -1)) {
+    if (!current[segment] || typeof current[segment] !== "object" || Array.isArray(current[segment])) {
+      throw artifactError("EXTENSION_JSON_MEMBER_MODIFIED", `Installed JSON member is missing: ${artifact.selector}`, { extension: extensionId, artifact: artifact.id, selector: artifact.selector });
     }
-    hooks[event] = value.hooks[event].map((entry) => {
-      validateHookEntry(entry, event, artifact);
-      return canonicalize(entry);
-    });
+    parents.push([current, segment]);
+    current = current[segment];
   }
-  return { schemaVersion: 1, hooks };
+  const key = segments.at(-1);
+  if (!Object.prototype.hasOwnProperty.call(current, key) || canonicalJson(current[key]) !== canonicalJson(artifact.payload)) {
+    throw artifactError("EXTENSION_JSON_MEMBER_MODIFIED", `Installed JSON member contains local changes: ${artifact.selector}`, { extension: extensionId, artifact: artifact.id, selector: artifact.selector });
+  }
+  delete current[key];
+  for (const [parent, segment] of parents.reverse()) {
+    const value = parent[segment];
+    if (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) delete parent[segment];
+    else break;
+  }
+}
+
+function addJsonMember(document, extensionId, artifact) {
+  const segments = decodePointer(artifact.selector);
+  let current = document;
+  for (const segment of segments.slice(0, -1)) {
+    if (current[segment] === undefined) current[segment] = {};
+    if (!current[segment] || typeof current[segment] !== "object" || Array.isArray(current[segment])) {
+      throw artifactError("EXTENSION_JSON_MEMBER_CONFLICT", `JSON selector parent is not an object: ${artifact.selector}`, { extension: extensionId, artifact: artifact.id, selector: artifact.selector });
+    }
+    current = current[segment];
+  }
+  const key = segments.at(-1);
+  if (Object.prototype.hasOwnProperty.call(current, key)) {
+    throw artifactError("EXTENSION_JSON_MEMBER_CONFLICT", `JSON member already exists: ${artifact.selector}`, { extension: extensionId, artifact: artifact.id, selector: artifact.selector });
+  }
+  current[key] = structuredClone(artifact.payload);
 }
 
 function installedRecord(artifact, verified) {
-  const target = targetForArtifact(artifact);
-  if (artifact.kind === "codex-config-block") {
-    normalizeConfigFragment(verified.content, artifact);
-    return { id: artifact.id, kind: artifact.kind, target, installedSha256: verified.installedSha256 };
+  const base = {
+    id: artifact.id,
+    kind: artifact.kind,
+    ownership: artifact.ownership,
+    target: artifact.target,
+    installedSha256: verified.installedSha256,
+  };
+  if (artifact.kind === "text-block") return { ...base, format: artifact.format || "text" };
+  if (artifact.kind === "json-member") {
+    let payload;
+    try { payload = JSON.parse(verified.content.toString("utf8")); } catch (error) { throw artifactError("EXTENSION_JSON_MEMBER_INVALID", `Cannot parse JSON contribution ${artifact.id}: ${error.message}`, { artifact: artifact.id }); }
+    return { ...base, selector: artifact.selector, payload: canonicalize(payload) };
   }
-  if (artifact.kind === "codex-hooks") {
-    const payload = normalizeHookFragment(verified.content, artifact);
-    return { id: artifact.id, kind: artifact.kind, target, installedSha256: verified.installedSha256, payload };
-  }
-  return { id: artifact.id, kind: "file", target, installedSha256: verified.installedSha256 };
+  return base;
 }
 
-function readText(file) {
-  return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+function artifactsOfKind(installed, kind) {
+  return (installed?.artifacts || []).filter((artifact) => (artifact.kind || "file") === kind);
 }
 
-function readHooks(file) {
-  if (!fs.existsSync(file)) return { hooks: {} };
-  try {
-    const value = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (!value || typeof value !== "object" || Array.isArray(value) || !value.hooks || typeof value.hooks !== "object" || Array.isArray(value.hooks)) throw new Error("hooks must be an object");
-    return structuredClone(value);
-  } catch (error) {
-    throw artifactError("EXTENSION_HOOKS_TARGET_INVALID", `Cannot parse ${CODEX_HOOKS_TARGET}: ${error.message}`, { target: CODEX_HOOKS_TARGET });
-  }
+function mergeTransition(target, source) {
+  for (const [file, content] of source.writes) target.writes.set(file, content);
+  for (const file of source.removes) target.removes.add(file);
 }
 
-function hookArtifacts(state) {
-  const entries = [];
-  for (const [extensionId, value] of Object.entries(state.extensions || {})) {
-    for (const artifact of value.installed?.artifacts || []) {
-      if (artifact.kind === "codex-hooks") entries.push({ extensionId, artifact });
-    }
-  }
-  return entries.sort((left, right) => left.extensionId.localeCompare(right.extensionId) || left.artifact.id.localeCompare(right.artifact.id));
-}
-
-function removeHookContribution(document, extensionId, artifact) {
-  for (const [event, entries] of Object.entries(artifact.payload?.hooks || {})) {
-    const current = document.hooks[event];
-    if (!Array.isArray(current)) throw artifactError("EXTENSION_HOOKS_MODIFIED", `Installed Hook contribution is missing for ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id, event });
-    for (const expected of entries) {
-      const matches = current.map((entry, index) => canonicalJson(entry) === canonicalJson(expected) ? index : -1).filter((index) => index >= 0);
-      if (matches.length !== 1) throw artifactError("EXTENSION_HOOKS_MODIFIED", `Installed Hook contribution is missing or ambiguous for ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id, event });
-      current.splice(matches[0], 1);
-    }
-    if (current.length === 0) delete document.hooks[event];
-  }
-}
-
-function addHookContribution(document, extensionId, artifact) {
-  for (const [event, entries] of Object.entries(artifact.payload?.hooks || {})) {
-    const current = document.hooks[event] ||= [];
-    for (const entry of entries) {
-      if (current.some((existing) => canonicalJson(existing) === canonicalJson(entry))) {
-        throw artifactError("EXTENSION_HOOK_CONFLICT", `Hook contribution conflicts for ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id, event });
-      }
-      current.push(structuredClone(entry));
-    }
-  }
-}
-
-function composeHooks(root, previousState, nextState) {
-  const file = path.join(root, CODEX_HOOKS_TARGET);
-  const document = readHooks(file);
-  for (const { extensionId, artifact } of hookArtifacts(previousState)) removeHookContribution(document, extensionId, artifact);
-  for (const { extensionId, artifact } of hookArtifacts(nextState)) addHookContribution(document, extensionId, artifact);
-  const emptyOwnedDocument = Object.keys(document.hooks).length === 0 && Object.keys(document).every((key) => key === "hooks");
-  const content = emptyOwnedDocument ? null : `${JSON.stringify(document, null, 2)}\n`;
-  return { file, content };
-}
-
-function composeHookContent(baseContent, state) {
-  let document;
-  try {
-    document = JSON.parse(Buffer.isBuffer(baseContent) ? baseContent.toString("utf8") : String(baseContent));
-  } catch (error) {
-    throw artifactError("EXTENSION_HOOKS_TARGET_INVALID", `Cannot parse core Hook content: ${error.message}`, { target: CODEX_HOOKS_TARGET });
-  }
-  for (const { extensionId, artifact } of hookArtifacts(state)) addHookContribution(document, extensionId, artifact);
-  return Buffer.from(`${JSON.stringify(document, null, 2)}\n`);
-}
-
-function fileArtifacts(installed) {
-  return (installed?.artifacts || []).filter((artifact) => (artifact.kind || "file") === "file");
-}
-
-function configArtifacts(installed) {
-  return (installed?.artifacts || []).filter((artifact) => artifact.kind === "codex-config-block");
-}
-
-function hooksArtifacts(installed) {
-  return (installed?.artifacts || []).filter((artifact) => artifact.kind === "codex-hooks");
-}
-
-function planArtifactTransition(root, extensionId, previousInstalled, nextInstalled, previousState, nextState, verifiedById = new Map()) {
+function planFileTransition(root, extensionId, previousInstalled, nextInstalled, verifiedById) {
   const writes = new Map();
   const removes = new Set();
-  const previousFiles = new Map(fileArtifacts(previousInstalled).map((artifact) => [artifact.target, artifact]));
-  const nextFiles = new Map(fileArtifacts(nextInstalled).map((artifact) => [artifact.target, artifact]));
-
-  for (const [target, artifact] of previousFiles) {
+  const previous = new Map(artifactsOfKind(previousInstalled, "file").map((artifact) => [artifact.target, artifact]));
+  const next = new Map(artifactsOfKind(nextInstalled, "file").map((artifact) => [artifact.target, artifact]));
+  for (const [target, artifact] of previous) {
     const file = path.join(root, ...target.split("/"));
     if (!fs.existsSync(file) || sha256(fs.readFileSync(file)) !== artifact.installedSha256) {
       throw artifactError("EXTENSION_ARTIFACT_MODIFIED", `Installed extension artifact contains local changes: ${target}`, { extension: extensionId, target });
     }
-    if (!nextFiles.has(target)) removes.add(file);
+    if (!next.has(target)) removes.add(file);
   }
-  for (const [target, artifact] of nextFiles) {
+  for (const [target, artifact] of next) {
     const file = path.join(root, ...target.split("/"));
-    if (fs.existsSync(file) && !previousFiles.has(target)) throw artifactError("EXTENSION_TARGET_OCCUPIED", `Extension target already exists and is not owned by ${extensionId}: ${target}`, { extension: extensionId, target });
+    if (fs.existsSync(file) && !previous.has(target)) throw artifactError("EXTENSION_TARGET_OCCUPIED", `Extension target already exists and is not owned by ${extensionId}: ${target}`, { extension: extensionId, target });
     const verified = verifiedById.get(artifact.id);
-    if (!verified) throw artifactError("EXTENSION_ARTIFACT_MISSING", `Missing verified file artifact ${artifact.id}`, { extension: extensionId, artifact: artifact.id });
+    if (!verified?.content) throw artifactError("EXTENSION_ARTIFACT_MISSING", `Missing verified file artifact ${artifact.id}`, { extension: extensionId, artifact: artifact.id });
     writes.set(file, verified.content);
   }
-
-  const previousConfig = configArtifacts(previousInstalled);
-  const nextConfig = configArtifacts(nextInstalled);
-  if (previousConfig.length > 0 || nextConfig.length > 0) {
-    const file = path.join(root, CODEX_CONFIG_TARGET);
-    let content = readText(file);
-    for (const artifact of previousConfig) content = removeConfigBlock(content, extensionId, artifact);
-    for (const artifact of nextConfig.sort((left, right) => left.id.localeCompare(right.id))) {
-      if (findConfigBlock(content, extensionId, artifact.id)) throw artifactError("EXTENSION_CONFIG_BLOCK_CONFLICT", `Extension config block already exists: ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id });
-      const verified = verifiedById.get(artifact.id);
-      if (!verified) throw artifactError("EXTENSION_ARTIFACT_MISSING", `Missing verified config artifact ${artifact.id}`, { extension: extensionId, artifact: artifact.id });
-      content = `${content}${content && !content.endsWith("\n") ? "\n" : ""}${content ? "\n" : ""}${configBlock(extensionId, artifact.id, normalizeConfigFragment(verified.content, artifact))}`;
-    }
-    try {
-      TOML.parse(content);
-    } catch (error) {
-      throw artifactError("EXTENSION_CONFIG_CONFLICT", `Extension config blocks produce invalid Codex TOML: ${error.message}`, { extension: extensionId, target: CODEX_CONFIG_TARGET });
-    }
-    if (content) writes.set(file, content);
-    else removes.add(file);
-  }
-
-  if (hooksArtifacts(previousInstalled).length > 0 || hooksArtifacts(nextInstalled).length > 0) {
-    const hooks = composeHooks(root, previousState, nextState);
-    if (hooks.content === null) removes.add(hooks.file);
-    else writes.set(hooks.file, hooks.content);
-  }
   return { writes, removes };
+}
+
+function planTextTransition(root, extensionId, previousInstalled, nextInstalled, verifiedById) {
+  const transition = { writes: new Map(), removes: new Set() };
+  const previous = artifactsOfKind(previousInstalled, "text-block");
+  const next = artifactsOfKind(nextInstalled, "text-block");
+  const targets = [...new Set([...previous, ...next].map((artifact) => artifact.target))];
+  for (const target of targets) {
+    const file = path.join(root, ...target.split("/"));
+    let content = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+    for (const artifact of previous.filter((entry) => entry.target === target)) content = removeTextBlock(content, extensionId, artifact);
+    for (const artifact of next.filter((entry) => entry.target === target).sort((left, right) => left.id.localeCompare(right.id))) {
+      if (findTextBlock(content, extensionId, artifact.id)) throw artifactError("EXTENSION_TEXT_BLOCK_CONFLICT", `Extension text block already exists: ${extensionId}/${artifact.id}`, { extension: extensionId, artifact: artifact.id });
+      const verified = verifiedById.get(artifact.id);
+      if (!verified?.content) throw artifactError("EXTENSION_ARTIFACT_MISSING", `Missing verified text block ${artifact.id}`, { extension: extensionId, artifact: artifact.id });
+      const fragment = normalizeTextFragment(verified.content, artifact);
+      const separator = !content ? "" : content.endsWith("\n\n") ? "" : content.endsWith("\n") ? "\n" : "\n\n";
+      content = `${content}${separator}${textBlock(extensionId, artifact.id, fragment)}`;
+    }
+    if ([...previous, ...next].some((artifact) => artifact.target === target && artifact.format === "toml")) {
+      try { TOML.parse(content); } catch (error) { throw artifactError("EXTENSION_TEXT_BLOCK_CONFLICT", `Extension text blocks produce invalid TOML: ${error.message}`, { extension: extensionId, target }); }
+    }
+    if (content) transition.writes.set(file, content);
+    else transition.removes.add(file);
+  }
+  return transition;
+}
+
+function planJsonTransition(root, extensionId, previousInstalled, nextInstalled) {
+  const transition = { writes: new Map(), removes: new Set() };
+  const previous = artifactsOfKind(previousInstalled, "json-member");
+  const next = artifactsOfKind(nextInstalled, "json-member");
+  const targets = [...new Set([...previous, ...next].map((artifact) => artifact.target))];
+  for (const target of targets) {
+    const file = path.join(root, ...target.split("/"));
+    const document = readJsonDocument(file);
+    for (const artifact of previous.filter((entry) => entry.target === target)) removeJsonMember(document, extensionId, artifact);
+    for (const artifact of next.filter((entry) => entry.target === target).sort((left, right) => left.selector.localeCompare(right.selector))) addJsonMember(document, extensionId, artifact);
+    if (Object.keys(document).length === 0) transition.removes.add(file);
+    else transition.writes.set(file, `${JSON.stringify(document, null, 2)}\n`);
+  }
+  return transition;
+}
+
+function planArtifactTransition(root, extensionId, previousInstalled, nextInstalled, previousState, nextState, verifiedById = new Map()) {
+  const transition = { writes: new Map(), removes: new Set() };
+  mergeTransition(transition, planFileTransition(root, extensionId, previousInstalled, nextInstalled, verifiedById));
+  mergeTransition(transition, planTextTransition(root, extensionId, previousInstalled, nextInstalled, verifiedById));
+  mergeTransition(transition, planJsonTransition(root, extensionId, previousInstalled, nextInstalled));
+  mergeTransition(transition, planLegacyArtifactTransition(root, extensionId, previousInstalled, nextInstalled, previousState, nextState));
+  for (const file of transition.writes.keys()) transition.removes.delete(file);
+  return transition;
 }
 
 function verifyArtifactTransition(transition) {
@@ -268,27 +247,40 @@ function verifyArtifactTransition(transition) {
       throw artifactError("EXTENSION_POSTCONDITION_FAILED", `Extension target could not be verified: ${file}`, { file });
     }
   }
-  for (const file of transition.removes) {
-    if (fs.existsSync(file)) throw artifactError("EXTENSION_POSTCONDITION_FAILED", `Obsolete extension target was not removed: ${file}`, { file });
-  }
+  for (const file of transition.removes) if (fs.existsSync(file)) throw artifactError("EXTENSION_POSTCONDITION_FAILED", `Obsolete extension target was not removed: ${file}`, { file });
 }
 
 function installedArtifactsCurrent(root, extensionId, installed, state) {
   try {
-    for (const artifact of fileArtifacts(installed)) {
+    for (const artifact of artifactsOfKind(installed, "file")) {
       const file = path.join(root, ...artifact.target.split("/"));
       if (!fs.existsSync(file) || sha256(fs.readFileSync(file)) !== artifact.installedSha256) return false;
     }
-    const config = readText(path.join(root, CODEX_CONFIG_TARGET));
-    for (const artifact of configArtifacts(installed)) {
-      const found = findConfigBlock(config, extensionId, artifact.id);
+    for (const artifact of artifactsOfKind(installed, "directory")) {
+      const directory = path.join(root, ...artifact.target.split("/"));
+      if (!fs.existsSync(directory) || directoryDigest(directory) !== artifact.installedSha256) return false;
+    }
+    for (const artifact of artifactsOfKind(installed, "text-block")) {
+      const file = path.join(root, ...artifact.target.split("/"));
+      const content = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+      const found = findTextBlock(content, extensionId, artifact.id);
       if (!found || sha256(Buffer.from(found.fragment)) !== artifact.installedSha256) return false;
     }
-    if (hooksArtifacts(installed).length > 0) composeHooks(root, state, state);
-    return true;
+    for (const artifact of artifactsOfKind(installed, "json-member")) {
+      const document = readJsonDocument(path.join(root, ...artifact.target.split("/")));
+      const segments = decodePointer(artifact.selector);
+      let current = document;
+      for (const segment of segments.slice(0, -1)) current = current?.[segment];
+      if (!current || typeof current !== "object" || canonicalJson(current[segments.at(-1)]) !== canonicalJson(artifact.payload)) return false;
+    }
+    return legacyArtifactsCurrent(root, extensionId, installed, state);
   } catch {
     return false;
   }
+}
+
+function directoryArtifacts(installed) {
+  return artifactsOfKind(installed, "directory");
 }
 
 function removeEmptyParents(root, file) {
@@ -305,7 +297,10 @@ module.exports = {
   ARTIFACT_KINDS,
   CODEX_CONFIG_TARGET,
   CODEX_HOOKS_TARGET,
+  LEGACY_ARTIFACT_KINDS,
+  canonicalize,
   composeHookContent,
+  directoryArtifacts,
   installedArtifactsCurrent,
   installedRecord,
   planArtifactTransition,

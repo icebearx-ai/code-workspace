@@ -1,28 +1,26 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "experimental": true,
   "id": "openspec-workspace",
   "name": "OpenSpec Workspace",
   "version": "1.0.0",
   "entry": "init.js",
-  "entrySha256": "de3de4e9fea3dc10d8b93a270e636e93b6c2099b231819c16fb1516397c728d9",
+  "entrySha256": "3528b75b5971cb25c7056aab9eb7b163ae23f7495b60ba7f45b1286c82514bc1",
   "codeWorkspace": ">=0.1.0-beta.3 <0.2.0",
   "timeoutMs": 60000,
-  "artifacts": [
+  "outputs": [
     {
       "id": "codex-propose-skill",
       "kind": "file",
+      "ownership": "exclusive",
       "target": ".codex/skills/code-workspace-openspec-propose/SKILL.md",
-      "output": ".codex/skills/code-workspace-openspec-propose/SKILL.md",
-      "sha256": "928d905f792b005cc39d78be86b6c15bdc37e11b434731858edc20b63887615e",
       "tools": ["codex"]
     },
     {
       "id": "claude-propose-skill",
       "kind": "file",
+      "ownership": "exclusive",
       "target": ".claude/skills/code-workspace-openspec-propose/SKILL.md",
-      "output": ".claude/skills/code-workspace-openspec-propose/SKILL.md",
-      "sha256": "928d905f792b005cc39d78be86b6c15bdc37e11b434731858edc20b63887615e",
       "tools": ["claude"]
     }
   ]

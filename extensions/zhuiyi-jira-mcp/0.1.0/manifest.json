@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "experimental": true,
+  "id": "zhuiyi-jira-mcp",
+  "name": "Zhuiyi Jira MCP",
+  "version": "0.1.0",
+  "entry": "init.js",
+  "entrySha256": "c547561869fcbee6e2a92559ced275a00b130bf26afce6747992b95e57b6a789",
+  "codeWorkspace": ">=0.1.0-beta.0 <0.2.0",
+  "timeoutMs": 120000,
+  "capabilities": {
+    "networkHosts": ["gitee.com", "raw.giteeusercontent.com"]
+  },
+  "outputs": [
+    {
+      "id": "runtime",
+      "kind": "directory",
+      "ownership": "exclusive",
+      "target": ".code-workspace/extensions/zhuiyi-jira-mcp/0.1.0"
+    },
+    {
+      "id": "codex-config",
+      "kind": "text-block",
+      "ownership": "shared",
+      "target": ".codex/config.toml",
+      "format": "toml",
+      "tools": ["codex"]
+    },
+    {
+      "id": "claude-config",
+      "kind": "json-member",
+      "ownership": "shared",
+      "target": ".mcp.json",
+      "selector": "/mcpServers/zhuiyi-jira",
+      "tools": ["claude"]
+    }
+  ]
+}

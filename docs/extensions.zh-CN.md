@@ -1,31 +1,64 @@
 # 内置扩展契约
 
-Code Workspace 扩展是随 npm 包发布、位于 `extensions/<id>/<semver>/` 下的可信版本化软件包。它们不会从外部来源下载，也不是安全沙箱。
+Code Workspace 扩展是随发布包提供、位于 `extensions/<id>/<semver>/` 下的可信版本化软件包。扩展进程具有故障隔离，但不是安全沙箱：内置扩展代码仍以当前用户的操作系统权限运行。
 
-每个版本都包含 `manifest.json` 和 `init.js`。清单遵循 `schemas/extension-manifest-v1.json`。Code Workspace 会在确认前固定这两个文件的 hash，并在执行前再次验证。
+每个版本包含 `manifest.json`、`init.js`，以及扩展需要的私有模板、元数据或辅助代码。新扩展包遵循：
 
-Host 使用以下命令启动入口：
+- `schemas/extension-manifest-v2.json`
+- `schemas/extension-init-context-v1.json`
+- `schemas/extension-init-result-v1.json`
+
+静态 manifest 声明扩展身份、Host 兼容范围、入口摘要和超时、声明性网络 host，以及最大输出范围。Code Workspace 在确认前冻结 manifest、入口和完整扩展版本目录摘要，并在执行前重新验证三者。
+
+Host 使用相互独立的临时路径启动入口：
 
 ```text
-node init.js --context <json-file> --output <empty-directory>
+node init.js --context <context-file> --output <staging-directory> --result <result-file>
 ```
 
-上下文仅包含 schema 版本、扩展标识、Workspace 显示标识/语言以及选中的工具。子进程只接收一小组环境变量白名单，并且契约不会向其提供真实 Workspace 路径。
+context 只包含扩展身份、Workspace 显示元数据和所选工具，不提供真实 Workspace 路径。result 只包含扩展身份和 `{ id, source }`。它必须完整返回本次工具选择所适用的全部 manifest 输出，不能重新声明 target、kind、ownership、selector 或摘要。
 
-入口将且仅将选中的制品写入其声明的 `output` 路径。`file` 的 `output` 默认取 `target`；共享制品类型必须显式声明 output。每个输出都必须是普通文件，且具有声明的 SHA-256。
+Host 递归验证 staging，拒绝未声明内容、路径逃逸、符号链接和特殊文件，并独立计算已安装文件或目录摘要。扩展不直接写入真实 Workspace 或 installed 状态，也不提供卸载脚本。
 
-支持的制品类型：
+## 通用输出类型
 
-- `file`：扩展独占的 Workspace 相对路径文件。它不能指向由核心管理的目标或共享 Host 目标。
-- `codex-config-block`：安装在 `.codex/config.toml` 稳定扩展标记内的 TOML 片段。Host 会保留配置块之外的内容，并验证完整的 TOML 文档。
-- `codex-hooks`：合并到 `.codex/hooks.json` 中的 JSON Hook 片段。Host 会保留无关 Hook，并存储规范化后的贡献，以供升级和卸载使用。
+- `file`：扩展独占的一个 Workspace 相对普通文件。
+- `directory`：扩展独占的一个 Workspace 相对目录树，其中只能包含普通文件和目录。
+- `text-block`：Host 使用稳定标记管理的共享文本片段；`format: "toml"` 会同时验证片段和合成后的完整文档。
+- `json-member`：扩展在共享 JSON 对象文档的声明 JSON Pointer 位置拥有一个值。
 
-扩展永远不会直接写入真实 Workspace，也不会提供卸载代码。规划、冲突处理、事务、验证、状态、回滚和移除均由 Host 负责。
+独占目标不能与核心管理路径或其他扩展目标重叠。多个共享文本块可以共存于同一文本文件；JSON 成员所有权会拒绝相同 selector 及父子 selector。安装、升级、回滚和卸载均保留用户、核心及其他扩展的内容。
 
-`code-w extension install <id> --yes` 会在不重新执行 Workspace 核心初始化的情况下，安装或升级最高兼容内置版本，并支持传入多个 id。不传 id 时，交互 TTY 会列出全部有效内置扩展供多选；按 ESC 或提交空选择会无修改退出。JSON、非 TTY 和 `--yes` 调用必须至少提供一个 id。一个批次只确认一次，每个扩展使用独立事务；失败不会阻止后续扩展，但会使独立安装命令失败。
+下载协议、归档格式、包管理器、Jira、MCP 和具体 Agent 产品都不是公共输出类型。扩展可以在私有实现中使用这些知识，在 staging 中准备候选文件或目录。声明的 `networkHosts` 会展示在计划中供用户确认，但不代表操作系统级网络出口强制隔离。
 
-`code-w extension uninstall <id> --yes` 会从记录的状态中移除已安装扩展。即使内置扩展版本已不存在，它仍然可以工作。存在未知本地修改时，卸载会停止；初始契约特意不提供强制模式。
+installed manifest 是唯一安装事实。它记录协议版本、扩展版本、冻结的扩展包和 manifest 摘要、通用输出所有权、Host 计算的摘要及共享 contribution 数据。幂等判断同时验证状态和真实 Workspace。升级在单扩展可恢复事务中处理保留、新增、替换和移除的输出。卸载只读取 installed 状态，因此扩展包已经不存在时仍可工作。发现未知本地修改时，升级或卸载会停止；基础版不提供强制模式。
 
-init、安装和卸载共享同一个 Workspace 操作锁，不能并发修改扩展制品或状态。
+已经发布的协议 v1 文件、Codex 配置块和 Codex Hooks installed 记录仍可读取和卸载；它们只属于兼容状态，不再是 manifest v2 的新输出类型。
 
-稳定的所有权键由扩展 id 和制品 id 组成。兼容升级中，当制品表示相同逻辑贡献时，其制品 id 和输出路径必须保持稳定。
+`init`、`extension install` 和 `extension uninstall` 共用同一个非阻塞 Workspace 操作锁。多扩展安装只确认一次，每个扩展使用独立事务；单个失败不会阻止后续扩展，但整体命令会报告失败。
+
+## Zhuiyi Jira MCP
+
+安装：
+
+```bash
+code-w extension install zhuiyi-jira-mcp --yes
+```
+
+Jira 扩展在私有实现中下载固定的 Gitee 发布包，校验固定 SHA-256，安全解压，并在 staging 中验证 npm 包名称、版本和 `dist/index.js` 入口。归档已经包含 `dist` 和运行依赖；初始化不会执行 `npm install`、`npm ci`、构建或归档内脚本。
+
+验证完成后，Host 只安装通用输出：
+
+```text
+.code-workspace/extensions/zhuiyi-jira-mcp/0.1.0/   # directory
+.codex/config.toml                                  # 选择 Codex 时的 text-block
+.mcp.json#/mcpServers/zhuiyi-jira                   # 选择 Claude 时的 json-member
+```
+
+生成配置只包含非敏感默认值，不会持久化 Jira Cookie、Token、邮箱或密码。用户需要在启动 Agent 的环境中提供凭证，例如：
+
+```bash
+export JIRA_COOKIE='JSESSIONID=...; atlassian.xsrf.token=...'
+```
+
+下载附件默认保存在 Workspace 的 `.jira-attachments/`。它是运行期用户数据，不是安装制品，扩展升级或卸载时都会保留。

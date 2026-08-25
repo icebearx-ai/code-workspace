@@ -30,7 +30,8 @@ function formatInstallPlan(plans) {
     `Install ${plans.length} extension${plans.length === 1 ? "" : "s"}:`,
     ...plans.flatMap((plan) => [
       `  ${plan.id}@${plan.version} (manifest ${plan.manifestSha256})`,
-      ...plan.artifacts.map((artifact) => `    WRITE ${artifact.target}`),
+      ...(plan.capabilities.networkHosts || []).map((host) => `    NETWORK https://${host}`),
+      ...plan.artifacts.map((artifact) => `    WRITE ${artifact.target} (${artifact.kind})`),
     ]),
   ].join("\n");
 }

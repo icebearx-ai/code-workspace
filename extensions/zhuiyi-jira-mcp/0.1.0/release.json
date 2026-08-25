@@ -1,0 +1,15 @@
+{
+  "url": "https://gitee.com/liutaigang/zhuiyi-jira-mcp/raw/master/release/zhuiyi-jira-mcp-0.1.0.tar.gz",
+  "allowedHosts": ["gitee.com", "raw.giteeusercontent.com"],
+  "sha256": "74785207a75d1f7ea74ea893533835720baed016509ef4401c9b20f3b59a4afa",
+  "root": "zhuiyi-jira-mcp-0.1.0",
+  "entry": "dist/index.js",
+  "package": {
+    "name": "zhuiyi-jira-mcp",
+    "version": "0.1.0"
+  },
+  "maxDownloadBytes": 20971520,
+  "maxExtractBytes": 104857600,
+  "maxFiles": 10000,
+  "downloadTimeoutMs": 60000
+}
