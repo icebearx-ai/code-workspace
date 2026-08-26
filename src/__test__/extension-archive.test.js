@@ -23,6 +23,7 @@ const {
   planExtensionUninstall,
   resolveExtensionPlans,
   validateManifest,
+  verifyExtensionOutput,
 } = require("../core/extensions");
 const { sha256 } = require("../core/fs");
 
@@ -176,6 +177,40 @@ test("Jira private release preparation verifies hash, package identity, entry, a
   assert.throws(() => extractTarGz(archive, temporaryRoot(), { ...release, maxFiles: 1 }), (error) => error.code === "JIRA_ARCHIVE_TOO_LARGE");
   await assert.rejects(download("http://example.invalid/archive.tar.gz", path.join(temporaryRoot(), "archive"), release), (error) => error.code === "JIRA_DOWNLOAD_FAILED");
   await assert.rejects(download("https://example.invalid/archive.tar.gz", path.join(temporaryRoot(), "archive"), release), (error) => error.code === "JIRA_DOWNLOAD_HOST_FORBIDDEN");
+});
+
+test("Jira release preparation removes its managed archive before Host staging verification", async () => {
+  const archive = packageArchive();
+  const archiveBytes = fs.readFileSync(archive);
+  const digest = sha256(archiveBytes);
+  const staging = temporaryRoot();
+  const runtime = path.join(staging, "runtime");
+  const managedArchive = path.join(staging, "zhuiyi-jira-mcp.tar.gz");
+  fs.copyFileSync(archive, managedArchive);
+
+  await prepareRelease({ ...release, sha256: digest }, runtime, {
+    downloaded: { bytes: archiveBytes.length, sha256: digest, finalUrl: release.url },
+  });
+
+  assert.equal(fs.existsSync(managedArchive), false);
+  const plan = {
+    id: "zhuiyi-jira-mcp",
+    version: "0.1.0",
+    extensionSpecVersion: 1,
+    artifacts: [{
+      id: "runtime",
+      kind: "directory",
+      ownership: "exclusive",
+      target: ".code-workspace/extensions/zhuiyi-jira-mcp/0.1.0",
+    }],
+  };
+  const result = {
+    schemaVersion: 1,
+    extensionSpecVersion: 1,
+    extension: { id: "zhuiyi-jira-mcp", version: "0.1.0" },
+    outputs: [{ id: "runtime", source: "runtime" }],
+  };
+  assert.equal(verifyExtensionOutput(staging, result, plan).length, 1);
 });
 
 test("Jira init installs a generic runtime directory and shared Codex and Claude contributions", () => {

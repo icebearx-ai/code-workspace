@@ -185,12 +185,16 @@ function download(url, file, options, redirects = 0) {
 
 async function prepareRelease(release, outputRoot, options = {}) {
   const archiveFile = path.join(path.dirname(outputRoot), "zhuiyi-jira-mcp.tar.gz");
-  const downloaded = options.downloaded || await download(release.url, archiveFile, release);
-  if (downloaded.sha256 !== release.sha256) throw archiveError("JIRA_ARCHIVE_HASH_MISMATCH", `Archive hash mismatch for ${release.url}`, { url: release.url, expectedSha256: release.sha256, actualSha256: downloaded.sha256 });
   const source = options.archiveFile || archiveFile;
-  const extracted = extractTarGz(source, outputRoot, release);
-  validatePackage(outputRoot, release);
-  return { ...downloaded, ...extracted };
+  try {
+    const downloaded = options.downloaded || await download(release.url, archiveFile, release);
+    if (downloaded.sha256 !== release.sha256) throw archiveError("JIRA_ARCHIVE_HASH_MISMATCH", `Archive hash mismatch for ${release.url}`, { url: release.url, expectedSha256: release.sha256, actualSha256: downloaded.sha256 });
+    const extracted = extractTarGz(source, outputRoot, release);
+    validatePackage(outputRoot, release);
+    return { ...downloaded, ...extracted };
+  } finally {
+    if (!options.archiveFile) fs.rmSync(archiveFile, { force: true });
+  }
 }
 
 module.exports = { archiveError, download, extractTarGz, prepareRelease, safeRelativePath, validatePackage };
