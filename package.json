@@ -1,6 +1,6 @@
 {
   "name": "code-workspace-zhuiyi",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Local multi-project registry and safety layer for AI coding workspaces",
   "author": "icebearx-ai",
   "license": "MIT",
