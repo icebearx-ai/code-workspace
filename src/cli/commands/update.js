@@ -5,6 +5,7 @@ const {
   configPath,
   loadConfig,
   loadState,
+  projectConfigPath,
   saveConfig,
   statePath,
 } = require("../../core/config");
@@ -82,6 +83,7 @@ function updateWorkspace(root, options = {}) {
   }
   const transaction = createFileTransaction([
     configPath(root),
+    projectConfigPath(root),
     statePath(root),
     ...managedPlan.plans.map((plan) => plan.target),
     ...obsoletePlan.map((plan) => path.join(root, plan.target)),

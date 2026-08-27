@@ -8,6 +8,8 @@ const { LANGUAGE_CODES } = require("../i18n");
 
 const LOCAL_DIRECTORY = ".code-workspace";
 const CONFIG_FILE = "config.yaml";
+const PROJECT_CONFIG_FILE = "config-projects.yaml";
+const PROJECT_CONFIG_VERSION = 1;
 const STATE_FILE = "state.json";
 const DEFAULT_WORKSPACE_NAME = "code-workspace";
 const DEFAULT_MONITOR_URL = "http://127.0.0.1:3211";
@@ -27,6 +29,10 @@ const CONFIG_MIGRATIONS = new Map([
 
 function configPath(root) {
   return path.join(root, LOCAL_DIRECTORY, CONFIG_FILE);
+}
+
+function projectConfigPath(root) {
+  return path.join(root, LOCAL_DIRECTORY, PROJECT_CONFIG_FILE);
 }
 
 function statePath(root) {
@@ -122,6 +128,101 @@ function normalizeProjects(value) {
   });
 }
 
+function normalizeProjectReference(value, options = {}) {
+  const file = options.file || null;
+  if (value == null || (typeof value === "object" && !Array.isArray(value) && !Object.prototype.hasOwnProperty.call(value, "ref"))) {
+    throw new WorkspaceError("PROJECT_CONFIG_REFERENCE_MISSING", "projects.ref must reference config-projects.yaml; no project configuration reference was provided", {
+      file,
+      remediation: "Set projects.ref to config-projects.yaml and move project records into .code-workspace/config-projects.yaml.",
+    });
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new WorkspaceError("PROJECT_CONFIG_INLINE_UNSUPPORTED", "projects must reference config-projects.yaml; inline project arrays are not supported", {
+      file,
+      remediation: "Set projects.ref to config-projects.yaml and move project records into .code-workspace/config-projects.yaml.",
+    });
+  }
+  const ref = String(value.ref || "").trim();
+  if (ref !== PROJECT_CONFIG_FILE) {
+    throw new WorkspaceError("PROJECT_CONFIG_REFERENCE_INVALID", `projects.ref must be ${PROJECT_CONFIG_FILE}`, {
+      file,
+      ref: ref || null,
+      expected: PROJECT_CONFIG_FILE,
+      remediation: `Set projects.ref to ${PROJECT_CONFIG_FILE}.`,
+    });
+  }
+  return { ref: PROJECT_CONFIG_FILE };
+}
+
+function readProjectConfigDocument(root) {
+  const file = projectConfigPath(root);
+  let stat;
+  try {
+    stat = fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new WorkspaceError("PROJECT_CONFIG_FILE_MISSING", `Missing project configuration: ${file}`, {
+        file,
+        remediation: "Create .code-workspace/config-projects.yaml with schemaVersion: 1 and projects: [].",
+      });
+    }
+    throw new WorkspaceError("PROJECT_CONFIG_FILE_INVALID", `Cannot inspect project configuration ${file}: ${error.message}`, {
+      file,
+      cause: error.code || error.name,
+    });
+  }
+  if (stat.isSymbolicLink()) {
+    throw new WorkspaceError("PROJECT_CONFIG_FILE_INVALID", `Project configuration must be a regular file, not a symbolic link: ${file}`, {
+      file,
+      kind: "symbolic-link",
+      remediation: "Replace the symbolic link with a regular .code-workspace/config-projects.yaml file.",
+    });
+  }
+  if (!stat.isFile()) {
+    throw new WorkspaceError("PROJECT_CONFIG_FILE_INVALID", `Project configuration must be a regular file: ${file}`, {
+      file,
+      kind: stat.isDirectory() ? "directory" : "special-file",
+      remediation: "Create .code-workspace/config-projects.yaml as a regular file.",
+    });
+  }
+  let value;
+  try {
+    value = yaml.load(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    if (error instanceof WorkspaceError) throw error;
+    if (error.name === "YAMLException") {
+      throw new WorkspaceError("PROJECT_CONFIG_FILE_PARSE_FAILED", `Cannot parse project configuration ${file}: ${error.message}`, {
+        file,
+      });
+    }
+    throw new WorkspaceError("PROJECT_CONFIG_FILE_INVALID", `Cannot read project configuration ${file}: ${error.message}`, {
+      file,
+      cause: error.code || error.name,
+    });
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new WorkspaceError("PROJECT_CONFIG_FILE_INVALID", `Project configuration must be a YAML object: ${file}`, { file });
+  }
+  if (value.schemaVersion !== PROJECT_CONFIG_VERSION) {
+    throw new WorkspaceError("PROJECT_CONFIG_SCHEMA_UNSUPPORTED", `Project configuration schemaVersion must be ${PROJECT_CONFIG_VERSION}: ${file}`, {
+      file,
+      version: value.schemaVersion ?? null,
+      supported: PROJECT_CONFIG_VERSION,
+    });
+  }
+  if (!Array.isArray(value.projects)) {
+    throw new WorkspaceError("PROJECT_CONFIG_FILE_INVALID", `Project configuration projects must be an array: ${file}`, { file });
+  }
+  return {
+    file,
+    schemaVersion: PROJECT_CONFIG_VERSION,
+    value: {
+      ...value,
+      projects: normalizeProjects(value.projects),
+    },
+  };
+}
+
 function configVersion(value) {
   const version = value?.schemaVersion ?? 0;
   if (!Number.isInteger(version) || version < MINIMUM_READABLE_CONFIG_VERSION) {
@@ -182,23 +283,31 @@ function normalizeConfig(value, options = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const migration = planConfigMigration(source);
   const config = migration.value;
+  const projects = options.projects !== undefined ? normalizeProjects(options.projects) : normalizeProjects(config.projects);
   return {
     ...config,
     schemaVersion: configVersion(config),
     workspace: normalizeWorkspace(config.workspace, options),
     monitor: normalizeMonitor(config.monitor),
-    projects: normalizeProjects(config.projects),
+    projects,
   };
 }
 
 function loadConfig(root, options = {}) {
-  return normalizeConfig(readConfigDocument(root).value, options);
+  const document = readConfigDocument(root);
+  normalizeProjectReference(document.value.projects, { file: document.file });
+  const projects = readProjectConfigDocument(root);
+  return normalizeConfig(document.value, {
+    ...options,
+    projects: projects.value.projects,
+    projectConfigFile: projects.file,
+  });
 }
 
 function loadConfigProjection(root, domains, options = {}) {
   const document = readConfigDocument(root);
   const requested = new Set(domains || []);
-  if (requested.has("complete")) return normalizeConfig(document.value, options);
+  if (requested.has("complete")) return loadConfig(root, options);
   const projected = { schemaVersion: CURRENT_CONFIG_VERSION, sourceSchemaVersion: document.schemaVersion };
   const attachFile = (error) => {
     error.details = { ...(error.details || {}), file: document.file };
@@ -230,9 +339,12 @@ function loadConfigProjection(root, domains, options = {}) {
   }
   if (requested.has("projects")) {
     try {
-      projected.projects = normalizeProjects(document.value.projects);
+      normalizeProjectReference(document.value.projects, { file: document.file });
+      const projects = readProjectConfigDocument(root);
+      projected.projects = projects.value.projects;
     } catch (error) {
-      attachFile(error);
+      error.details = { ...(error.details || {}), configFile: document.file };
+      throw error;
     }
   }
   return projected;
@@ -262,7 +374,7 @@ function inspectConfigDomains(root, options = {}) {
     try {
       return { valid: true, value: project(), diagnostics: [] };
     } catch (error) {
-      error.details = { ...(error.details || {}), file: document.file };
+      error.details = { ...(error.details || {}), configFile: document.file };
       return { valid: false, value: null, diagnostics: [error] };
     }
   };
@@ -273,7 +385,11 @@ function inspectConfigDomains(root, options = {}) {
     identity: inspect(() => normalizeWorkspaceIdentity(document.value.workspace)),
     language: inspect(() => normalizeWorkspaceLanguage(document.value.workspace?.language, options)),
     monitor: inspect(() => normalizeMonitor(document.value.monitor)),
-    projects: inspect(() => normalizeProjects(document.value.projects)),
+    projects: inspect(() => {
+      normalizeProjectReference(document.value.projects, { file: document.file });
+      const projectDocument = readProjectConfigDocument(root);
+      return projectDocument.value.projects;
+    }),
   };
 }
 
@@ -282,19 +398,33 @@ function renderConfigDocument(value) {
 }
 
 function renderConfig(config) {
-  return renderConfigDocument(normalizeConfig(config));
+  const normalized = normalizeConfig(config);
+  const { projectReference: _projectReference, ...withoutProjectReference } = normalized;
+  return renderConfigDocument({
+    ...withoutProjectReference,
+    projects: { ref: PROJECT_CONFIG_FILE },
+  });
+}
+
+function renderProjectConfig(projects) {
+  return renderConfigDocument({ schemaVersion: PROJECT_CONFIG_VERSION, projects: normalizeProjects(projects) });
 }
 
 function saveConfig(root, config) {
-  atomicWrite(configPath(root), renderConfig(config));
+  const normalized = normalizeConfig(config);
+  saveProjectConfig(root, normalized.projects);
+  atomicWrite(configPath(root), renderConfig(normalized));
+}
+
+function saveProjectConfig(root, projects) {
+  atomicWrite(projectConfigPath(root), renderProjectConfig(projects));
 }
 
 function updateProjectBranch(root, update, options = {}) {
   const document = (options.readConfigDocument || readConfigDocument)(root);
-  const sourceProjects = document.value.projects;
-  if (!Array.isArray(sourceProjects)) {
-    throw new WorkspaceError("PROJECT_REGISTRY_INVALID", "projects must be an array", { file: document.file });
-  }
+  normalizeProjectReference(document.value.projects, { file: document.file });
+  const projectDocument = (options.readProjectConfigDocument || readProjectConfigDocument)(root);
+  const sourceProjects = projectDocument.value.projects;
   const sourceProject = sourceProjects.find((project) => project?.name === update.name);
   if (!sourceProject || sourceProject.branch !== update.before.registeredBranch) {
     throw new WorkspaceError(
@@ -312,10 +442,10 @@ function updateProjectBranch(root, update, options = {}) {
   }
   const project = { ...sourceProject, branch: update.after.registeredBranch };
   const nextDocument = {
-    ...document.value,
+    ...projectDocument.value,
     projects: sourceProjects.map((entry) => entry?.name === update.name ? project : entry),
   };
-  (options.atomicWrite || atomicWrite)(configPath(root), renderConfigDocument(nextDocument));
+  (options.atomicWrite || atomicWrite)(projectConfigPath(root), renderProjectConfig(nextDocument.projects));
   return project;
 }
 
@@ -345,6 +475,8 @@ function ensureLocalIgnore(root) {
 
 module.exports = {
   CONFIG_FILE,
+  PROJECT_CONFIG_FILE,
+  PROJECT_CONFIG_VERSION,
   CURRENT_CONFIG_VERSION,
   DEFAULT_MONITOR_URL,
   DEFAULT_WORKSPACE_NAME,
@@ -363,6 +495,7 @@ module.exports = {
   normalizeConfig,
   normalizeMonitor,
   normalizeProjects,
+  normalizeProjectReference,
   normalizeWorkspace,
   normalizeWorkspaceIdentity,
   normalizeWorkspaceLanguage,
@@ -370,8 +503,12 @@ module.exports = {
   readConfigDocument,
   renderConfig,
   renderConfigDocument,
+  renderProjectConfig,
   requireWorkspaceRoot,
   saveConfig,
+  saveProjectConfig,
+  readProjectConfigDocument,
+  projectConfigPath,
   saveState,
   statePath,
   updateProjectBranch,

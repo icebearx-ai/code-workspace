@@ -32,6 +32,10 @@ function loadWorkspaceYaml(root) {
   return yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"));
 }
 
+function loadProjectYaml(root) {
+  return yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config-projects.yaml"), "utf8"));
+}
+
 function gitRepository(parent, name) {
   const directory = path.join(parent, name);
   fs.mkdirSync(path.join(directory, "src"), { recursive: true });
@@ -64,6 +68,9 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(output.workspace.uuid, /^[0-9a-f-]{36}$/);
   assert.deepEqual(output.monitor, { enable: true, url: "http://127.0.0.1:3211" });
   assert(fs.existsSync(path.join(root, ".codex", "hooks.json")));
+  const mainConfig = loadWorkspaceYaml(root);
+  assert.deepEqual(mainConfig.projects, { ref: "config-projects.yaml" });
+  assert.deepEqual(loadProjectYaml(root), { schemaVersion: 1, projects: [] });
   assert.match(fs.readFileSync(path.join(root, ".gitignore"), "utf8"), /\.code-workspace\//);
   const expected = [
     ".claude/commands/code-workspace/add-projects.md",
@@ -224,20 +231,20 @@ test("language update does not rewrite the static branch ASK contract", () => {
 test("language update leaves existing project context unchanged", () => {
   const root = temporaryRoot();
   assert.equal(run(root, ["init", ".", "--tools", "none", "--language", "zh-CN", "--yes", "--json"]).status, 0);
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const config = loadWorkspaceYaml(root);
-  config.projects.push({
+  const projectFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const projects = loadProjectYaml(root);
+  projects.projects.push({
     name: "portal",
     location: "/tmp/portal",
     branch: "main",
     type: "frontend",
     context: "职责：保持原有中文内容。",
   });
-  fs.writeFileSync(configFile, yaml.dump(config));
+  fs.writeFileSync(projectFile, yaml.dump(projects));
 
   const updated = run(root, ["update", "--tools", "none", "--language", "en-US", "--json"]);
   assert.equal(updated.status, 0, updated.stderr);
-  assert.equal(loadWorkspaceYaml(root).projects[0].context, "职责：保持原有中文内容。");
+  assert.equal(loadProjectYaml(root).projects[0].context, "职责：保持原有中文内容。");
 });
 
 test("language update protects local guide changes and suggests force without partial writes", () => {
@@ -376,9 +383,11 @@ test("project inspect is read-only and project add registers an explicit record"
       context: "职责：门户页面和交互。\n技术栈：React。\n代码定位：src。\n项目边界：负责门户前端。",
     }],
   }));
+  const mainBeforeAdd = fs.readFileSync(path.join(workspace, ".code-workspace", "config.yaml"), "utf8");
   const added = run(workspace, ["project", "add", "--projects-file", projectFile, "--yes", "--json"]);
   assert.equal(added.status, 0, added.stderr);
   assert.equal(jsonData(added).project.name, "portal");
+  assert.equal(fs.readFileSync(path.join(workspace, ".code-workspace", "config.yaml"), "utf8"), mainBeforeAdd);
 
   const repeated = run(workspace, ["project", "add", "--projects-file", projectFile, "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);

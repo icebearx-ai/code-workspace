@@ -5,7 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { configPath, loadConfig, saveConfig, updateProjectBranch } = require("../core/config");
+const { configPath, loadConfig, loadConfigProjection, projectConfigPath, saveConfig, updateProjectBranch } = require("../core/config");
 const { inspectProject } = require("../core/project");
 const { validateProject, validateProjects } = require("../core/validation");
 
@@ -41,7 +41,7 @@ test("local config preserves unrestricted multiline context", () => {
   };
   saveConfig(root, config);
   assert.deepEqual(loadConfig(root), config);
-  assert.match(fs.readFileSync(configPath(root), "utf8"), /context: \|-\n\s+职责：Example/);
+  assert.match(fs.readFileSync(projectConfigPath(root), "utf8"), /context: \|-\n\s+职责：Example/);
 });
 
 test("legacy project specPrefix is ignored and removed on explicit save", () => {
@@ -57,6 +57,12 @@ test("legacy project specPrefix is ignored and removed on explicit save", () => 
     "monitor:",
     "  enable: false",
     "projects:",
+    "  ref: config-projects.yaml",
+    "",
+  ].join("\n"));
+  fs.writeFileSync(projectConfigPath(root), [
+    "schemaVersion: 1",
+    "projects:",
     "  - name: service",
     "    specPrefix: legacy-service",
     "    location: /tmp/service",
@@ -68,7 +74,71 @@ test("legacy project specPrefix is ignored and removed on explicit save", () => 
   const loaded = loadConfig(root);
   assert.equal("specPrefix" in loaded.projects[0], false);
   saveConfig(root, loaded);
-  assert.doesNotMatch(fs.readFileSync(file, "utf8"), /specPrefix/);
+  assert.doesNotMatch(fs.readFileSync(projectConfigPath(root), "utf8"), /specPrefix/);
+});
+
+test("project configuration reference is mandatory and resolves only the fixed regular file", () => {
+  const root = temporaryRoot();
+  const file = configPath(root);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, [
+    "schemaVersion: 2",
+    "workspace:",
+    "  name: references",
+    "  uuid: 123e4567-e89b-42d3-a456-426614174000",
+    "  language: en-US",
+    "projects:",
+    "  ref: other.yaml",
+    "",
+  ].join("\n"));
+  assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_REFERENCE_INVALID");
+
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("other.yaml", "./config-projects.yaml"));
+  assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_REFERENCE_INVALID");
+
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("./config-projects.yaml", "config-projects.yaml"));
+  assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_FILE_MISSING");
+
+  fs.mkdirSync(projectConfigPath(root));
+  assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_FILE_INVALID");
+  fs.rmdirSync(projectConfigPath(root));
+  fs.writeFileSync(projectConfigPath(root), "schemaVersion: 1\nprojects: [\n");
+  assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_FILE_PARSE_FAILED");
+});
+
+test("inline project arrays are rejected without merging or inferring a project file", () => {
+  const root = temporaryRoot();
+  const file = configPath(root);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, [
+    "schemaVersion: 2",
+    "workspace:",
+    "  name: inline",
+    "  uuid: 123e4567-e89b-42d3-a456-426614174000",
+    "  language: en-US",
+    "projects:",
+    "  - name: legacy",
+    "    location: /tmp/legacy",
+    "    branch: main",
+    "    type: backend",
+    "    context: legacy",
+    "",
+  ].join("\n"));
+  assert.throws(() => loadConfig(root), (error) => error.code === "PROJECT_CONFIG_INLINE_UNSUPPORTED");
+  assert.equal(fs.existsSync(projectConfigPath(root)), false);
+});
+
+test("missing project reference reports a remediation tied to the main config", () => {
+  const root = temporaryRoot();
+  const file = configPath(root);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, "schemaVersion: 2\nworkspace: {}\n");
+  assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => {
+    assert.equal(error.code, "PROJECT_CONFIG_REFERENCE_MISSING");
+    assert.equal(error.details.file, file);
+    assert.match(error.details.remediation, /config-projects\.yaml/);
+    return true;
+  });
 });
 
 test("monitor configuration is loopback-only and canonical", () => {
@@ -107,6 +177,12 @@ test("targeted project branch updates preserve unrelated config domains and reje
     "  enable: false",
     "  url: not-a-valid-monitor-url",
     "projects:",
+    "  ref: config-projects.yaml",
+    "",
+  ].join("\n"));
+  fs.writeFileSync(projectConfigPath(root), [
+    "schemaVersion: 1",
+    "projects:",
     "  - name: service",
     "    location: /tmp/service",
     "    branch: main",
@@ -123,11 +199,11 @@ test("targeted project branch updates preserve unrelated config domains and reje
     after: { registeredBranch: "feature/sync", actualBranch: "feature/sync" },
   });
   assert.equal(updated.branch, "feature/sync");
-  const persisted = fs.readFileSync(file, "utf8");
+  const persisted = fs.readFileSync(projectConfigPath(root), "utf8");
   assert.match(persisted, /branch: feature\/sync/);
-  assert.match(persisted, /url: not-a-valid-monitor-url/);
-  assert.doesNotMatch(persisted, /language:/);
   assert.match(persisted, /context: \|-\n\s+first line\n\s+second line/);
+  assert.match(fs.readFileSync(file, "utf8"), /url: not-a-valid-monitor-url/);
+  assert.doesNotMatch(fs.readFileSync(file, "utf8"), /language:/);
 
   assert.throws(() => updateProjectBranch(root, {
     name: "service",
@@ -139,7 +215,7 @@ test("targeted project branch updates preserve unrelated config domains and reje
     assert.deepEqual(error.details.observedState, { registeredBranch: "feature/sync", actualBranch: "feature/stale" });
     return true;
   });
-  assert.equal(fs.readFileSync(file, "utf8"), persisted);
+  assert.equal(fs.readFileSync(projectConfigPath(root), "utf8"), persisted);
 });
 
 test("public branch implementation does not reintroduce legacy branch-state fields", () => {

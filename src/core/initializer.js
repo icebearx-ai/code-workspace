@@ -8,6 +8,7 @@ const {
   DEFAULT_MONITOR_URL,
   DEFAULT_WORKSPACE_NAME,
   configPath,
+  projectConfigPath,
   ensureLocalIgnore,
   loadConfig,
   normalizeConfig,
@@ -213,6 +214,7 @@ async function initializeWorkspace(rootInput, options = {}) {
   const files = [
     statePath(root),
     configPath(root),
+    projectConfigPath(root),
     path.join(root, ".gitignore"),
     path.join(root, ".codex", "config.toml"),
     ...permissionTargets(root, options.tools),

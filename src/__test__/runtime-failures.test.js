@@ -298,7 +298,9 @@ test("project configuration restores config and permissions at each write bounda
   fs.writeFileSync(codexPermissionsFile, "# user configuration\n");
   fs.writeFileSync(claudePermissionsFile, '{"user":true}\n');
   const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const projectConfigFile = path.join(root, ".code-workspace", "config-projects.yaml");
   const baselineConfig = fs.readFileSync(configFile);
+  const baselineProjectConfig = fs.readFileSync(projectConfigFile);
   const baselineCodexPermissions = fs.readFileSync(codexPermissionsFile);
   const baselineClaudePermissions = fs.readFileSync(claudePermissionsFile);
   const next = {
@@ -317,6 +319,7 @@ test("project configuration restores config and permissions at each write bounda
     });
     assert.equal(failure.details.workspaceRolledBack, true, stageId);
     assert.deepEqual(fs.readFileSync(configFile), baselineConfig, stageId);
+    assert.deepEqual(fs.readFileSync(projectConfigFile), baselineProjectConfig, stageId);
     assert.deepEqual(fs.readFileSync(codexPermissionsFile), baselineCodexPermissions, stageId);
     assert.deepEqual(fs.readFileSync(claudePermissionsFile), baselineClaudePermissions, stageId);
   }
@@ -338,7 +341,9 @@ test("accepting an actual branch rolls back configuration at apply and verificat
     projects: [project],
   });
   const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const projectConfigFile = path.join(root, ".code-workspace", "config-projects.yaml");
   const baseline = fs.readFileSync(configFile);
+  const baselineProjectConfig = fs.readFileSync(projectConfigFile);
   const plan = {
     action: "update",
     project: { name: "service", location: "/tmp/service" },
@@ -372,6 +377,7 @@ test("accepting an actual branch rolls back configuration at apply and verificat
     });
     assert.equal(failure.details.workspaceRolledBack, true, stageId);
     assert.deepEqual(fs.readFileSync(configFile), baseline, stageId);
+    assert.deepEqual(fs.readFileSync(projectConfigFile), baselineProjectConfig, stageId);
   }
 
   let inspections = 0;
@@ -389,6 +395,7 @@ test("accepting an actual branch rolls back configuration at apply and verificat
     return true;
   });
   assert.deepEqual(fs.readFileSync(configFile), baseline);
+  assert.deepEqual(fs.readFileSync(projectConfigFile), baselineProjectConfig);
 });
 
 test("an accept-actual conflict preserves another writer's configuration", () => {
@@ -401,6 +408,8 @@ test("an accept-actual conflict preserves another writer's configuration", () =>
   };
   saveConfig(root, base);
   const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const projectConfigFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const baselineProjectConfig = fs.readFileSync(projectConfigFile);
   const plan = {
     action: "update",
     project: { name: "service", location: "/tmp/service" },
@@ -418,11 +427,13 @@ test("an accept-actual conflict preserves another writer's configuration", () =>
     registeredBranchExists: true,
   });
   let concurrentContent;
+  let concurrentProjectContent;
   assert.throws(() => applyAcceptActual(root, plan, {
     inspectProjectBranch,
     updateProjectBranch: () => {
       saveConfig(root, { ...base, projects: [{ ...base.projects[0], branch: "feature/concurrent" }] });
       concurrentContent = fs.readFileSync(configFile);
+      concurrentProjectContent = fs.readFileSync(projectConfigFile);
       throw Object.assign(new Error("concurrent registry update"), {
         code: "PROJECT_BRANCH_ACCEPT_CONFLICT",
         details: {
@@ -433,6 +444,8 @@ test("an accept-actual conflict preserves another writer's configuration", () =>
     },
   }), (error) => error.code === "PROJECT_BRANCH_ACCEPT_CONFLICT");
   assert.deepEqual(fs.readFileSync(configFile), concurrentContent);
+  assert.notDeepEqual(concurrentProjectContent, baselineProjectConfig);
+  assert.deepEqual(fs.readFileSync(projectConfigFile), concurrentProjectContent);
 });
 
 test("batch branch application isolates failures and continues with later projects", async () => {

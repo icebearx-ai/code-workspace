@@ -103,9 +103,11 @@ test("interactive init reads a v1 workspace through the legacy language compatib
     "  uuid: 123e4567-e89b-42d3-a456-426614174000",
     "monitor:",
     "  enable: false",
-    "projects: []",
+    "projects:",
+    "  ref: config-projects.yaml",
     "",
   ].join("\n"));
+  fs.writeFileSync(path.join(root, ".code-workspace", "config-projects.yaml"), "schemaVersion: 1\nprojects: []\n");
   fs.writeFileSync(path.join(root, ".code-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
   const ui = {
     intro() {},
@@ -213,9 +215,11 @@ test("non-interactive init migrates legacy state without consulting openspec fil
     "  uuid: 123e4567-e89b-42d3-a456-426614174000",
     "monitor:",
     "  enable: false",
-    "projects: []",
+    "projects:",
+    "  ref: config-projects.yaml",
     "",
   ].join("\n"));
+  fs.writeFileSync(path.join(root, ".code-workspace", "config-projects.yaml"), "schemaVersion: 1\nprojects: []\n");
   fs.writeFileSync(path.join(root, ".code-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
 
   const result = await initializeWorkspace(root, {

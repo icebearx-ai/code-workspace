@@ -37,7 +37,7 @@ Use `--tools claude`, `--tools codex`, or `--tools none` to override the default
 
 Initialization writes only Workspace-owned state and integrations:
 
-- `.code-workspace/config.yaml` and `.code-workspace/state.json`
+- `.code-workspace/config.yaml`, `.code-workspace/config-projects.yaml`, and `.code-workspace/state.json`
 - `USER_GUIDE.md`
 - `CLAUDE.md` and/or `AGENTS.md`
 - Workspace-specific commands and skills whose names start with `code-workspace-` or use the `/code-workspace` namespace
@@ -93,6 +93,30 @@ code-workspace project add --projects-file projects.json --yes --json
 
 The registry stores each project's name, real location, registered branch, type, and context. The registered branch is the Code Workspace expected state; the actual branch is observed from the selected Git worktree. Workspace never guesses a path from a conversation or automatically decides which branch is authoritative.
 
+Project registration is always stored in the separate `.code-workspace/config-projects.yaml` file. The main configuration contains only its fixed local reference:
+
+```yaml
+# .code-workspace/config.yaml
+projects:
+  ref: config-projects.yaml
+```
+
+The referenced file uses this format:
+
+```yaml
+# .code-workspace/config-projects.yaml
+schemaVersion: 1
+projects:
+  - name: payments
+    location: /absolute/path/to/payments
+    branch: main
+    type: backend
+    context: |-
+      Service ownership and navigation context.
+```
+
+`projects.ref` is resolved relative to `config.yaml` and must be exactly `config-projects.yaml`. URLs, globs, absolute paths, path traversal, and inline `projects` arrays are not supported. All project commands keep their existing CLI semantics; they read and write the referenced project file. The `.code-workspace/` directory is ignored by default, so Git history for this local registry requires an explicit repository policy.
+
 ## Daily commands
 
 ```bash
@@ -117,11 +141,18 @@ The two reconciliation directions are deliberately separate:
 
 Both commands detect plan drift and verify postconditions. `project branch update-latest` is the separate, opt-in path for projects with `updateLatest: true`; it only fetches the configured upstream and fast-forwards a clean matching branch. Code Workspace never creates or downloads a branch and never performs stash, reset, rebase, non-fast-forward merge, production-code edits, or conflict resolution.
 
-Users may manually set the optional project policy in `.code-workspace/config.yaml`:
+Users may manually set the optional project policy in `.code-workspace/config-projects.yaml`:
 
 ```yaml
+# .code-workspace/config-projects.yaml
+schemaVersion: 1
 projects:
   - name: payments
+    location: /absolute/path/to/payments
+    branch: main
+    type: backend
+    context: |-
+      Service ownership and navigation context.
     updateLatest: true
 ```
 

@@ -1,4 +1,4 @@
-const { configPath, loadConfigProjection, updateProjectBranch } = require("../../core/config");
+const { configPath, loadConfigProjection, projectConfigPath, updateProjectBranch } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const {
   assertRegisteredBranchSwitchAvailable,
@@ -54,7 +54,7 @@ function applyAcceptActual(root, plan, options = {}) {
   const currentConfig = load(root, ["projects"]);
   assertAcceptPlanCurrent(plan, inspect(currentConfig, plan.project.name, options));
 
-  const transaction = createFileTransaction([configPath(root)]);
+  const transaction = createFileTransaction([configPath(root), projectConfigPath(root)]);
   try {
     (options.updateProjectBranch || updateProjectBranch)(root, {
       name: plan.project.name,
