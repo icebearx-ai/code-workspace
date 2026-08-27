@@ -152,7 +152,6 @@ function coreWholeFileTargets() {
     `${LOCAL_DIRECTORY}/${CONFIG_FILE}`,
     `${LOCAL_DIRECTORY}/${STATE_FILE}`,
     `${LOCAL_DIRECTORY}/${EXTENSION_STATE_FILE}`,
-    ".gitignore",
     ...manifest.managedFiles.map((entry) => entry.target),
     ...OBSOLETE_ASSETS,
   ]);
@@ -162,6 +161,7 @@ function coreManagedTargets() {
   const root = path.parse(PACKAGE_ROOT).root;
   return new Set([
     ...coreWholeFileTargets(),
+    ".gitignore",
     ...permissionTargets(root, ["claude", "codex"]).map((target) => path.relative(root, target).split(path.sep).join("/")),
   ]);
 }

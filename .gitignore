@@ -6,6 +6,9 @@ coverage
 # Code Workspace local project registry and managed state
 /.code-workspace/
 
+# Zhuiyi Jira MCP attachments
+/.jira-attachments/
+
 # 本机 Codex 配置
 /.codex/config.toml
 

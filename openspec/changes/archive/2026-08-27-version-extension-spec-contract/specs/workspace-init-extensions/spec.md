@@ -135,9 +135,13 @@ npm 包 SHALL 包含基于 Extension Spec v1 的 `zhuiyi-jira-mcp@0.1.0`。扩�
 - **WHEN** Jira 扩展准备远程运行包
 - **THEN** 扩展不运行 `npm install`、`npm ci`、`npm run build` 或归档内生命周期脚本
 
-#### Scenario: 不持久化 Jira 凭证
+#### Scenario: 不持久化真实 Jira 凭证
 - **WHEN** 扩展生成 Codex 或 Claude 配置
-- **THEN** staging、result、installed 状态、诊断和日志均不包含 Cookie、Token 或真实用户凭证
+- **THEN** 配置可包含空字符串 `JIRA_COOKIE` 占位符，但 staging、result、installed 状态、诊断和日志均不包含非空 Cookie、Token 或其他真实用户凭证
+
+#### Scenario: 忽略 Jira 附件目录
+- **WHEN** 扩展安装到 Workspace
+- **THEN** Host 通过共享文本 contribution 将 `/.jira-attachments/` 写入 `.gitignore`，并保留已有用户内容
 
 #### Scenario: 卸载保留附件
 - **WHEN** 用户卸载 Jira 扩展且 Workspace 存在 `.jira-attachments/`

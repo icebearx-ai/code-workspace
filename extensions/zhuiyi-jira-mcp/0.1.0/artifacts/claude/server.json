@@ -5,10 +5,12 @@
   ],
   "env": {
     "JIRA_AUTH_TYPE": "cookie",
+    "JIRA_COOKIE": "",
     "JIRA_API_VERSION": "latest",
     "JIRA_ALLOWED_HOSTS": "jira.in.wezhuiyi.com",
     "JIRA_REQUIREMENT_FIELDS": "{\"acceptanceCriteria\":\"customfield_10042\",\"storyPoints\":\"customfield_10016\"}",
     "JIRA_ATTACHMENT_DIR": ".jira-attachments",
-    "JIRA_ATTACHMENT_MAX_SIZE": "20MB"
+    "JIRA_ATTACHMENT_MAX_SIZE": "20MB",
+    "JIRA_ATTACHMENT_ALLOWED_TYPES": "pdf,png,jpg,jpeg,gif,webp,txt,md,csv,json,xml,doc,docx,xls,xlsx,ppt,pptx,html"
   }
 }

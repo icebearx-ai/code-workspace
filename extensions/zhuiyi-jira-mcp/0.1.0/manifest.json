@@ -6,7 +6,7 @@
   "name": "Zhuiyi Jira MCP",
   "version": "0.1.0",
   "entry": "init.js",
-  "entrySha256": "af7f4a71835402235b3d763418ee1b4135da0125a85aff1153bfaa0f6c83a022",
+  "entrySha256": "53a814ffcbc5669a024f921c5c30e74385d334b749913b0212bdcc2e48a2e0bd",
   "timeoutMs": 120000,
   "capabilities": {
     "networkHosts": ["gitee.com", "raw.giteeusercontent.com"]
@@ -17,6 +17,13 @@
       "kind": "directory",
       "ownership": "exclusive",
       "target": ".code-workspace/extensions/zhuiyi-jira-mcp/0.1.0"
+    },
+    {
+      "id": "gitignore",
+      "kind": "text-block",
+      "ownership": "shared",
+      "target": ".gitignore",
+      "format": "text"
     },
     {
       "id": "codex-config",

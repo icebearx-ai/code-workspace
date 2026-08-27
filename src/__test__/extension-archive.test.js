@@ -114,7 +114,8 @@ function context(plan, tools = ["codex", "claude"]) {
 test("Jira manifest declares only generic outputs while private release metadata freezes download constraints", () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(JIRA_EXTENSION_ROOT, "manifest.json"), "utf8"));
   const validated = validateManifest(manifest, { protectedTargets: new Set() });
-  assert.deepEqual(validated.outputs.map((output) => output.kind), ["directory", "text-block", "json-member"]);
+  assert.deepEqual(validated.outputs.map((output) => output.kind), ["directory", "text-block", "text-block", "json-member"]);
+  assert.equal(validated.outputs.find((output) => output.id === "gitignore").target, ".gitignore");
   assert.deepEqual(validated.capabilities.networkHosts, ["gitee.com", "raw.giteeusercontent.com"]);
   assert.equal(release.url, "https://gitee.com/liutaigang/zhuiyi-jira-mcp/raw/master/release/zhuiyi-jira-mcp-0.1.0.tar.gz");
   assert.equal(release.sha256, "74785207a75d1f7ea74ea893533835720baed016509ef4401c9b20f3b59a4afa");
@@ -216,21 +217,30 @@ test("Jira release preparation removes its managed archive before Host staging v
 test("Jira init installs a generic runtime directory and shared Codex and Claude contributions", () => {
   const plan = jiraPlan();
   const root = temporaryRoot();
+  fs.writeFileSync(path.join(root, ".gitignore"), "dist/\n");
   fs.writeFileSync(path.join(root, ".mcp.json"), `${JSON.stringify({ custom: true, mcpServers: { existing: { command: "existing" } } }, null, 2)}\n`);
   const result = executeExtension(root, plan, context(plan));
   assert.equal(result.status, "installed");
   assert(fs.existsSync(path.join(root, ".code-workspace", "extensions", "zhuiyi-jira-mcp", "0.1.0", "dist", "index.js")));
   const codex = fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8");
   assert.match(codex, /mcp_servers\.zhuiyi-jira/);
-  assert.doesNotMatch(codex, /JIRA_TOKEN|JIRA_COOKIE/);
+  assert.match(codex, /JIRA_COOKIE = ""/);
+  assert.match(codex, /JIRA_ATTACHMENT_ALLOWED_TYPES = "pdf,png,jpg,jpeg,gif,webp,txt,md,csv,json,xml,doc,docx,xls,xlsx,ppt,pptx,html"/);
+  assert.doesNotMatch(codex, /JIRA_TOKEN/);
   const claude = JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"));
   assert.equal(claude.custom, true);
   assert.equal(claude.mcpServers.existing.command, "existing");
   assert.equal(claude.mcpServers["zhuiyi-jira"].command, "node");
+  assert.equal(claude.mcpServers["zhuiyi-jira"].env.JIRA_COOKIE, "");
+  assert.equal(claude.mcpServers["zhuiyi-jira"].env.JIRA_ATTACHMENT_ALLOWED_TYPES, "pdf,png,jpg,jpeg,gif,webp,txt,md,csv,json,xml,doc,docx,xls,xlsx,ppt,pptx,html");
+  const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
+  assert.match(gitignore, /^dist\/$/m);
+  assert.match(gitignore, /BEGIN code-workspace-extension:zhuiyi-jira-mcp:gitignore/);
+  assert.match(gitignore, /^\/\.jira-attachments\/$/m);
   const installed = loadExtensionState(root).extensions[plan.id].installed;
   assert.equal(installed.protocolVersion, 3);
   assert.equal(installed.extensionSpecVersion, 1);
-  assert.deepEqual(installed.artifacts.map((artifact) => artifact.kind), ["directory", "text-block", "json-member"]);
+  assert.deepEqual(installed.artifacts.map((artifact) => artifact.kind), ["directory", "text-block", "text-block", "json-member"]);
   assert.equal(executeExtension(root, plan, context(plan)).status, "skipped");
 
   fs.mkdirSync(path.join(root, ".jira-attachments"));
@@ -238,6 +248,9 @@ test("Jira init installs a generic runtime directory and shared Codex and Claude
   assert.equal(applyExtensionUninstall(planExtensionUninstall(root, plan.id)).status, "uninstalled");
   assert.equal(fs.existsSync(path.join(root, ".code-workspace", "extensions", "zhuiyi-jira-mcp", "0.1.0")), false);
   assert.equal(fs.readFileSync(path.join(root, ".jira-attachments", "retained.txt"), "utf8"), "user data\n");
+  const retainedIgnore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
+  assert.match(retainedIgnore, /^dist\/$/m);
+  assert.doesNotMatch(retainedIgnore, /code-workspace-extension:zhuiyi-jira-mcp:gitignore|\.jira-attachments/);
   const retained = JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"));
   assert.equal(retained.custom, true);
   assert.equal(retained.mcpServers.existing.command, "existing");

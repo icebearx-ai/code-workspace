@@ -30,6 +30,9 @@ async function main() {
   await prepareRelease(release, runtime);
   outputs.push({ id: "runtime", source: "runtime" });
 
+  copyOutput(outputRoot, "artifacts/gitignore", "gitignore");
+  outputs.push({ id: "gitignore", source: "gitignore" });
+
   if (context.tools.includes("codex")) {
     copyOutput(outputRoot, "artifacts/codex/config.toml", "codex-config.toml");
     outputs.push({ id: "codex-config", source: "codex-config.toml" });
