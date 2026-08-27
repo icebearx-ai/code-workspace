@@ -4,7 +4,6 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
-const yaml = require("js-yaml");
 
 const { parse } = require("../cli/parser");
 const {
@@ -847,10 +846,10 @@ test("ext-manifest rejects core claims and duplicate ownership from persisted st
 });
 
 test("init parser accepts extension option ordering and CLI rejects version syntax before writing", () => {
-  assert.deepEqual(parse(argv("init", "--extensions", "openspec-workspace", ".", "--yes")).options.extensions, "openspec-workspace");
+  assert.deepEqual(parse(argv("init", "--extensions", "example-extension", ".", "--yes")).options.extensions, "example-extension");
   assert.deepEqual(parse(argv("init", ".", "--yes", "--extensions=none")).options.extensions, "none");
   const root = temporaryRoot();
-  const result = runCli(root, ["init", ".", "--extensions", "openspec-workspace@1.0.0", "--yes", "--json"]);
+  const result = runCli(root, ["init", ".", "--extensions", "example-extension@1.0.0", "--yes", "--json"]);
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).diagnostics[0].code, "EXTENSION_VERSION_SELECTION_UNSUPPORTED");
   assert.equal(fs.existsSync(path.join(root, ".code-workspace")), false);
@@ -858,7 +857,9 @@ test("init parser accepts extension option ordering and CLI rejects version synt
 
 test("interactive init offers extension names and confirms frozen versions and manifest hashes", async () => {
   const root = temporaryRoot();
-  const catalog = discoverExtensions();
+  const repository = temporaryRoot();
+  writeExtension(repository, { id: "example-extension", version: "1.2.3", name: "Example Extension" });
+  const catalog = discoverExtensions({ extensionsRoot: repository });
   let offered;
   let readyLines;
   const ui = {
@@ -870,7 +871,7 @@ test("interactive init offers extension names and confirms frozen versions and m
     select: async (_label, choices) => choices[0].value,
     multiselect: async (label, choices, initialValues) => {
       offered = { label, choices, initialValues };
-      return ["openspec-workspace"];
+      return ["example-extension"];
     },
     confirm: async () => true,
     close() {},
@@ -882,9 +883,9 @@ test("interactive init offers extension names and confirms frozen versions and m
     extensionState: emptyExtensionState(),
   });
   assert.equal(offered.label, "Extensions (experimental, select any)");
-  assert.deepEqual(offered.choices.map((entry) => entry.value), ["openspec-workspace", "zhuiyi-jira-mcp"]);
-  assert.match(offered.choices[0].label, /latest supported: 1\.0\.0 · Extension Spec 1/);
-  assert.equal(plan.extensions[0].version, "1.0.0");
+  assert.deepEqual(offered.choices.map((entry) => entry.value), ["example-extension"]);
+  assert.match(offered.choices[0].label, /latest supported: 1\.2\.3 · Extension Spec 1/);
+  assert.equal(plan.extensions[0].version, "1.2.3");
   assert.match(readyLines.find((line) => line.startsWith("Extensions")), /[a-f0-9]{64}/);
 });
 
@@ -944,49 +945,48 @@ test("interactive extension install treats ESC and empty selection as successful
   assert.equal(fs.existsSync(extensionStatePath(root)), false);
 });
 
-test("extension install requires explicit names non-interactively and confirmation before writing", () => {
+test("extension install requires explicit names non-interactively and confirmation before writing", async () => {
   const root = temporaryRoot();
   assert.equal(runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]).status, 0);
   const noNames = runCli(root, ["extension", "install", "--yes", "--json"]);
   assert.equal(noNames.status, 1);
   assert.equal(JSON.parse(noNames.stdout).diagnostics[0].code, "EXTENSION_SELECTION_REQUIRED");
 
-  const versioned = runCli(root, ["extension", "install", "openspec-workspace@1.0.0", "--yes", "--json"]);
+  const versioned = runCli(root, ["extension", "install", "example-extension@1.0.0", "--yes", "--json"]);
   assert.equal(versioned.status, 1);
   assert.equal(JSON.parse(versioned.stdout).diagnostics[0].code, "EXTENSION_VERSION_SELECTION_UNSUPPORTED");
 
-  const target = path.join(root, ".codex", "skills", "code-workspace-openspec-propose", "SKILL.md");
-  const unconfirmed = runCli(root, ["extension", "install", "openspec-workspace", "--json"]);
-  assert.equal(unconfirmed.status, 1);
-  assert.equal(JSON.parse(unconfirmed.stdout).diagnostics[0].code, "CLI_CONFIRMATION_REQUIRED");
-  assert.equal(fs.existsSync(target), false);
-
-  const textInstalled = runCli(root, ["extension", "install", "openspec-workspace", "--yes"]);
-  assert.equal(textInstalled.status, 0, textInstalled.stderr);
-  assert.match(textInstalled.stdout, /Installed openspec-workspace@1\.0\.0\./);
+  const repository = temporaryRoot();
+  writeExtension(repository, { id: "example-extension" });
+  await assert.rejects(executeExtensionInstall({
+    root,
+    args: ["example-extension"],
+    options: { json: true },
+    config: loadConfigProjection(root, ["identity", "language"]),
+    dependencies: { extensionsRoot: repository, interactive: false },
+  }), (error) => error.code === "CLI_CONFIRMATION_REQUIRED");
+  assert.equal(fs.existsSync(extensionStatePath(root)), false);
 });
 
-test("CLI reinstalls an uninstalled extension and repeated install is idempotent without rewriting core assets", () => {
+test("standalone extension install is idempotent without rewriting core assets", async () => {
+  const repository = temporaryRoot();
+  const definition = writeExtension(repository, { id: "example-extension" });
   const root = temporaryRoot();
   assert.equal(runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]).status, 0);
   const coreFile = path.join(root, "AGENTS.md");
   const coreBefore = fs.readFileSync(coreFile, "utf8");
-  const target = path.join(root, ".codex", "skills", "code-workspace-openspec-propose", "SKILL.md");
-
-  const installed = runCli(root, ["extension", "install", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(installed.status, 0, installed.stderr);
-  assert.equal(JSON.parse(installed.stdout).data.results[0].status, "installed");
-  assert(fs.existsSync(target));
+  const invocation = {
+    root,
+    args: [definition.id],
+    options: { yes: true, json: true },
+    config: loadConfigProjection(root, ["identity", "language"]),
+    dependencies: { extensionsRoot: repository, interactive: false },
+  };
+  const installed = await executeExtensionInstall(invocation);
+  assert.equal(installed.data.results[0].status, "installed");
   assert.equal(fs.readFileSync(coreFile, "utf8"), coreBefore);
-
-  assert.equal(runCli(root, ["extension", "uninstall", "openspec-workspace", "--yes", "--json"]).status, 0);
-  assert.equal(fs.existsSync(target), false);
-  const reinstalled = runCli(root, ["extension", "install", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(reinstalled.status, 0, reinstalled.stderr);
-  assert.equal(JSON.parse(reinstalled.stdout).data.results[0].status, "installed");
-  const repeated = runCli(root, ["extension", "install", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(repeated.status, 0, repeated.stderr);
-  assert.deepEqual(JSON.parse(repeated.stdout).data.summary, { total: 1, succeeded: 0, skipped: 1, failed: 0 });
+  const repeated = await executeExtensionInstall(invocation);
+  assert.deepEqual(repeated.data.summary, { total: 1, succeeded: 0, skipped: 1, failed: 0 });
 });
 
 test("standalone extension install preserves ordered best-effort results and fails when one extension fails", async () => {
@@ -1010,39 +1010,6 @@ test("standalone extension install preserves ordered best-effort results and fai
   assert.equal(fs.existsSync(path.join(root, working.target)), true);
 });
 
-test("extension install loads only identity and language configuration domains", () => {
-  const root = temporaryRoot();
-  assert.equal(runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]).status, 0);
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const config = yaml.load(fs.readFileSync(configFile, "utf8"));
-  config.monitor = { url: "not-a-url" };
-  config.projects = "invalid";
-  fs.writeFileSync(configFile, yaml.dump(config));
-  const installed = runCli(root, ["extension", "install", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(installed.status, 0, installed.stderr);
-  assert.equal(JSON.parse(installed.stdout).data.results[0].status, "installed");
-});
-
-test("CLI installs an explicit extension, defaults to it on re-init, and none does not uninstall", () => {
-  const root = temporaryRoot();
-  const first = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(first.status, 0, first.stderr);
-  const firstEnvelope = JSON.parse(first.stdout);
-  assert.equal(firstEnvelope.data.extensions.results[0].status, "installed");
-  const target = path.join(root, ".codex", "skills", "code-workspace-openspec-propose", "SKILL.md");
-  assert(fs.existsSync(target));
-
-  const repeated = runCli(root, ["init", ".", "--tools", "codex", "--yes", "--json"]);
-  assert.equal(repeated.status, 0, repeated.stderr);
-  assert.deepEqual(JSON.parse(repeated.stdout).data.extensions.summary, { installed: 0, skipped: 1, failed: 0 });
-
-  const none = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]);
-  assert.equal(none.status, 0, none.stderr);
-  assert.deepEqual(JSON.parse(none.stdout).data.extensions.requested, []);
-  assert(fs.existsSync(target));
-  assert.equal(loadExtensionState(root).extensions["openspec-workspace"].installed.version, "1.0.0");
-});
-
 test("explicit none isolates core re-init from an unreadable extension state", () => {
   const root = temporaryRoot();
   assert.equal(runCli(root, ["init", ".", "--tools", "none", "--extensions", "none", "--yes", "--json"]).status, 0);
@@ -1062,47 +1029,4 @@ test("ordinary core re-init survives an unreadable extension state with a warnin
   const envelope = JSON.parse(repeated.stdout);
   assert.equal(envelope.ok, true);
   assert(envelope.diagnostics.some((entry) => entry.code === "EXTENSION_STATE_PARSE_FAILED"));
-});
-
-test("CLI uninstalls a bundled extension transactionally and is idempotent", () => {
-  const root = temporaryRoot();
-  const installed = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(installed.status, 0, installed.stderr);
-  const target = path.join(root, ".codex", "skills", "code-workspace-openspec-propose", "SKILL.md");
-  assert(fs.existsSync(target));
-  const removed = runCli(root, ["extension", "uninstall", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(JSON.parse(removed.stdout).data.status, "uninstalled");
-  assert.equal(fs.existsSync(target), false);
-  assert.equal(loadExtensionState(root).extensions["openspec-workspace"], undefined);
-  const repeated = runCli(root, ["extension", "uninstall", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(repeated.status, 0, repeated.stderr);
-  assert.equal(JSON.parse(repeated.stdout).data.status, "skipped");
-});
-
-test("CLI reports an extension failure as a warning without failing successful core init", () => {
-  const root = temporaryRoot();
-  const first = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(first.status, 0, first.stderr);
-  const target = path.join(root, ".codex", "skills", "code-workspace-openspec-propose", "SKILL.md");
-  fs.appendFileSync(target, "\nlocal edit\n");
-  const repeated = runCli(root, ["init", ".", "--tools", "codex", "--yes", "--json"]);
-  assert.equal(repeated.status, 0, repeated.stderr);
-  const envelope = JSON.parse(repeated.stdout);
-  assert.equal(envelope.ok, true);
-  assert.deepEqual(envelope.data.extensions.summary, { installed: 0, skipped: 0, failed: 1 });
-  assert.equal(envelope.data.extensions.results[0].code, "EXTENSION_ARTIFACT_MODIFIED");
-  assert.equal(envelope.diagnostics[0].code, "EXTENSION_INIT_FAILED");
-  assert.equal(envelope.diagnostics[0].severity, "warning");
-  assert.equal(envelope.diagnostics[0].causeCode, "EXTENSION_ARTIFACT_MODIFIED");
-  assert.match(fs.readFileSync(target, "utf8"), /local edit/);
-});
-
-test("a core init failure never starts the requested extension", () => {
-  const root = temporaryRoot();
-  fs.writeFileSync(path.join(root, "AGENTS.md"), "user-owned instructions\n");
-  const result = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "openspec-workspace", "--yes", "--json"]);
-  assert.equal(result.status, 1);
-  assert.equal(fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-openspec-propose", "SKILL.md")), false);
-  assert.equal(fs.existsSync(extensionStatePath(root)), false);
 });

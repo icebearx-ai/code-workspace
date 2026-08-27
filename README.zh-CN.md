@@ -50,20 +50,20 @@ code-workspace init . \
 `init` 可以从 npm 包内随附的版本化 `extensions/` 仓库安装集成。交互模式按扩展名多选；非交互模式传入逗号分隔的扩展名。独立安装命令接受一个或多个扩展名；不传名称时打开内置扩展多选，按 ESC 可无修改退出：
 
 ```bash
-code-w init . --extensions openspec-workspace --yes
+code-w init . --extensions zhuiyi-jira-mcp --yes
 code-w init . --extensions none --yes
 code-w extension install
-code-w extension install openspec-workspace --yes
-code-w extension uninstall openspec-workspace --yes
+code-w extension install zhuiyi-jira-mcp --yes
+code-w extension uninstall zhuiyi-jira-mcp --yes
 ```
 
 `init`、扩展安装和扩展卸载共享的 Workspace 操作锁配置在 Code Workspace 项目自身的 `.env` 中（不在目标 Workspace 中）。`CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` 默认值为 `5000`，`CODE_WORKSPACE_INIT_LOCK_STALE_MS` 默认值为 `30000`；进程环境变量优先于 `.env`。配置项名称见 `.env.example`。
 
-用户只选择扩展名，不能选择版本；`openspec-workspace@1.0.0` 会被明确拒绝。Code Workspace 在确认前，从 Host 明确支持的 Extension Spec 实现中解析最高扩展 SemVer。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装扩展；已有 Workspace 重新初始化时，默认选择已安装扩展，并在存在更高受支持内置版本时升级。`none` 只跳过本次扩展初始化，不会卸载已有制品。
+用户只选择扩展名，不能选择版本；`zhuiyi-jira-mcp@0.1.0` 会被明确拒绝。Code Workspace 在确认前，从 Host 明确支持的 Extension Spec 实现中解析最高扩展 SemVer。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装扩展；已有 Workspace 重新初始化时，默认选择已安装扩展，并在存在更高受支持内置版本时升级。`none` 只跳过本次扩展初始化，不会卸载已有制品。
 
 `extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。
 
-内置 `openspec-workspace` 扩展会为选中的 Agent 工具安装命名空间为 `code-workspace-openspec-propose` 的 Skill；它不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
+当前随包提供的内置扩展是 `zhuiyi-jira-mcp`，用于为选中的 Agent 工具配置 Jira MCP 服务；它不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
 
 扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.code-workspace/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
 

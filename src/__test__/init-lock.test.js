@@ -108,8 +108,8 @@ test("extension install and uninstall share the Workspace operation lock", async
   const release = await acquireInitLock(root, { config: { update: 5000, stale: 30000 } });
   try {
     for (const args of [
-      ["extension", "install", "openspec-workspace", "--yes", "--json"],
-      ["extension", "uninstall", "openspec-workspace", "--yes", "--json"],
+      ["extension", "install", "example-extension", "--yes", "--json"],
+      ["extension", "uninstall", "example-extension", "--yes", "--json"],
     ]) {
       const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8" });
       assert.equal(result.status, 1);

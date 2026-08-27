@@ -5,7 +5,27 @@ const path = require("node:path");
 const test = require("node:test");
 const zlib = require("node:zlib");
 
-const JIRA_EXTENSION_ROOT = path.resolve(__dirname, "..", "..", "extensions", "zhuiyi-jira-mcp", "0.1.0");
+const EXTENSIONS_ROOT = path.resolve(__dirname, "..", "..", "extensions");
+
+function findArchiveExtensionRoot() {
+  for (const extension of fs.readdirSync(EXTENSIONS_ROOT, { withFileTypes: true })) {
+    if (!extension.isDirectory() || extension.isSymbolicLink()) continue;
+    const extensionRoot = path.join(EXTENSIONS_ROOT, extension.name);
+    for (const version of fs.readdirSync(extensionRoot, { withFileTypes: true })) {
+      if (!version.isDirectory() || version.isSymbolicLink()) continue;
+      const versionRoot = path.join(extensionRoot, version.name);
+      if (fs.existsSync(path.join(versionRoot, "release.json")) && fs.existsSync(path.join(versionRoot, "lib", "archive.js"))) return versionRoot;
+    }
+  }
+  throw new Error("No archive-backed extension fixture found");
+}
+
+const JIRA_EXTENSION_ROOT = findArchiveExtensionRoot();
+const extensionManifest = JSON.parse(fs.readFileSync(path.join(JIRA_EXTENSION_ROOT, "manifest.json"), "utf8"));
+const EXTENSION_ID = extensionManifest.id;
+const EXTENSION_VERSION = extensionManifest.version;
+const RUNTIME_TARGET = extensionManifest.outputs.find((output) => output.id === "runtime").target;
+const SERVER_NAME = extensionManifest.outputs.find((output) => output.kind === "json-member").selector.split("/").at(-1);
 const release = require(path.join(JIRA_EXTENSION_ROOT, "release.json"));
 const {
   download,
@@ -29,6 +49,14 @@ const { sha256 } = require("../core/fs");
 
 function temporaryRoot(prefix = "code-workspace-jira-extension-test-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function workspaceTarget(root, target) {
+  return path.join(root, ...target.split("/"));
+}
+
+function escaped(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function octal(value, length) {
@@ -77,7 +105,7 @@ function packageArchive(options = {}) {
 
 function jiraRepository() {
   const repository = temporaryRoot("code-workspace-jira-repository-");
-  const versionRoot = path.join(repository, "zhuiyi-jira-mcp", "0.1.0");
+  const versionRoot = path.join(repository, EXTENSION_ID, EXTENSION_VERSION);
   fs.cpSync(JIRA_EXTENSION_ROOT, versionRoot, { recursive: true });
   fs.writeFileSync(path.join(versionRoot, "lib", "archive.js"), [
     'const fs = require("node:fs");',
@@ -85,7 +113,7 @@ function jiraRepository() {
     'async function prepareRelease(_release, outputRoot) {',
     '  fs.mkdirSync(path.join(outputRoot, "dist"), { recursive: true });',
     '  fs.mkdirSync(path.join(outputRoot, "node_modules", "zod"), { recursive: true });',
-    '  fs.writeFileSync(path.join(outputRoot, "package.json"), JSON.stringify({ name: "zhuiyi-jira-mcp", version: "0.1.0" }) + "\\n");',
+    `  fs.writeFileSync(path.join(outputRoot, "package.json"), JSON.stringify({ name: ${JSON.stringify(release.package.name)}, version: ${JSON.stringify(release.package.version)} }) + "\\n");`,
     '  fs.writeFileSync(path.join(outputRoot, "dist", "index.js"), "process.exitCode = 0;\\n");',
     '  fs.writeFileSync(path.join(outputRoot, "node_modules", "zod", "package.json"), "{\\"name\\":\\"zod\\"}\\n");',
     '}',
@@ -98,7 +126,7 @@ function jiraRepository() {
 function jiraPlan(tools = ["codex", "claude"]) {
   const repository = jiraRepository();
   const catalog = discoverExtensions({ extensionsRoot: repository });
-  return resolveExtensionPlans(catalog, ["zhuiyi-jira-mcp"], { tools, state: emptyExtensionState() })[0];
+  return resolveExtensionPlans(catalog, [EXTENSION_ID], { tools, state: emptyExtensionState() })[0];
 }
 
 function context(plan, tools = ["codex", "claude"]) {
@@ -112,15 +140,15 @@ function context(plan, tools = ["codex", "claude"]) {
 }
 
 test("Jira manifest declares only generic outputs while private release metadata freezes download constraints", () => {
-  const manifest = JSON.parse(fs.readFileSync(path.join(JIRA_EXTENSION_ROOT, "manifest.json"), "utf8"));
-  const validated = validateManifest(manifest, { protectedTargets: new Set() });
+  const validated = validateManifest(extensionManifest, { protectedTargets: new Set() });
   assert.deepEqual(validated.outputs.map((output) => output.kind), ["directory", "text-block", "text-block", "json-member"]);
   assert.equal(validated.outputs.find((output) => output.id === "gitignore").target, ".gitignore");
   assert.deepEqual(validated.capabilities.networkHosts, ["gitee.com", "raw.giteeusercontent.com"]);
-  assert.equal(release.url, "https://gitee.com/liutaigang/zhuiyi-jira-mcp/raw/master/release/zhuiyi-jira-mcp-0.1.0.tar.gz");
+  assert.equal(new URL(release.url).protocol, "https:");
+  assert.match(release.url, new RegExp(`/release/${escaped(EXTENSION_ID)}-${escaped(EXTENSION_VERSION)}\\.tar\\.gz$`));
   assert.equal(release.sha256, "74785207a75d1f7ea74ea893533835720baed016509ef4401c9b20f3b59a4afa");
-  assert.equal(release.package.name, "zhuiyi-jira-mcp");
-  assert.equal(release.package.version, "0.1.0");
+  assert.equal(release.package.name, EXTENSION_ID);
+  assert.equal(release.package.version, EXTENSION_VERSION);
   assert.equal(release.entry, "dist/index.js");
   assert.deepEqual(release.allowedHosts, validated.capabilities.networkHosts);
 });
@@ -186,7 +214,7 @@ test("Jira release preparation removes its managed archive before Host staging v
   const digest = sha256(archiveBytes);
   const staging = temporaryRoot();
   const runtime = path.join(staging, "runtime");
-  const managedArchive = path.join(staging, "zhuiyi-jira-mcp.tar.gz");
+  const managedArchive = path.join(staging, `${EXTENSION_ID}.tar.gz`);
   fs.copyFileSync(archive, managedArchive);
 
   await prepareRelease({ ...release, sha256: digest }, runtime, {
@@ -195,20 +223,20 @@ test("Jira release preparation removes its managed archive before Host staging v
 
   assert.equal(fs.existsSync(managedArchive), false);
   const plan = {
-    id: "zhuiyi-jira-mcp",
-    version: "0.1.0",
+    id: EXTENSION_ID,
+    version: EXTENSION_VERSION,
     extensionSpecVersion: 1,
     artifacts: [{
       id: "runtime",
       kind: "directory",
       ownership: "exclusive",
-      target: ".code-workspace/extensions/zhuiyi-jira-mcp/0.1.0",
+      target: RUNTIME_TARGET,
     }],
   };
   const result = {
     schemaVersion: 1,
     extensionSpecVersion: 1,
-    extension: { id: "zhuiyi-jira-mcp", version: "0.1.0" },
+    extension: { id: EXTENSION_ID, version: EXTENSION_VERSION },
     outputs: [{ id: "runtime", source: "runtime" }],
   };
   assert.equal(verifyExtensionOutput(staging, result, plan).length, 1);
@@ -221,21 +249,21 @@ test("Jira init installs a generic runtime directory and shared Codex and Claude
   fs.writeFileSync(path.join(root, ".mcp.json"), `${JSON.stringify({ custom: true, mcpServers: { existing: { command: "existing" } } }, null, 2)}\n`);
   const result = executeExtension(root, plan, context(plan));
   assert.equal(result.status, "installed");
-  assert(fs.existsSync(path.join(root, ".code-workspace", "extensions", "zhuiyi-jira-mcp", "0.1.0", "dist", "index.js")));
+  assert(fs.existsSync(path.join(workspaceTarget(root, RUNTIME_TARGET), "dist", "index.js")));
   const codex = fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8");
-  assert.match(codex, /mcp_servers\.zhuiyi-jira/);
+  assert.match(codex, new RegExp(`mcp_servers\\.${escaped(SERVER_NAME)}`));
   assert.match(codex, /JIRA_COOKIE = ""/);
   assert.match(codex, /JIRA_ATTACHMENT_ALLOWED_TYPES = "pdf,png,jpg,jpeg,gif,webp,txt,md,csv,json,xml,doc,docx,xls,xlsx,ppt,pptx,html"/);
   assert.doesNotMatch(codex, /JIRA_TOKEN/);
   const claude = JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"));
   assert.equal(claude.custom, true);
   assert.equal(claude.mcpServers.existing.command, "existing");
-  assert.equal(claude.mcpServers["zhuiyi-jira"].command, "node");
-  assert.equal(claude.mcpServers["zhuiyi-jira"].env.JIRA_COOKIE, "");
-  assert.equal(claude.mcpServers["zhuiyi-jira"].env.JIRA_ATTACHMENT_ALLOWED_TYPES, "pdf,png,jpg,jpeg,gif,webp,txt,md,csv,json,xml,doc,docx,xls,xlsx,ppt,pptx,html");
+  assert.equal(claude.mcpServers[SERVER_NAME].command, "node");
+  assert.equal(claude.mcpServers[SERVER_NAME].env.JIRA_COOKIE, "");
+  assert.equal(claude.mcpServers[SERVER_NAME].env.JIRA_ATTACHMENT_ALLOWED_TYPES, "pdf,png,jpg,jpeg,gif,webp,txt,md,csv,json,xml,doc,docx,xls,xlsx,ppt,pptx,html");
   const gitignore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
   assert.match(gitignore, /^dist\/$/m);
-  assert.match(gitignore, /BEGIN code-workspace-extension:zhuiyi-jira-mcp:gitignore/);
+  assert.match(gitignore, new RegExp(`BEGIN code-workspace-extension:${escaped(EXTENSION_ID)}:gitignore`));
   assert.match(gitignore, /^\/\.jira-attachments\/$/m);
   const installed = loadExtensionState(root).extensions[plan.id].installed;
   assert.equal(installed.protocolVersion, 3);
@@ -246,22 +274,22 @@ test("Jira init installs a generic runtime directory and shared Codex and Claude
   fs.mkdirSync(path.join(root, ".jira-attachments"));
   fs.writeFileSync(path.join(root, ".jira-attachments", "retained.txt"), "user data\n");
   assert.equal(applyExtensionUninstall(planExtensionUninstall(root, plan.id)).status, "uninstalled");
-  assert.equal(fs.existsSync(path.join(root, ".code-workspace", "extensions", "zhuiyi-jira-mcp", "0.1.0")), false);
+  assert.equal(fs.existsSync(workspaceTarget(root, RUNTIME_TARGET)), false);
   assert.equal(fs.readFileSync(path.join(root, ".jira-attachments", "retained.txt"), "utf8"), "user data\n");
   const retainedIgnore = fs.readFileSync(path.join(root, ".gitignore"), "utf8");
   assert.match(retainedIgnore, /^dist\/$/m);
-  assert.doesNotMatch(retainedIgnore, /code-workspace-extension:zhuiyi-jira-mcp:gitignore|\.jira-attachments/);
+  assert.doesNotMatch(retainedIgnore, new RegExp(`code-workspace-extension:${escaped(EXTENSION_ID)}:gitignore|\\.jira-attachments`));
   const retained = JSON.parse(fs.readFileSync(path.join(root, ".mcp.json"), "utf8"));
   assert.equal(retained.custom, true);
   assert.equal(retained.mcpServers.existing.command, "existing");
-  assert.equal(retained.mcpServers["zhuiyi-jira"], undefined);
+  assert.equal(retained.mcpServers[SERVER_NAME], undefined);
 });
 
 test("Jira uninstall rejects modified runtime or shared JSON contribution", () => {
   const runtimePlan = jiraPlan(["claude"]);
   const runtimeRoot = temporaryRoot();
   assert.equal(executeExtension(runtimeRoot, runtimePlan, context(runtimePlan, ["claude"])).status, "installed");
-  fs.appendFileSync(path.join(runtimeRoot, ".code-workspace", "extensions", "zhuiyi-jira-mcp", "0.1.0", "dist", "index.js"), "// local\n");
+  fs.appendFileSync(path.join(workspaceTarget(runtimeRoot, RUNTIME_TARGET), "dist", "index.js"), "// local\n");
   assert.throws(() => planExtensionUninstall(runtimeRoot, runtimePlan.id), (error) => error.code === "EXTENSION_ARTIFACT_MODIFIED");
 
   const jsonPlan = jiraPlan(["claude"]);
@@ -269,10 +297,10 @@ test("Jira uninstall rejects modified runtime or shared JSON contribution", () =
   assert.equal(executeExtension(jsonRoot, jsonPlan, context(jsonPlan, ["claude"])).status, "installed");
   const file = path.join(jsonRoot, ".mcp.json");
   const document = JSON.parse(fs.readFileSync(file, "utf8"));
-  document.mcpServers["zhuiyi-jira"].command = "changed";
+  document.mcpServers[SERVER_NAME].command = "changed";
   fs.writeFileSync(file, `${JSON.stringify(document, null, 2)}\n`);
   assert.throws(() => planExtensionUninstall(jsonRoot, jsonPlan.id), (error) => error.code === "EXTENSION_JSON_MEMBER_MODIFIED");
-  assert(fs.existsSync(path.join(jsonRoot, ".code-workspace", "extensions", "zhuiyi-jira-mcp", "0.1.0")));
+  assert(fs.existsSync(workspaceTarget(jsonRoot, RUNTIME_TARGET)));
 });
 
 test("Jira directory and shared configuration roll back together when state verification fails", () => {
@@ -284,7 +312,7 @@ test("Jira directory and shared configuration roll back together when state veri
     },
   });
   assert.equal(result.status, "failed");
-  assert.equal(fs.existsSync(path.join(root, ".code-workspace", "extensions", "zhuiyi-jira-mcp", "0.1.0")), false);
+  assert.equal(fs.existsSync(workspaceTarget(root, RUNTIME_TARGET)), false);
   assert.equal(fs.existsSync(path.join(root, ".codex", "config.toml")), false);
   assert.equal(loadExtensionState(root).extensions[plan.id].installed, null);
 });

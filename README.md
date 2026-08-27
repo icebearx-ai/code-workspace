@@ -50,20 +50,20 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 `init` can install integrations from the versioned `extensions/` repository shipped inside this npm package. Select extension names interactively, or pass a comma-separated name list non-interactively. The dedicated install command accepts one or more names; without names it opens the built-in extension multiselect, where ESC exits without changes:
 
 ```bash
-code-w init . --extensions openspec-workspace --yes
+code-w init . --extensions zhuiyi-jira-mcp --yes
 code-w init . --extensions none --yes
 code-w extension install
-code-w extension install openspec-workspace --yes
-code-w extension uninstall openspec-workspace --yes
+code-w extension install zhuiyi-jira-mcp --yes
+code-w extension uninstall zhuiyi-jira-mcp --yes
 ```
 
 The Workspace operation lock shared by init, extension install, and extension uninstall is configured in the Code Workspace project's `.env` (not in the target Workspace). `CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` defaults to `5000`, and `CODE_WORKSPACE_INIT_LOCK_STALE_MS` defaults to `30000`; process environment variables take precedence. See `.env.example` for the project configuration names.
 
-Users select names, not versions; `openspec-workspace@1.0.0` is intentionally rejected. Code Workspace resolves the highest extension SemVer implemented against a Host-supported Extension Spec before confirmation. A new non-interactive Workspace installs no extensions unless `--extensions` is provided. Re-initializing an existing Workspace defaults to its installed extensions and upgrades them when a newer supported built-in version exists. `none` skips extension work and does not uninstall existing artifacts.
+Users select names, not versions; `zhuiyi-jira-mcp@0.1.0` is intentionally rejected. Code Workspace resolves the highest extension SemVer implemented against a Host-supported Extension Spec before confirmation. A new non-interactive Workspace installs no extensions unless `--extensions` is provided. Re-initializing an existing Workspace defaults to its installed extensions and upgrades them when a newer supported built-in version exists. `none` skips extension work and does not uninstall existing artifacts.
 
 `extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run.
 
-The bundled `openspec-workspace` extension installs a namespaced `code-workspace-openspec-propose` skill for the selected Agent tools. It does not create an `openspec/` directory or install native OpenSpec commands.
+The bundled `zhuiyi-jira-mcp` extension configures the Jira MCP service for the selected Agent tools. It does not create an `openspec/` directory or install native OpenSpec commands.
 
 Extension entries run in separate Node processes and generate files in temporary staging directories. The host rejects undeclared, missing, symbolic-link, non-file, path-escaping, conflicting, and checksum-mismatched artifacts before transactionally installing them. Per-Workspace state is stored in `.code-workspace/ext-manifest.json`. A failed extension is reported as a warning and does not roll back successful core initialization or stop later extensions; a failed upgrade restores and retains the previous installed version.
 

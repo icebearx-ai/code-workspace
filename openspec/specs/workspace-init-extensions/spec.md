@@ -18,7 +18,7 @@
 - **THEN** Host 跳过较新版本并选择较低的受支持版本
 
 #### Scenario: 拒绝版本选择语法
-- **WHEN** 用户通过 `--extensions` 请求 `openspec-workspace@1.0.0`
+- **WHEN** 用户通过 `--extensions` 请求 `zhuiyi-jira-mcp@0.1.0`
 - **THEN** 系统以稳定的扩展选择错误拒绝请求且不执行初始化写入
 
 ### Requirement: 校验扩展 manifest 和目标所有权
@@ -102,17 +102,6 @@
 #### Scenario: 部分扩展失败
 - **WHEN** 核心成功且请求的多个扩展中至少一个失败
 - **THEN** 顶层结果保持成功，extensions results 保持请求顺序，summary 统计 installed、skipped、failed，并附带 warning diagnostics
-
-### Requirement: 发布首个 OpenSpec Workspace 扩展
-npm 包 SHALL 包含 `extensions/openspec-workspace` 的至少一个 Extension Spec v1 实现。该扩展 SHALL 根据 context 中选择的工具在 staging 中生成 Codex 和 Claude skill 文件，并在 result 中完整返回适用 output id 与 source；真实 Workspace target、所有权和摘要由静态 manifest 与 Host 决定。
-
-#### Scenario: 只为选择工具生成文件
-- **WHEN** context tools 只包含 `codex`
-- **THEN** 扩展只生成并返回 Codex output，Host 不要求不适用的 Claude output，也不写任何未声明目标
-
-#### Scenario: 发布包包含扩展仓库
-- **WHEN** 执行 npm pack dry-run
-- **THEN** 包内容包含 `extensions/openspec-workspace/<version>/init.js`、Extension Spec v1 manifest 和所需模板文件
 
 ### Requirement: 扩展入口与执行环境遵守最小契约
 系统 SHALL 在计划中冻结并在执行前验证 Extension Spec 版本、manifest、扩展入口和完整扩展版本目录摘要，且 SHALL 仅向扩展子进程传递运行所需的环境变量白名单。扩展规范 SHALL 以随包文档和 JSON Schema 集合发布；context 和 result SHALL 回显计划中的 Extension Spec 版本，context 不得包含真实 Workspace 路径，result 不得重新声明 target、所有权或摘要。
@@ -216,7 +205,7 @@ npm 包 SHALL 包含基于 Extension Spec v1 的 `zhuiyi-jira-mcp@0.1.0`。扩�
 系统 SHALL 提供 `extension install [name...]` planned-write 命令，不执行核心 Workspace 初始化。显式名称 SHALL 按参数顺序请求基于 Host 支持规范的最高扩展 SemVer；未提供名称时，系统 SHALL 只在交互 TTY 中展示全部有效内置扩展名称、最高受支持版本和规范版本，并允许多选。安装 SHALL 复用扩展的计划冻结、逐扩展事务、后置验证、回滚和状态持久化能力。
 
 #### Scenario: 显式安装已卸载扩展
-- **WHEN** 用户执行 `extension install openspec-workspace --yes` 且该扩展未安装
+- **WHEN** 用户执行 `extension install zhuiyi-jira-mcp --yes` 且该扩展未安装
 - **THEN** 系统安装最高受支持版本、验证制品和 installed 状态，并且不重写核心 Workspace 制品
 
 #### Scenario: 无参数交互多选

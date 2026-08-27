@@ -95,7 +95,7 @@ async function executeExtensionInstall(invocation) {
   let requested = invocation.args.length > 0 ? normalizeExtensionNames(invocation.args) : null;
   if (requested === null && !interactive) {
     throw new WorkspaceError("EXTENSION_SELECTION_REQUIRED", "Extension installation requires one or more extension names outside interactive mode.", {
-      remediation: "Pass one or more names, for example: code-w extension install openspec-workspace --yes",
+      remediation: "Pass one or more extension names, for example: code-w extension install <extension-name> --yes",
     });
   }
 
