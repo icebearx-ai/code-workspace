@@ -22,6 +22,17 @@
       "sha256": "4dc207305a3975ab7272addedf3bc2930054e860c2b0b2b6e0e102f4457f5cc0"
     }
   ],
+  "coordinationArtifacts": {
+    "schemaVersion": 1,
+    "sources": [
+      { "id": "task-coordination-codex-hooks", "path": "templates/codex/task-coordination-hooks.json", "sha256": "68fcefa83f75294fd270713e07eb3ea3f266e63dc9d2be4ba77fe8af7596742f" },
+      { "id": "task-coordination-claude-settings", "path": "templates/claude/task-coordination-settings.json", "sha256": "4faedcc67a78c8e7e61e44dc34571e55d0d3a2ce1ce7aa636222e1813505ca29" }
+    ],
+    "managedFiles": [
+      { "id": "task-coordination-codex-hooks", "target": ".codex/task-coordination-hooks.json", "tool": "codex" },
+      { "id": "task-coordination-claude-settings", "target": ".claude/task-coordination-settings.json", "tool": "claude" }
+    ]
+  },
   "managedFiles": [
     {
       "id": "workspace-user-guide",

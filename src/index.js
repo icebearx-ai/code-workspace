@@ -9,6 +9,9 @@ const monitor = require("./monitor");
 const monitorPage = require("./monitor/page");
 const project = require("./core/project");
 const validation = require("./core/validation");
+const taskCoordination = require("./core/task-coordination");
+const taskCoordinationProtocol = require("./core/task-coordination-protocol");
+const taskCoordinationManaged = require("./core/task-coordination-managed");
 
 module.exports = {
   ...config,
@@ -22,4 +25,7 @@ module.exports = {
   ...monitorPage,
   ...project,
   ...validation,
+  ...taskCoordination,
+  ...taskCoordinationProtocol,
+  ...taskCoordinationManaged,
 };

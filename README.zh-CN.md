@@ -34,6 +34,7 @@ code-workspace init . \
 ```
 
 可用 `--tools claude`、`--tools codex` 或 `--tools none` 覆盖默认工具选择。选择 Codex 时默认启用监控；可传 `--no-monitor` 关闭。
+传入 `--coordination` 可为选中的工具安装与 Monitor 独立的写入协调 Hook 制品。
 
 初始化只写入 Workspace 自有状态和集成：
 
@@ -160,11 +161,45 @@ AI/Agent 不得直接编辑该文件；可以读取策略并调用已注册的 C
 
 `permissions apply` 会展示选中 Agent 工具的完整授权计划，在需要修改时要求确认，实施并验证请求的授权，并按工具报告结果。Agent 目录访问仍属于用户授权。该命令只补齐已注册项目缺失的访问权限，不撤销额外目录；如需撤销，请使用 `project remove` 或显式编辑 Agent 设置。
 
+## 协调并行 Agent 写入
+
+安装并信任 Codex 或 Claude 协调 Hook 后，Code Workspace 会把协调台账保存在 Workspace 外部，并在受支持工具真正运行前预约写入范围。同一项目写不同文件时，经过一次明确的项目并行确认即可继续；范围重叠时强制拒绝，不提供强制覆盖。
+
+查询任务、范围 claim 和待处理裁决：
+
+```bash
+code-workspace task list --json
+code-workspace task show <task-id> --json
+code-workspace task lock list --json
+code-workspace task decision show <request-id> --json
+```
+
+查看证据后再处理裁决。写入型命令需要确认；自动化场景必须传 `--yes`，裁决成功后始终重新执行原 Agent 操作：
+
+```bash
+code-workspace task decision keep <request-id> --yes --json
+code-workspace task decision approve <request-id> --yes --json
+code-workspace task decision release <request-id> --yes --json
+code-workspace task decision abandon <request-id> --yes --json
+```
+
+`ACTIVE` 文件冲突不能覆盖。`UNKNOWN` reservation 必须由用户选择保留，或放弃整个 generation；已知旧进程仍存活时不能 abandon。该机制只覆盖已信任、已启用且受支持的 Agent Hook，不是编辑器、Shell 或外部进程的 OS 级沙箱。
+
+Hook 支持矩阵（schema v1）：
+
+| Provider | 生命周期事件 | 写入事件 | 目标处理 |
+| --- | --- | --- | --- |
+| Codex | `SessionStart`、`UserPromptSubmit`、`PermissionRequest`、`Stop`、`SessionEnd` | `PreToolUse`、`PostToolUse` 及可用失败事件 | 已知 Edit/Write 类工具使用 exact 文件；未知 Shell/工具使用 `PROJECT_WIDE` |
+| Claude | `SessionStart`、`UserPromptSubmit`、`PermissionRequest`、`Stop`、`StopFailure`、`SessionEnd` | `PreToolUse`、`PostToolUse`、`PostToolUseFailure` | 与 Codex 使用相同的归一化核心决策和范围规则 |
+
+适配器通过版本化 fixture 固化输入，而不是承诺未来 Agent 版本保持相同原生字段。新增或无法识别的工具按可能写入处理并 fail closed；Hook 强制范围不包含被绕过或禁用的 Hook、外部编辑器或任意 OS 进程。
+
 ## 更新与语言
 
 ```bash
 code-workspace update --json
 code-workspace update --language en-US --json
+code-workspace update --coordination --json
 code-workspace language --json
 ```
 

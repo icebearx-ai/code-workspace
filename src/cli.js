@@ -13,6 +13,7 @@ const { executeProject } = require("./cli/commands/project");
 const { executeProjectBranch } = require("./cli/commands/project-branch");
 const { executeProjectBranchUpdateLatest } = require("./cli/commands/project-branch-update");
 const { executeUpdate, updateWorkspace } = require("./cli/commands/update");
+const { executeTask } = require("./cli/commands/task");
 const {
   executeDoctor,
   executeLanguage,
@@ -29,6 +30,7 @@ async function dispatch(invocation) {
   if (key === "update") return executeUpdate(invocation);
   if (key === "language") return executeLanguage(invocation);
   if (key === "permissions apply") return executePermissions(invocation);
+  if (key.startsWith("task ")) return executeTask(invocation);
   if (key === "doctor") return executeDoctor(invocation);
   if (key === "completion") return executeCompletion(invocation);
   if (key === "help") return executeHelp();

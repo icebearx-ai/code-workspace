@@ -2,6 +2,8 @@
 
 本文描述 Workspace 的职责边界：管理多项目注册表和 Agent 安全集成，并与原生 OpenSpec 实现保持解耦。
 
+并行 Agent 写入协调的需求目的、设计理念、责任边界和支持限制见[《Agent 写入协调设计》](task-write-coordination.zh-CN.md)。
+
 ## 核心原则
 
 - Workspace 不安装、检测或调用其他 OpenSpec CLI。

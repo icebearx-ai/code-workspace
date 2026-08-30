@@ -34,6 +34,7 @@ code-workspace init . \
 ```
 
 Use `--tools claude`, `--tools codex`, or `--tools none` to override the default tool selection. Codex monitoring is enabled by default when Codex is selected; use `--no-monitor` to disable it.
+Pass `--coordination` to install the provider-neutral write-coordination Hook artifacts for the selected tools.
 
 Initialization writes only Workspace-owned state and integrations:
 
@@ -160,11 +161,45 @@ AI/Agent must not directly edit this file. They may read the policy and invoke t
 
 `permissions apply` shows the complete authorization plan for the selected Agent tools, requires confirmation when changes are needed, applies and verifies the requested grants, and reports the result per tool. Agent directory access remains a user authorization. The command adds missing registered-project access but does not revoke additional directories; use `project remove` or edit the Agent settings explicitly to revoke access.
 
+## Coordinate concurrent Agent writes
+
+When trusted Codex or Claude Hooks are installed, Code Workspace keeps the coordination ledger outside the Workspace and reserves write ranges before a supported tool runs. Different files in one project can proceed after an explicit project-parallel approval; overlapping files are denied without a force override.
+
+Inspect tasks, claims, and pending recovery decisions:
+
+```bash
+code-workspace task list --json
+code-workspace task show <task-id> --json
+code-workspace task lock list --json
+code-workspace task decision show <request-id> --json
+```
+
+Resolve a pending decision only after reviewing its evidence. Planned-write commands require confirmation; automation must pass `--yes` and always retry the original Agent operation after a successful decision:
+
+```bash
+code-workspace task decision keep <request-id> --yes --json
+code-workspace task decision approve <request-id> --yes --json
+code-workspace task decision release <request-id> --yes --json
+code-workspace task decision abandon <request-id> --yes --json
+```
+
+`ACTIVE` file conflicts cannot be overridden. `UNKNOWN` reservations remain protected until the user keeps them or abandons the entire generation; a known live process blocks abandon. The mechanism covers only trusted, enabled, supported Agent Hooks and is not an OS-level sandbox for editors, shells, or external processes.
+
+Hook support matrix (schema v1):
+
+| Provider | Lifecycle events | Write events | Target handling |
+| --- | --- | --- | --- |
+| Codex | `SessionStart`, `UserPromptSubmit`, `PermissionRequest`, `Stop`, `SessionEnd` | `PreToolUse`, `PostToolUse` and available failure events | Known Edit/Write-style tools use exact files; unknown shell/tools use `PROJECT_WIDE` |
+| Claude | `SessionStart`, `UserPromptSubmit`, `PermissionRequest`, `Stop`, `StopFailure`, `SessionEnd` | `PreToolUse`, `PostToolUse`, `PostToolUseFailure` | Same normalized core decisions and scope rules as Codex |
+
+The adapters are versioned fixtures rather than a promise that future Agent releases keep identical native fields. New or unrecognized tools fail closed as possible writes; Hook enforcement does not cover bypassed or disabled Hooks, external editors, or arbitrary OS processes.
+
 ## Update and language
 
 ```bash
 code-workspace update --json
 code-workspace update --language zh-CN --json
+code-workspace update --coordination --json
 code-workspace language --json
 ```
 

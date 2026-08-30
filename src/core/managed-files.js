@@ -150,7 +150,7 @@ function loadManagedManifest(file = MANIFEST_FILE) {
       if (!["claude", "codex"].includes(tool)) throw new Error(`Unsupported managed file tool: ${tool}`);
     }
     for (const capability of entry.capabilities || []) {
-      if (capability !== "monitor") throw new Error(`Unsupported managed file capability: ${capability}`);
+      if (!["monitor", "coordination"].includes(capability)) throw new Error(`Unsupported managed file capability: ${capability}`);
     }
     if (entry.render) {
       if (!Array.isArray(entry.render.variables) || entry.render.variables.length === 0) {

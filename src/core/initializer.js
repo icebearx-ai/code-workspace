@@ -27,6 +27,7 @@ const {
 } = require("./init");
 const { applyPermissionPlan, permissionTargets, planPermissionChanges } = require("./permissions");
 const { installManagedFiles } = require("./managed-files");
+const { installCoordinationArtifacts } = require("./task-coordination-managed");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { planWorkspaceMaintenance } = require("./migration");
 const { createFileTransaction } = require("./transaction");
@@ -110,7 +111,10 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   };
 
   const workspaceConfig = await stage("Configure workspace identity", () => collectWorkspaceSetup(root, options));
-  const capabilities = workspaceConfig.monitor.enable ? ["monitor"] : [];
+  const capabilities = [
+    ...(workspaceConfig.monitor.enable ? ["monitor"] : []),
+    ...(options.coordination === true ? ["coordination"] : []),
+  ];
 
   const manifest = await stage("Validate manifest", () => loadInitManifest(options.manifestFile || MANIFEST_FILE));
   const minimumNode = minimumFromRange(manifest.requirements.node);
@@ -135,13 +139,17 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     cleanupObsoleteAssets(root, options.tools, { force: options.force === true })
   );
 
-  const managedFiles = await stage("Install managed files", () =>
-    installManagedFiles(root, manifest, options.tools, {
+  const managedFiles = await stage("Install managed files", () => {
+    const core = installManagedFiles(root, manifest, options.tools, {
       force: options.force === true,
       capabilities,
       variables: { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) },
-    })
-  );
+    });
+    const coordination = options.coordination === true
+      ? installCoordinationArtifacts(root, options.tools, { force: options.force === true })
+      : [];
+    return [...core, ...coordination.map((entry) => ({ ...entry, id: `task-coordination-${entry.tool}` }))];
+  });
 
   const localConfig = await stage("Prepare local workspace configuration", () => {
     const file = configPath(root);
@@ -217,6 +225,7 @@ async function initializeWorkspace(rootInput, options = {}) {
     projectConfigPath(root),
     path.join(root, ".gitignore"),
     path.join(root, ".codex", "config.toml"),
+    ...(options.coordination === true ? [path.join(root, ".codex", "task-coordination-hooks.json"), path.join(root, ".claude", "task-coordination-settings.json")] : []),
     ...permissionTargets(root, options.tools),
     ...manifest.managedFiles.map((entry) => path.join(root, entry.target)),
     ...OBSOLETE_ASSETS.map((target) => path.join(root, target)),

@@ -13,6 +13,7 @@ const { WorkspaceError } = require("../../core/errors");
 const { commitUpdateState, loadInitManifest } = require("../../core/init");
 const { workspaceGuide } = require("../../core/language");
 const { inspectManagedFiles, installManagedFiles, planManagedFiles } = require("../../core/managed-files");
+const { installCoordinationArtifacts } = require("../../core/task-coordination-managed");
 const { planWorkspaceMaintenance } = require("../../core/migration");
 const { inspectProjectPermissions } = require("../../core/permissions");
 const { resolveWorkspaceTools } = require("../../core/tools");
@@ -63,6 +64,7 @@ function updateWorkspace(root, options = {}) {
   const config = loadConfig(root, { defaultLanguage: language });
   const nextConfig = { ...config, workspace: { ...config.workspace, language } };
   const capabilities = nextConfig.monitor.enable ? ["monitor"] : [];
+  if (options.coordination === true) capabilities.push("coordination");
   const variables = { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) };
   let managedPlan;
   let obsoletePlan;
@@ -86,6 +88,7 @@ function updateWorkspace(root, options = {}) {
     projectConfigPath(root),
     statePath(root),
     ...managedPlan.plans.map((plan) => plan.target),
+    ...(options.coordination === true ? [path.join(root, ".codex", "task-coordination-hooks.json"), path.join(root, ".claude", "task-coordination-settings.json")] : []),
     ...obsoletePlan.map((plan) => path.join(root, plan.target)),
   ]);
   try {
@@ -96,13 +99,23 @@ function updateWorkspace(root, options = {}) {
       capabilities,
       variables,
     });
+    if (options.coordination === true) {
+      managedFiles.push(...installCoordinationArtifacts(root, tools, { force: options.force === true }).map((entry) => ({ ...entry, id: `task-coordination-${entry.tool}` })));
+    }
     options.injectFailure?.("after-managed-install", managedFiles);
     saveConfig(root, nextConfig);
     options.injectFailure?.("after-config-save", nextConfig);
     verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables);
+    if (options.coordination === true) {
+      const coordinationIncomplete = installCoordinationArtifacts(root, tools, { dryRun: true }).filter((entry) => entry.action !== "skip");
+      if (coordinationIncomplete.length > 0) {
+        throw new WorkspaceError("UPDATE_POSTCONDITION_FAILED", "Coordination Hook artifacts failed verification.", { files: coordinationIncomplete, remediation: "Run code-w update --coordination again after reviewing the reported files." });
+      }
+    }
     const result = {
       language,
       tools: toolSelection,
+      coordination: options.coordination === true,
       migration: migrationData(migration),
       obsoleteFiles,
       managedFiles,

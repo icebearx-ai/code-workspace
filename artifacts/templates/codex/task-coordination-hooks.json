@@ -1,0 +1,12 @@
+{
+  "description": "Coordinate supported Codex writes before tools execute. This Hook is independent from Monitor reporting.",
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "code-workspace-task-hook codex", "timeout": 2 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "code-workspace-task-hook codex", "timeout": 2 }] }],
+    "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "code-workspace-task-hook codex", "timeout": 2 }] }],
+    "PreToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "code-workspace-task-hook codex", "timeout": 2 }] }],
+    "PostToolUse": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "code-workspace-task-hook codex", "timeout": 2 }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "code-workspace-task-hook codex", "timeout": 2 }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "code-workspace-task-hook codex", "timeout": 2 }] }]
+  }
+}
