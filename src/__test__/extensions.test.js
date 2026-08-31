@@ -33,9 +33,11 @@ const {
   runExtensionBatch,
   saveExtensionState,
   supportsExtensionSpec,
+  applicableHooks,
   validateManifest,
   verifyExtensionOutput,
 } = require("../core/extensions");
+const { validateHookDeclarations } = require("../core/hooks");
 const { atomicWrite, sha256 } = require("../core/fs");
 
 const cli = path.resolve(__dirname, "..", "..", "bin", "code-workspace.js");
@@ -118,6 +120,7 @@ function writeExtension(repository, options = {}) {
     entrySha256: sha256(Buffer.from(script)),
     timeoutMs: options.timeoutMs || 1000,
     ...(options.networkHosts ? { capabilities: { networkHosts: options.networkHosts } } : {}),
+    ...(options.hooks ? { hooks: options.hooks } : {}),
     outputs,
   }, null, 2)}\n`);
   return { id, version, target, content, versionRoot, outputs, resultOutputs };
@@ -753,6 +756,76 @@ test("a second protocol extension installs through existing generic capabilities
   assert.equal(fs.readFileSync(path.join(root, ".example", "first.txt"), "utf8"), "first\n");
   assert.equal(fs.readFileSync(path.join(root, ".example", "second", "index.js"), "utf8"), "second\n");
   assert.match(fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8"), /BEGIN code-workspace-extension:second-extension:config/);
+});
+
+test("abstract Hook declarations validate independently of native provider names", () => {
+  const hooks = validateHookDeclarations([
+    { id: "audit", event: "session.start", command: "code-workspace-hook-audit", tools: ["codex"], timeoutMs: 3 },
+    { id: "write-audit", event: "write.before", command: "code-workspace-hook-write", matcher: "Edit" },
+  ], "example-extension");
+  assert.deepEqual(hooks.map((hook) => hook.event), ["task.started", "write.before"]);
+  assert.deepEqual(hooks[0].tools, ["codex"]);
+  assert.throws(() => validateHookDeclarations([{ id: "audit", event: "PreToolUse", command: "echo audit" }], "example-extension"), (error) => error.code === "HOOK_EVENT_UNSUPPORTED");
+  assert.throws(() => validateHookDeclarations([{ id: "audit", event: "write.before", command: "echo\nunsafe" }], "example-extension"), (error) => error.code === "HOOK_DECLARATION_INVALID");
+});
+
+test("extension Hook declarations dynamically plug and unplug Codex and Claude adaptors", () => {
+  const repository = temporaryRoot();
+  const definition = writeExtension(repository, {
+    id: "hook-plugin",
+    outputs: [],
+    script: outputScript({}),
+    hooks: [
+      { id: "activity", event: "task.activity", command: "code-workspace-plugin-activity", tools: ["codex", "claude"] },
+      { id: "before-write", event: "write.before", command: "code-workspace-plugin-write", tools: ["codex", "claude"], matcher: "*", timeoutMs: 4 },
+    ],
+  });
+  const root = temporaryRoot();
+  fs.mkdirSync(path.join(root, ".codex"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".claude"), { recursive: true });
+  const codexUser = { description: "user", hooks: { Stop: [{ hooks: [{ type: "command", command: "user-stop" }] }] } };
+  const claudeUser = { permissions: { allow: ["Read"] } };
+  fs.writeFileSync(path.join(root, ".codex", "hooks.json"), `${JSON.stringify(codexUser, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, ".claude", "settings.json"), `${JSON.stringify(claudeUser, null, 2)}\n`);
+  const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), [definition.id], { tools: ["codex", "claude"], state: emptyExtensionState() })[0];
+  const result = runExtensionBatch(root, [plan], (entry) => ({ ...context(entry), tools: ["codex", "claude"] }));
+  assert.equal(result.results[0].status, "installed");
+  const codex = JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"));
+  const claude = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
+  assert.equal(codex.hooks.UserPromptSubmit.length, 1);
+  assert.equal(codex.hooks.PermissionRequest.length, 1);
+  assert.equal(codex.hooks.PreToolUse[0].matcher, "*");
+  assert.equal(claude.hooks.PreToolUse[0].matcher, "*");
+  assert.deepEqual(claude.permissions, claudeUser.permissions);
+  assert.equal(loadExtensionState(root).extensions[definition.id].installed.hooks.length, 2);
+
+  const uninstall = applyExtensionUninstall(planExtensionUninstall(root, definition.id));
+  assert.equal(uninstall.status, "uninstalled");
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8")), codexUser);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")), claudeUser);
+});
+
+test("Hook ownership conflicts and local Hook drift fail closed", () => {
+  const repository = temporaryRoot();
+  const hook = { id: "activity", event: "task.activity", command: "same-hook", tools: ["codex"] };
+  writeExtension(repository, { id: "first-hook", outputs: [], script: outputScript({}), hooks: [hook] });
+  writeExtension(repository, { id: "second-hook", outputs: [], script: outputScript({}), hooks: [hook] });
+  assert.throws(
+    () => resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), ["first-hook", "second-hook"], { tools: ["codex"], state: emptyExtensionState() }),
+    (error) => error.code === "HOOK_DECLARATION_CONFLICT"
+  );
+
+  const singleRepository = temporaryRoot();
+  const definition = writeExtension(singleRepository, { id: "drift-hook", outputs: [], script: outputScript({}), hooks: [hook] });
+  const root = temporaryRoot();
+  const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: singleRepository }), [definition.id], { tools: ["codex"], state: emptyExtensionState() })[0];
+  assert.equal(runExtensionBatch(root, [plan], (entry) => context(entry)).results[0].status, "installed");
+  const file = path.join(root, ".codex", "hooks.json");
+  const document = JSON.parse(fs.readFileSync(file, "utf8"));
+  document.hooks.UserPromptSubmit[0].hooks[0].command = "changed-by-user";
+  fs.writeFileSync(file, `${JSON.stringify(document, null, 2)}\n`);
+  assert.throws(() => planExtensionUninstall(root, definition.id), (error) => error.code === "HOOK_CONTRIBUTION_MODIFIED");
+  assert(loadExtensionState(root).extensions[definition.id].installed);
 });
 
 test("legacy installed file, Codex block, and Hook state can be uninstalled without the extension package", () => {

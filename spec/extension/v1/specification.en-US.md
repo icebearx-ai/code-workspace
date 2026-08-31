@@ -134,6 +134,42 @@ Spec v1 supports four output kinds:
 
 Public output kinds MUST NOT encode private business concepts such as Jira, MCP, npm, archive formats, or individual Agent products.
 
+### 7.1 Abstract Hook declarations
+
+An extension MAY declare pluggable Workspace Hooks. Hooks are not extension output files and
+MUST NOT declare Provider-native names such as `PreToolUse` or `SessionStart`. The optional
+manifest `hooks` array contains entries with at least `id`, `event`, and `command`:
+
+```json
+{
+  "hooks": [
+    {
+      "id": "audit-task",
+      "event": "task.activity",
+      "command": "code-workspace-plugin-audit",
+      "tools": ["codex", "claude"],
+      "matcher": "*",
+      "timeoutMs": 2
+    }
+  ]
+}
+```
+
+Supported abstract events are `task.started`, `task.activity`, `write.before`, `write.after`,
+`task.turn-ended`, `task.ended`, `task.subagent-started`, and `task.subagent-ended`.
+The aliases `session.start`, `session.activity`, `session.end`, `turn.end`, `subagent.start`,
+`subagent.end`, `pre-write`, and `post-write` are accepted and normalized to those events.
+When `tools` is omitted, the declaration applies to every tool supported by the Host.
+`command` is a trusted extension Hook entry point. The Host validates the declaration, renders
+it through a Provider adaptor, and governs its lifecycle; it does not interpret arbitrary native
+configuration fragments.
+
+Codex and Claude adaptors map one abstract event to their native events and compose only the
+extension-owned entries. Install, upgrade, and uninstall use installed Workspace state;
+uninstall does not execute extension code and preserves user and other-extension Hooks. If an
+installed contribution is missing, duplicated, or modified, the Host MUST fail closed and roll
+back the transaction.
+
 ## 8. Staging Verification
 
 An extension MUST generate candidate content only inside the staging directory supplied by the Host. The Host MUST:

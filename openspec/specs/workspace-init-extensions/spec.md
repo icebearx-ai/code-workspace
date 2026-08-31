@@ -148,6 +148,24 @@
 - **WHEN** installed 状态包含已发布的 `codex-config-block` 或 `codex-hooks` 记录
 - **THEN** Host 仍能仅依据状态安全移除对应旧 contribution，且 Extension Spec v1 不再产生这些类型
 
+### Requirement: Host 管理抽象插件 Hook
+扩展 MAY 在 manifest 中声明抽象 `hooks`。Hook 必须使用 Host 支持的 provider-neutral
+事件和可信执行入口，不得声明 Codex/Claude 原生事件名。Host SHALL 通过 Provider
+adaptor 将声明映射到所选工具的原生配置，并将已安装声明持久化到 installed 状态。
+安装、升级和卸载 SHALL 动态添加或移除对应 Hook，同时保留用户及其他扩展内容。
+
+#### Scenario: 插件 Hook 随安装插入
+- **WHEN** 扩展声明适用于 Codex 和 Claude 的 `write.before` Hook 且扩展安装成功
+- **THEN** Host 分别写入两个 Provider 的原生 PreToolUse entry，并记录 Hook 声明
+
+#### Scenario: 插件卸载移除 Hook
+- **WHEN** 已安装扩展被卸载且其 Hook entry 未被本地修改
+- **THEN** Host 只移除该扩展拥有的 entry，保留用户和其他扩展 Hook
+
+#### Scenario: 插件 Hook 被修改
+- **WHEN** 已安装 Hook entry 缺失、重复或内容与 installed 状态不一致
+- **THEN** Host 以稳定错误停止并回滚本次扩展事务
+
 ### Requirement: 发布 Zhuiyi Jira MCP 扩展
 npm 包 SHALL 包含基于 Extension Spec v1 的 `zhuiyi-jira-mcp@0.1.0`。扩展入口 SHALL 在扩展私有实现中下载固定预构建包、限制允许的 HTTPS host、验证固定 SHA-256、安全解压和校验包结构，再生成运行目录及所选 Codex/Claude 配置。Host MUST NOT 理解该下载或归档业务。
 

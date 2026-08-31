@@ -32,6 +32,7 @@ function formatInstallPlan(plans) {
       `  ${plan.id}@${plan.version} [Extension Spec ${plan.extensionSpecVersion}] (manifest ${plan.manifestSha256})`,
       ...(plan.capabilities.networkHosts || []).map((host) => `    NETWORK https://${host}`),
       ...plan.artifacts.map((artifact) => `    WRITE ${artifact.target} (${artifact.kind})`),
+      ...(plan.hooks || []).map((hook) => `    HOOK ${hook.id} (${hook.event}${hook.tools?.length ? ` · ${hook.tools.join(",")}` : ""}) -> ${hook.command}`),
     ]),
   ].join("\n");
 }
@@ -69,6 +70,7 @@ function installResultEntry(entry) {
     extensionSpecVersion: entry.extensionSpecVersion,
     ...(entry.reason ? { reason: entry.reason } : {}),
     ...(entry.artifacts ? { artifacts: entry.artifacts } : {}),
+    ...(entry.hooks ? { hooks: entry.hooks } : {}),
     ...(entry.code ? { code: entry.code } : {}),
     ...(entry.message ? { message: entry.message } : {}),
     ...(entry.statePersisted !== undefined ? { statePersisted: entry.statePersisted } : {}),

@@ -64,6 +64,10 @@ Host 是 Code Workspace 中负责扩展生命周期治理的核心实现。Host 
 
 扩展仓库是 Code Workspace 发布包中用于保存内置扩展的目录集合。基础版不从网络发现或安装扩展定义。
 
+扩展还可以通过 manifest 的 `hooks` 声明抽象 Workspace Hook。Hook 声明由 Host 通过
+Codex/Claude adaptor 转换为原生配置，并随扩展安装、升级和卸载动态插拔；扩展不得把
+Provider 原生事件名直接写入公共合同。
+
 ### 4.3 扩展包
 
 扩展包是一个符合扩展协议的、具有明确 id 和版本的可执行目录：

@@ -133,6 +133,40 @@ Spec v1 支持四种输出：
 
 公共输出不得包含 Jira、MCP、npm、归档或特定 Agent 产品的业务类型。
 
+### 7.1 抽象 Hook 声明
+
+扩展可以声明可插拔的 Workspace Hook。Hook 不是扩展输出文件，也不得直接声明
+`PreToolUse`、`SessionStart` 等 Provider 原生名称。manifest 的 `hooks` 是一个可选数组，
+每项至少包含 `id`、`event` 和 `command`：
+
+```json
+{
+  "hooks": [
+    {
+      "id": "audit-task",
+      "event": "task.activity",
+      "command": "code-workspace-plugin-audit",
+      "tools": ["codex", "claude"],
+      "matcher": "*",
+      "timeoutMs": 2
+    }
+  ]
+}
+```
+
+支持的抽象事件为 `task.started`、`task.activity`、`write.before`、`write.after`、
+`task.turn-ended`、`task.ended`、`task.subagent-started` 和 `task.subagent-ended`。
+`session.start`、`session.activity`、`session.end`、`turn.end`、`subagent.start`、
+`subagent.end`、`pre-write` 和 `post-write` 作为兼容别名会被规范化为上述事件。
+`tools` 缺省时表示适用于 Host 支持的全部工具。`command` 是可信扩展提供的 Hook
+执行入口；Host 只负责声明校验、适配器渲染和生命周期治理，不把它解释为任意原生
+配置片段。
+
+Codex 与 Claude 的适配器会把一个抽象事件映射到各自的原生事件，并只合成扩展拥有的
+局部 entry。安装、升级和卸载均依据 Workspace 中的 installed 状态完成；卸载不执行
+扩展代码，并保留用户及其他扩展的 Hook。扩展 Hook 被手动删除、重复或修改时，Host
+必须 fail closed 并回滚本次事务。
+
 ## 8. Staging 验证
 
 扩展只能在 Host 提供的 staging 目录生成候选内容。Host 必须：

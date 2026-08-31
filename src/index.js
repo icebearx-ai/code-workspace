@@ -22,4 +22,6 @@ module.exports = {
   ...monitorPage,
   ...project,
   ...validation,
+  ...hooks,
+  ...hookAdapters,
 };

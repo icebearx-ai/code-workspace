@@ -6,6 +6,7 @@ const TOML = require("@iarna/toml");
 const { directoryDigest } = require("./directory-digest");
 const { WorkspaceError } = require("./errors");
 const { sha256 } = require("./fs");
+const { planHookTransition } = require("./hooks");
 const {
   CODEX_CONFIG_TARGET,
   CODEX_HOOKS_TARGET,
@@ -236,7 +237,12 @@ function planArtifactTransition(root, extensionId, previousInstalled, nextInstal
   mergeTransition(transition, planFileTransition(root, extensionId, previousInstalled, nextInstalled, verifiedById));
   mergeTransition(transition, planTextTransition(root, extensionId, previousInstalled, nextInstalled, verifiedById));
   mergeTransition(transition, planJsonTransition(root, extensionId, previousInstalled, nextInstalled));
-  mergeTransition(transition, planLegacyArtifactTransition(root, extensionId, previousInstalled, nextInstalled, previousState, nextState));
+  const legacyTransition = planLegacyArtifactTransition(root, extensionId, previousInstalled, nextInstalled, previousState, nextState);
+  mergeTransition(transition, legacyTransition);
+  // Generic plugin Hooks are shared native configuration contributions, not
+  // file artifacts. They participate in the same transaction as all other
+  // extension effects and are rebuilt from installed state.
+  mergeTransition(transition, planHookTransition(root, previousState, nextState, { baseTransitions: legacyTransition }));
   for (const file of transition.writes.keys()) transition.removes.delete(file);
   return transition;
 }
