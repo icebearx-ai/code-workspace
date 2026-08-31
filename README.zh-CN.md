@@ -38,7 +38,7 @@ code-workspace init . \
 
 初始化只写入 Workspace 自有状态和集成：
 
-- `.code-workspace/config.yaml`、`.code-workspace/config-projects.yaml` 与 `.code-workspace/state.json`
+- `.code-workspace/config.yaml`、其引用的项目配置文件（默认：`.code-workspace/config-projects.yaml`）与 `.code-workspace/state.json`
 - `USER_GUIDE.md`
 - `CLAUDE.md` 和/或 `AGENTS.md`
 - 名称以 `code-workspace-` 开头或使用 `/code-workspace` 命名空间的 Workspace 专用命令与 Skill
@@ -94,7 +94,7 @@ code-workspace project add --projects-file projects.json --yes --json
 
 注册表保存项目名称、真实路径、注册分支、类型和上下文。注册分支是 Code Workspace 的期望状态，实际分支是从选中 Git worktree 观测到的状态。Workspace 不会根据对话猜测路径，也不会自动判断哪一侧分支更权威。
 
-项目注册配置始终独立保存于 `.code-workspace/config-projects.yaml`。主配置只保存固定的本地引用：
+项目注册配置始终独立保存于 `.code-workspace` 目录下的单独文件。初始化默认使用 `config-projects.yaml`，但 `projects.ref` 可以引用该目录下任意安全的普通文件名：
 
 ```yaml
 # .code-workspace/config.yaml
@@ -116,7 +116,9 @@ projects:
       服务职责和代码导航上下文。
 ```
 
-`projects.ref` 相对于 `config.yaml` 解析，并且必须是 `config-projects.yaml`。不支持 URL、glob、绝对路径、路径逃逸或内联 `projects` 数组。所有项目 CLI 的语义保持不变，只是改为读取和写入引用文件。`.code-workspace/` 默认被忽略；如需 Git 历史，需要显式制定仓库策略。
+`projects.ref` 相对于 `config.yaml` 解析，必须是同一 `.code-workspace` 目录下的安全普通文件名。不支持 URL、glob、绝对路径、路径逃逸或内联 `projects` 数组。所有项目 CLI 的语义保持不变，只是改为读取和写入引用文件。`.code-workspace/` 默认被忽略；如需 Git 历史，需要显式制定仓库策略。
+
+例如，`ref: team-projects.yaml` 会将项目注册表放在 `.code-workspace/team-projects.yaml`；默认名称仍为 `config-projects.yaml`。
 
 ## 日常命令
 
@@ -142,7 +144,7 @@ code-workspace doctor --json
 
 两条命令都会检查计划漂移并验证后置条件。`project branch update-latest` 是独立的显式配置路径：仅当项目 `updateLatest: true` 时，才对干净且分支一致的 worktree fetch upstream 并 fast-forward。Code Workspace 不会创建或下载分支，也不会执行 stash、reset、rebase、非 fast-forward merge、生产代码编辑或冲突处理。
 
-用户可以手动在 `.code-workspace/config-projects.yaml` 中设置项目策略：
+用户可以手动在 `projects.ref` 指定的文件（默认：`.code-workspace/config-projects.yaml`）中设置项目策略：
 
 ```yaml
 # .code-workspace/config-projects.yaml

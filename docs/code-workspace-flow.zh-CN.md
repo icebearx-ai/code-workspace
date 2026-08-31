@@ -62,7 +62,7 @@ schemaVersion: 1
 projects: []
 ```
 
-`projects.ref` 必须引用同一 `.code-workspace` 目录下的 `config-projects.yaml`；内联项目数组和其他引用形式不受支持。
+初始化默认生成 `config-projects.yaml`，但 `projects.ref` 可以引用同一 `.code-workspace` 目录下任意安全的普通文件名；内联项目数组、路径逃逸、绝对路径、URL 和 glob 等引用形式不受支持。
 
 关键命令：
 
@@ -104,7 +104,7 @@ code-workspace project branch update-latest "<project-name>" --json
 code-workspace project verify "<project-name>" --json
 ```
 
-注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支默认要求干净 worktree 和已存在的本地分支；`--allow-remote` 可从唯一已有远程跟踪分支创建本地 tracking 分支，`--remote <name>` 经确认后仅 fetch 指定远程的注册分支。接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 根据 `config-projects.yaml` 中的 `projects[].updateLatest` 调用 `project branch update-latest`，最后使用定向 `project verify` 接管项目整体健康校验。
+注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支默认要求干净 worktree 和已存在的本地分支；`--allow-remote` 可从唯一已有远程跟踪分支创建本地 tracking 分支，`--remote <name>` 经确认后仅 fetch 指定远程的注册分支。接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 根据所引用项目文件中的 `projects[].updateLatest` 调用 `project branch update-latest`，最后使用定向 `project verify` 接管项目整体健康校验。
 
 ## 责任边界
 
@@ -118,7 +118,7 @@ code-workspace project verify "<project-name>" --json
 ## 不变量
 
 - 不得猜测项目路径、项目归属或分支。
-- AI/Agent 不得直接编辑 `.code-workspace/config.yaml`、`.code-workspace/config-projects.yaml` 或权限文件；用户可以手动编辑并对结果负责。AI/Agent 的配置写入必须通过受支持的 CLI。
+- AI/Agent 不得直接编辑 `.code-workspace/config.yaml`、`projects.ref` 所引用的项目文件或权限文件；用户可以手动编辑并对结果负责。AI/Agent 的配置写入必须通过受支持的 CLI。
 - 不得把独立的 `openspec/` 存储隐式绑定到 Workspace。
 - Workspace 初始化、更新和 Doctor 不依赖其他 OpenSpec 包或可执行文件。
 - Workspace 不读取或写入 `openspec/`。

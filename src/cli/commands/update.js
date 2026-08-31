@@ -5,7 +5,7 @@ const {
   configPath,
   loadConfig,
   loadState,
-  projectConfigPath,
+  resolveProjectConfigPath,
   saveConfig,
   statePath,
 } = require("../../core/config");
@@ -85,7 +85,7 @@ function updateWorkspace(root, options = {}) {
   }
   const transaction = createFileTransaction([
     configPath(root),
-    projectConfigPath(root),
+    resolveProjectConfigPath(root),
     statePath(root),
     ...managedPlan.plans.map((plan) => plan.target),
     ...(options.coordination === true ? [path.join(root, ".codex", "task-coordination-hooks.json"), path.join(root, ".claude", "task-coordination-settings.json")] : []),
