@@ -12,6 +12,7 @@ const {
   ensureLocalIgnore,
   loadConfig,
   normalizeConfig,
+  resolveProjectConfigPath,
   saveConfig,
   statePath,
 } = require("./config");
@@ -211,10 +212,13 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
 async function initializeWorkspace(rootInput, options = {}) {
   const root = path.resolve(rootInput || ".");
   const manifest = loadInitManifest(options.manifestFile || MANIFEST_FILE);
+  const projectFile = fs.existsSync(configPath(root))
+    ? resolveProjectConfigPath(root)
+    : projectConfigPath(root);
   const files = [
     statePath(root),
     configPath(root),
-    projectConfigPath(root),
+    projectFile,
     path.join(root, ".gitignore"),
     path.join(root, ".codex", "config.toml"),
     ...permissionTargets(root, options.tools),

@@ -1,4 +1,4 @@
-const { configPath, loadConfigProjection, loadState, projectConfigPath, saveProjectConfig } = require("./config");
+const { configPath, loadConfigProjection, loadState, resolveProjectConfigPath, saveProjectConfig } = require("./config");
 const { WorkspaceError } = require("./errors");
 const { loadInitManifest } = require("./init");
 const { applyPermissionPlan, planPermissionChanges } = require("./permissions");
@@ -30,7 +30,8 @@ function applyProjectConfiguration(root, nextConfig, permissionPlan, options = {
     options = permissionPlan || options;
     permissionPlan = fallbackPermissionPlan(root, nextConfig, options);
   }
-  const transaction = createFileTransaction([configPath(root), projectConfigPath(root), ...permissionPlan.targets]);
+  const projectFile = (options.resolveProjectConfigPath || resolveProjectConfigPath)(root);
+  const transaction = createFileTransaction([configPath(root), projectFile, ...permissionPlan.targets]);
   try {
     (options.saveProjectConfig || saveProjectConfig)(root, nextConfig.projects);
     options.injectFailure?.("after-config-save");

@@ -5,7 +5,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { configPath, loadConfig, loadConfigProjection, projectConfigPath, saveConfig, updateProjectBranch } = require("../core/config");
+const { configPath, loadConfig, loadConfigProjection, projectConfigPath, readProjectConfigDocument, saveConfig, updateProjectBranch } = require("../core/config");
 const { inspectProject } = require("../core/project");
 const { validateProject, validateProjects } = require("../core/validation");
 
@@ -77,7 +77,7 @@ test("legacy project specPrefix is ignored and removed on explicit save", () => 
   assert.doesNotMatch(fs.readFileSync(projectConfigPath(root), "utf8"), /specPrefix/);
 });
 
-test("project configuration reference is mandatory and resolves only the fixed regular file", () => {
+test("project configuration reference accepts a custom safe filename and rejects unsafe paths", () => {
   const root = temporaryRoot();
   const file = configPath(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -88,21 +88,33 @@ test("project configuration reference is mandatory and resolves only the fixed r
     "  uuid: 123e4567-e89b-42d3-a456-426614174000",
     "  language: en-US",
     "projects:",
-    "  ref: other.yaml",
+    "  ref: team-projects.yaml",
     "",
   ].join("\n"));
+  const customProjectFile = path.join(root, ".code-workspace", "team-projects.yaml");
+  fs.writeFileSync(customProjectFile, "schemaVersion: 1\nprojects: []\n");
+  assert.deepEqual(loadConfigProjection(root, ["projects"]).projects, []);
+
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("team-projects.yaml", "../team-projects.yaml"));
   assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_REFERENCE_INVALID");
 
-  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("other.yaml", "./config-projects.yaml"));
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("../team-projects.yaml", "./team-projects.yaml"));
   assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_REFERENCE_INVALID");
 
-  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("./config-projects.yaml", "config-projects.yaml"));
+  for (const invalidRef of ["/tmp/team-projects.yaml", "https://example.invalid/projects.yaml", "team-*.yaml", "config.yaml", "CONFIG.YAML", "state.json"]) {
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("./team-projects.yaml", invalidRef));
+    assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_REFERENCE_INVALID");
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace(invalidRef, "./team-projects.yaml"));
+  }
+
+  fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("./team-projects.yaml", "team-projects.yaml"));
+  fs.unlinkSync(customProjectFile);
   assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_FILE_MISSING");
 
-  fs.mkdirSync(projectConfigPath(root));
+  fs.mkdirSync(customProjectFile);
   assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_FILE_INVALID");
-  fs.rmdirSync(projectConfigPath(root));
-  fs.writeFileSync(projectConfigPath(root), "schemaVersion: 1\nprojects: [\n");
+  fs.rmdirSync(customProjectFile);
+  fs.writeFileSync(customProjectFile, "schemaVersion: 1\nprojects: [\n");
   assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_FILE_PARSE_FAILED");
 });
 
@@ -126,6 +138,28 @@ test("inline project arrays are rejected without merging or inferring a project 
   ].join("\n"));
   assert.throws(() => loadConfig(root), (error) => error.code === "PROJECT_CONFIG_INLINE_UNSUPPORTED");
   assert.equal(fs.existsSync(projectConfigPath(root)), false);
+});
+
+test("configuration writes preserve the referenced custom project filename", () => {
+  const root = temporaryRoot();
+  const customRef = "registry-team.yaml";
+  const project = { name: "service", location: "/tmp/service", branch: "main", type: "backend", context: "service" };
+  saveConfig(root, {
+    schemaVersion: 2,
+    workspace: { name: "custom-save", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
+    monitor: { enable: false, url: "http://127.0.0.1:3211" },
+    projects: [project],
+  }, { ref: customRef });
+  assert.equal(readProjectConfigDocument(root).file, path.join(root, ".code-workspace", customRef));
+  const loaded = loadConfig(root);
+  loaded.projects[0].branch = "feature/custom";
+  saveConfig(root, loaded);
+  assert.deepEqual(loadConfig(root).projects, [{ ...project, branch: "feature/custom" }]);
+  assert.deepEqual(loadConfigProjection(root, ["projects"]).projects, [{ ...project, branch: "feature/custom" }]);
+  assert.equal(fs.existsSync(path.join(root, ".code-workspace", "config-projects.yaml")), false);
+  assert.equal(fs.existsSync(path.join(root, ".code-workspace", customRef)), true);
+  assert.match(fs.readFileSync(configPath(root), "utf8"), new RegExp(`ref: ${customRef}`));
+  assert.throws(() => saveConfig(root, loaded, { ref: "../outside.yaml" }), (error) => error.code === "PROJECT_CONFIG_REFERENCE_INVALID");
 });
 
 test("missing project reference reports a remediation tied to the main config", () => {
