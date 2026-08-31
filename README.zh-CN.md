@@ -68,7 +68,10 @@ code-w extension uninstall zhuiyi-jira-mcp --yes
 
 扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.code-workspace/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
 
-扩展可以独占完整文件，也可以贡献由 Host 管理的 Codex TOML 配置块和 Hook 片段。共享目标由 Code Workspace 合成和验证；扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
+扩展可以独占完整文件，也可以声明由 Host 管理的抽象 Hook。Host 通过 Codex/Claude adaptor
+把声明转换为各自的原生配置，并在扩展安装、升级和卸载时动态插拔；共享目标由 Code
+Workspace 合成和验证，扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行
+扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
 
 这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码；暂不支持网络源、外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令，也不会通过 `code-w update` 自动更新扩展。开发契约见 `docs/extensions.zh-CN.md`。
 

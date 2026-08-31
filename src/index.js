@@ -12,6 +12,8 @@ const validation = require("./core/validation");
 const taskCoordination = require("./core/task-coordination");
 const taskCoordinationProtocol = require("./core/task-coordination-protocol");
 const taskCoordinationManaged = require("./core/task-coordination-managed");
+const hooks = require("./core/hooks");
+const hookAdapters = require("./hooks/adapters");
 
 module.exports = {
   ...config,
@@ -28,4 +30,6 @@ module.exports = {
   ...taskCoordination,
   ...taskCoordinationProtocol,
   ...taskCoordinationManaged,
+  ...hooks,
+  ...hookAdapters,
 };

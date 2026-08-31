@@ -4,7 +4,7 @@
   "title": "Code Workspace Extension Spec v1 manifest schema v3",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs", "outputs"],
+  "required": ["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs"],
   "properties": {
     "schemaVersion": { "const": 3 },
     "extensionSpecVersion": { "const": 1 },
@@ -69,8 +69,33 @@
           }
         ]
       }
+    },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "event", "command"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "event": { "enum": ["task.started", "task.activity", "write.before", "write.after", "task.turn-ended", "task.ended", "task.subagent-started", "task.subagent-ended", "session.start", "session.activity", "session.end", "turn.end", "subagent.start", "subagent.end", "pre-write", "post-write"] },
+          "command": { "type": "string", "minLength": 1, "maxLength": 4096, "pattern": "^[^\\r\\n]+$" },
+          "tools": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "enum": ["claude", "codex"] }
+          },
+          "matcher": { "type": "string", "minLength": 1, "maxLength": 1024, "pattern": "^[^\\r\\n]+$" },
+          "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 300000 }
+        }
+      }
     }
   },
+  "anyOf": [
+    { "required": ["outputs"], "properties": { "outputs": { "minItems": 1 } } },
+    { "required": ["hooks"], "properties": { "hooks": { "minItems": 1 } } }
+  ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
     "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },

@@ -68,7 +68,12 @@ The bundled `zhuiyi-jira-mcp` extension configures the Jira MCP service for the 
 
 Extension entries run in separate Node processes and generate files in temporary staging directories. The host rejects undeclared, missing, symbolic-link, non-file, path-escaping, conflicting, and checksum-mismatched artifacts before transactionally installing them. Per-Workspace state is stored in `.code-workspace/ext-manifest.json`. A failed extension is reported as a warning and does not roll back successful core initialization or stop later extensions; a failed upgrade restores and retains the previous installed version.
 
-Extensions may own complete files or contribute Host-managed Codex TOML blocks and Hook fragments. Shared targets are composed and verified by Code Workspace; extensions never patch the real Workspace directly. Uninstall uses recorded installed state and does not execute extension code. Unknown changes to extension-owned files or contributions stop the operation instead of being overwritten.
+Extensions may own complete files or declare Host-managed abstract Hooks. Codex and Claude
+adaptors render those declarations into each provider's native configuration and dynamically plug
+or unplug them during extension install, upgrade, and uninstall. Shared targets are composed and
+verified by Code Workspace; extensions never patch the real Workspace directly. Uninstall uses
+recorded installed state and does not execute extension code. Unknown changes to extension-owned
+files or contributions stop the operation instead of being overwritten.
 
 This is fault isolation, not a malicious-code security sandbox. The experimental release trusts only extension code shipped with Code Workspace; network sources, external extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `code-w update` are not supported. The developer contract is in `docs/extensions.md`.
 

@@ -22,6 +22,7 @@
     "src/cli",
     "src/index.js",
     "src/core",
+    "src/hooks",
     "src/i18n",
     "src/init",
     "src/monitor",

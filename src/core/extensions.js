@@ -12,6 +12,13 @@ const { permissionTargets } = require("./permissions");
 const { createFileTransaction } = require("./transaction");
 const { directoryDigest } = require("./directory-digest");
 const {
+  hooksCurrent,
+  hookDeclarationKeys,
+  hookDeclarationsForTools,
+  validateHookDeclarations,
+  verifyHookTransition,
+} = require("./hooks");
+const {
   ARTIFACT_KINDS,
   LEGACY_ARTIFACT_KINDS,
   directoryArtifacts,
@@ -234,7 +241,7 @@ function validateManifest(value, options = {}) {
       supportedExtensionSpecVersions: [...supportedVersions],
     });
   }
-  assertOnlyKeys(manifest, new Set(["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs", "capabilities", "outputs"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
+  assertOnlyKeys(manifest, new Set(["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs", "capabilities", "outputs", "hooks"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
   if (manifest.schemaVersion !== 3 || manifest.experimental !== true) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", "Extension Spec v1 manifest must use schemaVersion 3 and experimental true");
   }
@@ -254,14 +261,18 @@ function validateManifest(value, options = {}) {
   }
   assertOnlyKeys(capabilities, new Set(["networkHosts"]), "EXTENSION_MANIFEST_INVALID", `Extension ${id} capabilities`);
   const networkHosts = validateNetworkHosts(capabilities.networkHosts, id);
-  if (!Array.isArray(manifest.outputs) || manifest.outputs.length === 0) {
-    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} must declare at least one output`, { extension: id });
+  const hooks = validateHookDeclarations(manifest.hooks, id);
+  if (manifest.outputs !== undefined && !Array.isArray(manifest.outputs)) {
+    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} outputs must be an array`, { extension: id });
+  }
+  if ((!Array.isArray(manifest.outputs) || manifest.outputs.length === 0) && hooks.length === 0) {
+    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} must declare at least one output or Hook`, { extension: id });
   }
   const ids = new Set();
   const declaredArtifacts = [];
   const exclusiveProtectedTargets = options.protectedTargets || coreManagedTargets();
   const sharedProtectedTargets = options.protectedTargets || coreWholeFileTargets();
-  const outputs = manifest.outputs.map((output) => {
+  const outputs = (manifest.outputs || []).map((output) => {
     if (!output || typeof output !== "object" || Array.isArray(output)) {
       throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} contains an invalid output`, { extension: id });
     }
@@ -322,6 +333,7 @@ function validateManifest(value, options = {}) {
     timeoutMs: manifest.timeoutMs,
     capabilities: Object.freeze({ networkHosts }),
     outputs: Object.freeze(outputs),
+    hooks,
   });
 }
 
@@ -494,6 +506,13 @@ function validateInstalledState(id, installed) {
     }
     declaredArtifacts.push(normalized);
   }
+  if (installed.hooks !== undefined) {
+    validateHookDeclarations(installed.hooks, id);
+    if (installed.hooks.some((hook) => !Array.isArray(hook?.tools) || hook.tools.length === 0)) {
+      throw extensionError("EXTENSION_STATE_INVALID", `Installed Hook state for ${id} must record selected tools`, { extension: id });
+    }
+    if (protocolVersion < 3) throw extensionError("EXTENSION_STATE_INVALID", `Installed Hook state for ${id} requires protocol v3`, { extension: id, protocolVersion });
+  }
   return installed;
 }
 
@@ -505,6 +524,7 @@ function loadExtensionState(root) {
     throw extensionError("EXTENSION_STATE_INVALID", `Invalid Workspace extension state: ${file}`, { file });
   }
   const ownedArtifacts = [];
+  const ownedHooks = [];
   for (const [id, value] of Object.entries(state.extensions)) {
     validateExtensionName(id);
     if (!value || typeof value !== "object" || Array.isArray(value)) throw extensionError("EXTENSION_STATE_INVALID", `Invalid extension state for ${id}`, { extension: id });
@@ -531,6 +551,11 @@ function loadExtensionState(root) {
         });
       }
       ownedArtifacts.push({ id, artifact });
+    }
+    for (const key of hookDeclarationKeys(installed?.hooks || [])) {
+      const conflicting = ownedHooks.find((entry) => entry.key === key);
+      if (conflicting) throw extensionError("EXTENSION_STATE_INVALID", `Installed extensions ${conflicting.id} and ${id} declare the same native Hook`, { extension: id, conflictingExtension: conflicting.id });
+      ownedHooks.push({ id, key });
     }
   }
   return state;
@@ -578,6 +603,10 @@ function applicableArtifacts(manifest, tools = []) {
   return manifest.outputs.filter((artifact) => !artifact.tools || artifact.tools.some((tool) => selected.has(tool)));
 }
 
+function applicableHooks(manifest, tools = []) {
+  return hookDeclarationsForTools(manifest.hooks || [], tools);
+}
+
 function installedExtensionNames(state) {
   return Object.entries(state.extensions).filter(([, value]) => value.installed).map(([id]) => id);
 }
@@ -592,9 +621,11 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
   const byId = new Map(catalog.map((entry) => [entry.id, entry]));
   const plans = [];
   const ownedArtifacts = [];
+  const ownedHooks = new Map();
   for (const [id, value] of Object.entries(state.extensions)) {
     if (!value.installed || requested.includes(id)) continue;
     for (const artifact of value.installed.artifacts) ownedArtifacts.push({ id, artifact });
+    for (const key of hookDeclarationKeys(value.installed.hooks || [])) ownedHooks.set(key, id);
   }
   for (const id of requested) {
     const extension = byId.get(id);
@@ -608,7 +639,8 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
     }
     const resolved = extension.latestSupported;
     const artifacts = applicableArtifacts(resolved.manifest, tools);
-    if (artifacts.length === 0) throw extensionError("EXTENSION_NO_APPLICABLE_OUTPUTS", `Extension ${id} has no outputs for the selected tools`, { extension: id, tools });
+    const hooks = applicableHooks(resolved.manifest, tools);
+    if (artifacts.length === 0 && hooks.length === 0) throw extensionError("EXTENSION_NO_APPLICABLE_OUTPUTS", `Extension ${id} has no outputs or Hooks for the selected tools`, { extension: id, tools });
     for (const artifact of artifacts) {
       const conflicting = ownedArtifacts.find((entry) => artifactsConflict(entry.artifact, artifact));
       if (conflicting) {
@@ -620,6 +652,11 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
         });
       }
       ownedArtifacts.push({ id, artifact });
+    }
+    for (const key of hookDeclarationKeys(hooks)) {
+      const conflictingId = ownedHooks.get(key);
+      if (conflictingId) throw extensionError("HOOK_DECLARATION_CONFLICT", `Extensions ${conflictingId} and ${id} declare the same native Hook`, { extension: id, conflictingExtension: conflictingId });
+      ownedHooks.set(key, id);
     }
     plans.push(Object.freeze({
       id,
@@ -635,6 +672,7 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
       packageSha256: resolved.packageSha256,
       capabilities: resolved.manifest.capabilities,
       artifacts: Object.freeze(artifacts.slice()),
+      hooks: Object.freeze(hooks.slice()),
     }));
   }
   return Object.freeze(plans);
@@ -670,6 +708,7 @@ function prepareExtensionPlans(catalogResult, requested, options = {}) {
       planningState.extensions[id] = {
         installed: {
           artifacts: plan.artifacts.map((artifact) => ({ id: artifact.id, kind: artifact.kind, ownership: artifact.ownership, target: artifact.target, ...(artifact.selector ? { selector: artifact.selector } : {}) })),
+          hooks: plan.hooks.map((hook) => ({ ...hook })),
         },
       };
     } catch (error) {
@@ -841,10 +880,18 @@ function installedIsCurrent(root, plan, installed, state) {
   if (!installed || installed.protocolVersion !== 3 || installed.extensionSpecVersion !== plan.extensionSpecVersion || installed.version !== plan.version || installed.manifestSha256 !== plan.manifestSha256 || installed.packageSha256 !== plan.packageSha256) return false;
   if (installed.artifacts.length !== plan.artifacts.length) return false;
   const byId = new Map(installed.artifacts.map((artifact) => [artifact.id, artifact]));
+  const hooks = installed.hooks || [];
+  const planHooks = plan.hooks || [];
+  if (hooks.length !== planHooks.length) return false;
+  const hookById = new Map(hooks.map((hook) => [hook.id, hook]));
+  if (!planHooks.every((hook) => {
+    const current = hookById.get(hook.id);
+    return current && current.event === hook.event && current.command === hook.command && (current.matcher || null) === (hook.matcher || null) && current.timeoutMs === hook.timeoutMs && JSON.stringify(current.tools || []) === JSON.stringify(hook.tools || []);
+  })) return false;
   return plan.artifacts.every((artifact) => {
     const stateArtifact = byId.get(artifact.id);
     return stateArtifact && stateArtifact.kind === artifact.kind && stateArtifact.ownership === artifact.ownership && stateArtifact.target === artifact.target && (artifact.selector || null) === (stateArtifact.selector || null) && (artifact.format || null) === (stateArtifact.format || null);
-  }) && installedArtifactsCurrent(root, plan.id, installed, state);
+  }) && installedArtifactsCurrent(root, plan.id, installed, state) && hooksCurrent(root, state);
 }
 
 function assertInstallOwnership(root, plan, state) {
@@ -995,6 +1042,7 @@ function installVerifiedArtifacts(root, plan, verified, previousState, options =
       manifestSha256: plan.manifestSha256,
       packageSha256: plan.packageSha256,
       artifacts: installedArtifacts,
+      hooks: (plan.hooks || []).map((hook) => ({ ...hook, tools: [...hook.tools] })),
     },
     lastAttempt: { version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "installed" },
   };
@@ -1013,6 +1061,7 @@ function installVerifiedArtifacts(root, plan, verified, previousState, options =
     saveExtensionState(root, next, options);
     options.injectFailure?.("after-state-save", plan);
     verifyArtifactTransition(transition);
+    verifyHookTransition(transition);
     directoryTransition.verify();
     const persisted = loadExtensionState(root).extensions[plan.id];
     if (!persisted || persisted.lastAttempt?.status !== "installed" || persisted.installed?.extensionSpecVersion !== plan.extensionSpecVersion || persisted.installed?.manifestSha256 !== plan.manifestSha256 || persisted.installed?.packageSha256 !== plan.packageSha256) {
@@ -1054,7 +1103,7 @@ function executeExtension(root, plan, context, options = {}) {
     const state = loadExtensionState(root);
     const installed = state.extensions[plan.id]?.installed || null;
     if (installedIsCurrent(root, plan, installed, state)) {
-      executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "skipped", reason: "current" };
+      executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "skipped", reason: "current", hooks: installed.hooks || [] };
       return executionResult;
     }
     assertInstallOwnership(root, plan, state);
@@ -1074,7 +1123,7 @@ function executeExtension(root, plan, context, options = {}) {
     options.injectFailure?.("after-output-verify", plan);
     if (stateFingerprint(root) !== beforeState) throw extensionError("EXTENSION_STATE_CONFLICT", `Extension state changed while ${plan.id} was running`, { extension: plan.id });
     const installedState = installVerifiedArtifacts(root, plan, verified, state, options);
-    executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "installed", artifacts: installedState.artifacts };
+    executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "installed", artifacts: installedState.artifacts, hooks: installedState.hooks || [] };
     return executionResult;
   } catch (error) {
     const normalized = error.code ? error : extensionError("EXTENSION_INIT_FAILED", `Extension ${plan.id} failed: ${error.message}`, { extension: plan.id, cause: error.name });
@@ -1188,6 +1237,7 @@ module.exports = {
   EXTENSION_STATE_FILE,
   SUPPORTED_EXTENSION_SPEC_VERSIONS,
   applicableArtifacts,
+  applicableHooks,
   applyExtensionUninstall,
   assertSafeWorkspaceTarget,
   compareSemver,

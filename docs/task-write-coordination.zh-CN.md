@@ -125,6 +125,10 @@ Codex 和 Claude 的原生事件先转换为统一 envelope，再进入协调核
 
 统一决策包括 `ALLOW`、`CONFIRM_PROJECT`、`DENY_FILE_CONFLICT`、`DENY_UNKNOWN_WRITE_SCOPE`、`UNKNOWN_OWNER_DECISION_REQUIRED` 和 `RETRY_COORDINATION_FAILURE`。新增 Provider 时只增加事件适配、工具能力表和 native renderer，不复制生命周期或 claim 逻辑。
 
+协调 Hook 与扩展 Hook 共用同一组 Provider adaptor。扩展只能声明 `task.started`、
+`write.before` 等抽象事件；Codex/Claude 的原生事件名、配置文件和返回 envelope 由
+各自 adaptor 提供。这样新增插件或替换工具时，不需要把 Provider 分支复制到协调核心。
+
 ### 2.9 协调与 Monitor 解耦
 
 Monitor 可以展示协调状态，但不能决定任务是 `ACTIVE`、`UNKNOWN` 还是 `ENDED`，也不能持有 claim 或参与放行。协调 Hook 不调用 `monitor report`、Monitor HTTP API 或 Monitor 内存状态；Monitor 未启动、不可访问或完全移除时，写入协调仍按同一规则执行。
@@ -252,4 +256,3 @@ Managed 安装负责：
 | Claude | `SessionStart`、`UserPromptSubmit`、`PermissionRequest`、`Stop`、`StopFailure`、`SessionEnd` | `PreToolUse`、`PostToolUse`、`PostToolUseFailure` | 使用同一归一化核心决策、范围和裁决规则 |
 
 该矩阵描述当前 schema v1 的适配边界，不承诺未来 Codex/Claude 版本保持完全相同的原生字段。新增工具或事件应先增加 fixture、能力分类和 renderer 验证，再扩大支持范围。
-

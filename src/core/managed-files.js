@@ -7,6 +7,7 @@ const { WorkspaceError } = require("./errors");
 const { atomicWrite, sha256 } = require("./fs");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { CODEX_HOOKS_TARGET, composeHookContent } = require("./extension-artifacts");
+const { composeHookDocument } = require("./hooks");
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 const ARTIFACTS_ROOT = path.join(PACKAGE_ROOT, "artifacts");
@@ -59,7 +60,10 @@ function extensionHookState(root, provided) {
 
 function hasExtensionHooks(state) {
   if (!state) return false;
-  return Object.values(state.extensions || {}).some((value) => (value.installed?.artifacts || []).some((artifact) => artifact.kind === "codex-hooks"));
+  return Object.values(state.extensions || {}).some((value) =>
+    (value.installed?.artifacts || []).some((artifact) => artifact.kind === "codex-hooks") ||
+    (value.installed?.hooks || []).some((hook) => hook.tools?.includes("codex"))
+  );
 }
 
 function desiredManagedContent(root, entry, variables, extensionState, includeCore = true) {
@@ -67,7 +71,9 @@ function desiredManagedContent(root, entry, variables, extensionState, includeCo
   const target = path.join(root, entry.target);
   if (extensionState === null && fs.existsSync(target)) return fs.readFileSync(target);
   const base = includeCore ? renderManagedContent(entry, variables) : Buffer.from('{\n  "hooks": {}\n}\n');
-  return composeHookContent(base, extensionState || { extensions: {} });
+  const legacy = composeHookContent(base, extensionState || { extensions: {} });
+  const composed = composeHookDocument(legacy, "codex", { extensions: {} }, extensionState || { extensions: {} });
+  return Buffer.from(`${JSON.stringify(composed, null, 2)}\n`);
 }
 
 function resolveArtifact(relativePath) {

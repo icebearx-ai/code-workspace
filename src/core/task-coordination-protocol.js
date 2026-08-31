@@ -7,6 +7,7 @@ const path = require("node:path");
 const { WorkspaceError } = require("./errors");
 const { findWorkspaceRoot, loadConfigProjection } = require("./config");
 const { beforeWrite, afterWrite, applyTaskEvent, DECISIONS, SCOPE_TYPES, eventKey, taskIdFor } = require("./task-coordination");
+const { getAdapter: getHookAdapter } = require("../hooks/adapters");
 
 const PROTOCOL_SCHEMA_VERSION = 1;
 
@@ -61,19 +62,14 @@ function classifyTool(tool = {}) {
 }
 
 function normalizeEnvelope(provider, input, options = {}) {
+  const providerAdapter = getHookAdapter(provider);
   const source = input && typeof input === "object" ? input : {};
   const nativeEventName = source.hook_event_name || source.hookEventName || source.event_name || source.eventName || source.type || options.nativeEventName || "Unknown";
   const session = source.session_id || source.sessionId || source.session || options.nativeSessionId;
   if (!session) throw new WorkspaceError("HOOK_SESSION_ID_MISSING", "Hook input does not contain a native session id.");
   const eventId = stableEventId(provider, source);
   const op = operationId(source);
-  let eventType = "task.activity";
-  if (/^SessionStart$/i.test(nativeEventName)) eventType = "task.started";
-  else if (/^SessionEnd$/i.test(nativeEventName)) eventType = "task.ended";
-  else if (/^Stop(?:Failure)?$/i.test(nativeEventName)) eventType = "task.turn-ended";
-  else if (/^PermissionRequest$/i.test(nativeEventName) || /^UserPromptSubmit$/i.test(nativeEventName)) eventType = "task.activity";
-  else if (/^PreToolUse$/i.test(nativeEventName)) eventType = "write.before";
-  else if (/^PostToolUse(?:Failure)?$/i.test(nativeEventName)) eventType = "write.after";
+  const eventType = providerAdapter.eventTypeForNative(nativeEventName);
   const tool = {
     callId: op,
     name: source.tool_name || source.toolName || source.name || source.tool?.name || null,
@@ -110,12 +106,8 @@ function normalizeEnvelope(provider, input, options = {}) {
 }
 
 function renderNativeDecision(provider, result) {
+  const providerAdapter = getHookAdapter(provider);
   const decision = result?.decision || "RETRY_COORDINATION_FAILURE";
-  if (decision === "ALLOW") {
-    return provider === "claude"
-      ? { continue: true, decision: "allow", hookSpecificOutput: { schemaVersion: PROTOCOL_SCHEMA_VERSION, hookEventName: "PreToolUse", permissionDecision: "allow", decision: "ALLOW" } }
-      : { decision: "allow", hookSpecificOutput: { schemaVersion: PROTOCOL_SCHEMA_VERSION, decision: "ALLOW" } };
-  }
   const reason = result?.remediation || ({
     DENY_FILE_CONFLICT: "File range is owned by an active task; retry after it finishes.",
     DENY_UNKNOWN_WRITE_SCOPE: "The tool's write scope cannot be proven safe while another task participates in this project.",
@@ -123,18 +115,18 @@ function renderNativeDecision(provider, result) {
     UNKNOWN_OWNER_DECISION_REQUIRED: "An UNKNOWN task owns an overlapping range; inspect and resolve the decision request, then retry.",
     RETRY_COORDINATION_FAILURE: "Task coordination is temporarily unavailable; retry the operation.",
   })[decision] || "Task coordination blocked this operation.";
-  return provider === "claude"
-    ? { continue: false, decision: "block", reason, decisionRequestId: result?.decisionRequestId || null, hookSpecificOutput: { schemaVersion: PROTOCOL_SCHEMA_VERSION, hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason, decision, decisionRequestId: result?.decisionRequestId || null } }
-    : { decision: "block", reason, decisionRequestId: result?.decisionRequestId || null, hookSpecificOutput: { schemaVersion: PROTOCOL_SCHEMA_VERSION, decision, decisionRequestId: result?.decisionRequestId || null } };
+  return providerAdapter.renderDecision({ ...result, decision, remediation: reason });
 }
 
 function createAdapter(provider, options = {}) {
-  if (!["codex", "claude"].includes(provider)) throw new WorkspaceError("HOOK_PROVIDER_UNSUPPORTED", `Unsupported Hook provider: ${provider}`);
+  const providerAdapter = getHookAdapter(provider);
   return {
     provider,
     normalize(input) { return normalizeEnvelope(provider, input, options); },
     classifyTool,
     render(result) { return renderNativeDecision(provider, result); },
+    nativeEvents(event) { return providerAdapter.nativeEvents(event); },
+    renderDeclaration(declaration) { return providerAdapter.renderDeclaration(declaration); },
   };
 }
 
