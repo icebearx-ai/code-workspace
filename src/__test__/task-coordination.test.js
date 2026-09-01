@@ -111,6 +111,81 @@ test("provider adapters normalize Codex and Claude events to the same core envel
   assert.equal(protocol.renderNativeDecision("codex", { decision: "DENY_FILE_CONFLICT" }).decision, "block");
 });
 
+test("Provider adaptors own native IO and Codex PreToolUse output stays schema-compatible", () => {
+  const codex = require("../hooks/adapters/codex");
+  const input = {
+    hook_event_name: "PreToolUse",
+    session_id: "codex-session",
+    tool_name: "Edit",
+    tool_input: { file_path: "a.txt" },
+    tool_use_id: "tool-1",
+  };
+  assert.equal(codex.nativeEventName(input), "PreToolUse");
+  assert.equal(codex.normalizeInput(input).nativeSessionId, "codex-session");
+  assert.equal(codex.eventTypeForNative("NotARealCodexEvent"), null);
+  assert.deepEqual(codex.renderDecision({ decision: "ALLOW" }), {
+    hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
+  });
+  assert.equal(Object.hasOwn(codex.renderDecision({ decision: "ALLOW" }), "decision"), false);
+  assert.deepEqual(codex.renderDecision({ decision: "DENY_FILE_CONFLICT", remediation: "conflict" }), {
+    decision: "block",
+    reason: "conflict",
+    hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: "conflict" },
+  });
+  assert.equal(Object.hasOwn(codex.renderDecision({ decision: "DENY_FILE_CONFLICT" }).hookSpecificOutput, "decision"), false);
+  assert.equal(Object.hasOwn(codex.renderDecision({ decision: "DENY_FILE_CONFLICT" }).hookSpecificOutput, "decisionRequestId"), false);
+  assert.deepEqual(codex.renderFailure({ remediation: "bad input" }), { decision: "block", reason: "bad input" });
+});
+
+test("Hook adapter registry discovers providers by contract", () => {
+  const { ADAPTERS } = require("../hooks/adapters");
+  assert.deepEqual(Object.keys(ADAPTERS).sort(), ["claude", "codex"]);
+  for (const adapter of Object.values(ADAPTERS)) {
+    assert.equal(adapter.contractVersion, 1);
+    for (const method of ["normalizeInput", "nativeEventName", "eventTypeForNative", "classifyTool", "renderResponse", "renderFailure"]) {
+      assert.equal(typeof adapter[method], "function", `${adapter.provider}.${method}`);
+    }
+  }
+});
+
+test("read-only shell inspection commands do not enter write coordination", () => {
+  for (const command of [
+    "nl -ba a.txt",
+    "wc -l a.txt",
+    "sed -n '1,20l' a.txt",
+    "stat -f '%Sm %N' a.txt",
+    "rg -n '^5\\.' a.txt",
+    "if rg -n '^5\\.' a.txt; then exit 1; else echo no; fi",
+  ]) {
+    assert.deepEqual(protocol.classifyTool({ name: "shell", input: { command } }).kind, "read-only", command);
+  }
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "sed -i s/a/b/ a.txt" } }).kind, "unknown-write");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "command rm -f a.txt" } }).kind, "unknown-write");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "awk 'BEGIN { system(\"rm a.txt\") }'" } }).kind, "unknown-write");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "sed 's/a/b/w out.txt' a.txt" } }).kind, "unknown-write");
+  assert.equal(protocol.classifyTool({ name: "shell_command", input: { command: "nl -ba a.txt" } }).kind, "read-only");
+});
+
+test("coordination Hook targets come from adaptor metadata", () => {
+  assert.deepEqual(
+    managed.coordinationHookTargets("/tmp/workspace", ["codex", "claude"]),
+    ["/tmp/workspace/.codex/hooks.json", "/tmp/workspace/.claude/settings.json"]
+  );
+});
+
+test("read-only PreToolUse does not require a registered project", async () => {
+  const fx = fixture();
+  const output = await protocol.runHook("codex", {
+    hook_event_name: "PreToolUse",
+    session_id: "read-only-session",
+    event_id: "read-only-event",
+    cwd: fx.root,
+    tool_name: "shell",
+    tool_input: { command: "nl -ba a.txt" },
+  }, { workspaceRoot: fx.root, workspaceUuid: fx.workspaceUuid, projects: [], stateDirectory: fx.stateDirectory });
+  assert.deepEqual(output.native, { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" } });
+});
+
 test("lifecycle coordination Hooks acknowledge without blocking the provider", async () => {
   const fx = fixture();
   const input = { hook_event_name: "SessionStart", session_id: "lifecycle", event_id: "lifecycle-start", cwd: fx.root, workspace_uuid: fx.workspaceUuid };

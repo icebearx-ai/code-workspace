@@ -29,7 +29,7 @@ const {
 } = require("./init");
 const { applyPermissionPlan, permissionTargets, planPermissionChanges } = require("./permissions");
 const { installManagedFiles } = require("./managed-files");
-const { installCoordinationHooks, removeCoordinationHooks } = require("./task-coordination-managed");
+const { coordinationHookTargets, installCoordinationHooks, removeCoordinationHooks } = require("./task-coordination-managed");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { planWorkspaceMaintenance } = require("./migration");
 const { createFileTransaction } = require("./transaction");
@@ -235,6 +235,9 @@ async function initializeWorkspace(rootInput, options = {}) {
   const removedCoordinationTools = existingState?.coordination === true
     ? previousTools.filter((tool) => !options.tools?.includes(tool))
     : [];
+  const coordinationHookTools = coordination
+    ? [...new Set([...(options.tools || []), ...removedCoordinationTools])]
+    : removedCoordinationTools;
   const manifest = loadInitManifest(options.manifestFile || MANIFEST_FILE);
   const projectFile = fs.existsSync(configPath(root))
     ? resolveProjectConfigPath(root)
@@ -245,9 +248,7 @@ async function initializeWorkspace(rootInput, options = {}) {
     projectFile,
     path.join(root, ".gitignore"),
     path.join(root, ".codex", "config.toml"),
-    ...(coordination || removedCoordinationTools.length > 0
-      ? [path.join(root, ".codex", "hooks.json"), path.join(root, ".claude", "settings.json")]
-      : []),
+    ...coordinationHookTargets(root, coordinationHookTools),
     ...permissionTargets(root, options.tools),
     ...manifest.managedFiles.map((entry) => path.join(root, entry.target)),
     ...OBSOLETE_ASSETS.map((target) => path.join(root, target)),

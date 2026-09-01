@@ -6,81 +6,40 @@ const path = require("node:path");
 
 const { WorkspaceError } = require("./errors");
 const { findWorkspaceRoot, loadConfigProjection } = require("./config");
-const { beforeWrite, afterWrite, applyTaskEvent, DECISIONS, SCOPE_TYPES, eventKey, taskIdFor } = require("./task-coordination");
+const { beforeWrite, afterWrite, applyTaskEvent, taskIdFor } = require("./task-coordination");
 const { getAdapter: getHookAdapter } = require("../hooks/adapters");
+const {
+  READ_ONLY_TOOLS,
+  EXACT_TOOLS,
+  extractPaths,
+  classifyTool,
+  stableEventId,
+  operationId,
+} = require("../hooks/adapters/common");
 
 const PROTOCOL_SCHEMA_VERSION = 1;
-
-function stableJson(value) {
-  if (Array.isArray(value)) return value.map(stableJson);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableJson(value[key])]));
-}
-
-function stableEventId(provider, input) {
-  return input.event_id || input.eventId || input.eventID || crypto.createHash("sha256").update(JSON.stringify(stableJson({ provider, input }))).digest("hex");
-}
-
-function operationId(input) {
-  return input.operation_id || input.operationId || input.tool_use_id || input.tool_call_id || input.toolUseId || input.toolCallId || null;
-}
-
-const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "LS", "ListFiles", "WebFetch", "WebSearch", "NotebookRead", "Task", "TodoRead", "GetDiagnostics"]);
-const EXACT_TOOLS = new Set(["Edit", "Write", "NotebookEdit", "MultiEdit", "CreateFile", "DeleteFile", "Patch"]);
-
-function readToolInput(input) {
-  return input && typeof input === "object" ? input : {};
-}
-
-function extractPaths(value) {
-  const input = readToolInput(value);
-  const paths = [];
-  const add = (entry) => { if (typeof entry === "string" && entry.trim()) paths.push(entry.trim()); };
-  for (const key of ["file_path", "filePath", "path", "target", "filename", "directory", "dir"]) add(input[key]);
-  for (const key of ["paths", "files", "filePaths", "targets"]) if (Array.isArray(input[key])) input[key].forEach(add);
-  if (Array.isArray(input.edits)) input.edits.forEach((edit) => add(edit?.file_path || edit?.filePath || edit?.path));
-  if (Array.isArray(input.files)) input.files.forEach((edit) => add(typeof edit === "string" ? edit : edit?.path || edit?.file_path));
-  return [...new Set(paths)];
-}
-
-function classifyTool(tool = {}) {
-  const name = String(tool.name || tool.toolName || "");
-  const input = readToolInput(tool.input || tool.toolInput);
-  if (READ_ONLY_TOOLS.has(name)) return { kind: "read-only", scopes: [] };
-  if (EXACT_TOOLS.has(name)) {
-    const paths = extractPaths(input);
-    if (paths.length === 0) return { kind: "unknown-write", scopes: [{ type: "PROJECT_WIDE" }] };
-    return { kind: paths.length > 1 ? "multi-file" : "exact", scopes: paths.map((entry) => ({ type: "EXACT_FILE", path: entry })) };
-  }
-  if (/^(bash|shell|command|exec|run|terminal)$/i.test(name)) {
-    const command = String(input.command || input.cmd || input.script || "").trim();
-    if (/^(pwd|ls(?:\s|$)|cat\s|head\s|tail\s|grep\s|git\s+(status|diff|log|show|branch)|printf\s|echo\s)/i.test(command)) return { kind: "read-only", scopes: [] };
-    return { kind: "unknown-write", scopes: [{ type: "PROJECT_WIDE" }] };
-  }
-  // Unknown tools are never implicitly considered safe.
-  return { kind: "unknown-write", scopes: [{ type: "PROJECT_WIDE" }] };
-}
 
 function normalizeEnvelope(provider, input, options = {}) {
   const providerAdapter = getHookAdapter(provider);
   const source = input && typeof input === "object" ? input : {};
-  const nativeEventName = source.hook_event_name || source.hookEventName || source.event_name || source.eventName || source.type || options.nativeEventName || "Unknown";
-  const session = source.session_id || source.sessionId || source.session || options.nativeSessionId;
+  if (typeof providerAdapter.normalizeInput !== "function") {
+    throw new WorkspaceError("HOOK_ADAPTER_INVALID", `Hook adapter ${provider} does not implement normalizeInput.`);
+  }
+  const normalized = providerAdapter.normalizeInput(source, options) || {};
+  const nativeEventName = String(normalized.nativeEventName || "Unknown");
+  const session = normalized.nativeSessionId;
   if (!session) throw new WorkspaceError("HOOK_SESSION_ID_MISSING", "Hook input does not contain a native session id.");
-  const eventId = stableEventId(provider, source);
-  const op = operationId(source);
+  const eventId = normalized.eventId || stableEventId(provider, source);
+  const op = normalized.operationId || null;
   const eventType = providerAdapter.eventTypeForNative(nativeEventName);
-  const tool = {
-    callId: op,
-    name: source.tool_name || source.toolName || source.name || source.tool?.name || null,
-    input: source.tool_input || source.toolInput || source.input || source.tool?.input || {},
-  };
-  const agent = {
-    isSubagent: source.is_subagent === true || source.isSubagent === true || source.agent?.isSubagent === true || Boolean(source.agent_id || source.agentId),
-    agentId: source.agent_id || source.agentId || source.agent?.agentId || null,
-    agentType: source.agent_type || source.agentType || source.agent?.agentType || null,
-    parentSessionId: source.parent_session_id || source.parentSessionId || source.agent?.parentSessionId || null,
-  };
+  if (!eventType) {
+    throw new WorkspaceError("HOOK_EVENT_UNSUPPORTED", `Unsupported native Hook event for ${provider}: ${nativeEventName || "<missing>"}`, {
+      provider,
+      nativeEventName: nativeEventName || null,
+    });
+  }
+  const tool = normalized.tool || { callId: op, name: null, input: {} };
+  const agent = normalized.agent || { isSubagent: false, agentId: null, agentType: null, parentSessionId: null };
   const envelope = {
     schemaVersion: PROTOCOL_SCHEMA_VERSION,
     eventId,
@@ -88,17 +47,17 @@ function normalizeEnvelope(provider, input, options = {}) {
     provider,
     nativeEventName,
     nativeSessionId: session,
-    workspaceUuid: source.workspace_uuid || source.workspaceUuid || options.workspaceUuid || null,
-    cwd: source.cwd || process.cwd(),
-    occurredAt: source.occurred_at || source.occurredAt || new Date().toISOString(),
+    workspaceUuid: normalized.workspaceUuid || options.workspaceUuid || null,
+    cwd: normalized.cwd || process.cwd(),
+    occurredAt: normalized.occurredAt || new Date().toISOString(),
     agent,
     tool,
     operationId: op || (eventType === "write.before" || eventType === "write.after" ? crypto.createHash("sha256").update(`${eventId}\u0000${tool.name || ""}`).digest("hex") : null),
-    generation: source.generation,
-    success: eventType === "write.after" ? !(/Failure$/i.test(nativeEventName)) && source.success !== false : undefined,
-    phase: source.phase,
-    runtimeEvidence: source.runtime_evidence || source.runtimeEvidence || {},
-    processEvidence: source.process_evidence || source.processEvidence || null,
+    generation: normalized.generation,
+    success: eventType === "write.after" ? normalized.success !== false : undefined,
+    phase: normalized.phase,
+    runtimeEvidence: normalized.runtimeEvidence || {},
+    processEvidence: normalized.processEvidence || null,
   };
   if (!envelope.workspaceUuid && options.workspaceConfig?.workspace?.uuid) envelope.workspaceUuid = options.workspaceConfig.workspace.uuid;
   if (!envelope.workspaceUuid) throw new WorkspaceError("HOOK_WORKSPACE_UUID_MISSING", "Hook input does not contain workspaceUuid and no workspace identity was supplied.");
@@ -118,27 +77,53 @@ function renderNativeDecision(provider, result) {
   return providerAdapter.renderDecision({ ...result, decision, remediation: reason });
 }
 
-function renderNativeResponse(provider, eventType, result) {
+function renderNativeResponse(provider, eventType, result, context = {}) {
+  const providerAdapter = getHookAdapter(provider);
+  if (typeof providerAdapter.renderResponse === "function") {
+    return providerAdapter.renderResponse({ eventType, result, ...context });
+  }
   if (eventType === "write.before") return renderNativeDecision(provider, result);
-  return getHookAdapter(provider).renderAcknowledgement(eventType, result);
+  return providerAdapter.renderAcknowledgement(eventType, result, context);
+}
+
+function eventTypeForInput(provider, input, options = {}) {
+  const providerAdapter = getHookAdapter(provider);
+  try {
+    const normalized = typeof providerAdapter.normalizeInput === "function" ? providerAdapter.normalizeInput(input, options) : {};
+    const nativeEventName = normalized.nativeEventName || "Unknown";
+    return providerAdapter.eventTypeForNative(nativeEventName) || null;
+  } catch {
+    return null;
+  }
 }
 
 function createAdapter(provider, options = {}) {
   const providerAdapter = getHookAdapter(provider);
   return {
     provider,
+    normalizeInput(input) {
+      if (typeof providerAdapter.normalizeInput !== "function") throw new WorkspaceError("HOOK_ADAPTER_INVALID", `Hook adapter ${provider} does not implement normalizeInput.`);
+      return providerAdapter.normalizeInput(input, options);
+    },
     normalize(input) { return normalizeEnvelope(provider, input, options); },
-    classifyTool,
+    nativeEventName(input) {
+      if (typeof providerAdapter.nativeEventName !== "function") return null;
+      return providerAdapter.nativeEventName(input, options);
+    },
+    classifyTool(tool) {
+      return typeof providerAdapter.classifyTool === "function" ? providerAdapter.classifyTool(tool) : classifyTool(tool);
+    },
     render(result) { return renderNativeDecision(provider, result); },
     nativeEvents(event) { return providerAdapter.nativeEvents(event); },
     renderDeclaration(declaration) { return providerAdapter.renderDeclaration(declaration); },
+    renderResponse(context) { return renderNativeResponse(provider, context?.eventType, context?.result, context); },
   };
 }
 
 async function processEnvelope(envelope, options = {}) {
   const adapter = createAdapter(envelope.provider, options);
   if (envelope.eventType === "write.before") {
-    const capability = classifyTool(envelope.tool);
+    const capability = adapter.classifyTool(envelope.tool);
     if (capability.kind === "read-only") {
       await applyTaskEvent({ ...options, event: { ...envelope, eventType: "task.activity" } });
       return { decision: "ALLOW", taskId: taskIdFor({ workspaceUuid: envelope.workspaceUuid, provider: envelope.provider, nativeSessionId: envelope.agent.parentSessionId || envelope.nativeSessionId, generation: envelope.generation || 1 }) };
@@ -151,19 +136,20 @@ async function processEnvelope(envelope, options = {}) {
 
 async function runHook(provider, input, options = {}) {
   let effectiveOptions = { ...options };
+  const initialAdapter = createAdapter(provider, options);
   try {
     if (!effectiveOptions.workspaceUuid) {
-      const root = effectiveOptions.workspaceRoot || findWorkspaceRoot(input?.cwd || process.cwd());
+      const normalizedInput = initialAdapter.normalizeInput(input);
+      const root = effectiveOptions.workspaceRoot || findWorkspaceRoot(normalizedInput?.cwd || process.cwd());
       if (root) {
         const projection = loadConfigProjection(root, ["identity", "projects"]);
         effectiveOptions = { ...effectiveOptions, workspaceRoot: root, workspaceUuid: projection.workspace.uuid, projects: projection.projects };
       }
     }
   } catch (error) {
-    const adapter = createAdapter(provider, options);
     const result = { decision: "RETRY_COORDINATION_FAILURE", error: { code: error.code || "HOOK_WORKSPACE_CONFIG_INVALID", message: error.message, details: error.details || {} }, remediation: "The coordination Hook could not load Workspace identity/projects; repair the Workspace configuration and retry." };
-    const eventType = adapter.nativeEvents ? getHookAdapter(provider).eventTypeForNative(input?.hook_event_name || input?.hookEventName || input?.event_name || input?.eventName || input?.type || "Unknown") : null;
-    return { envelope: null, result, native: renderNativeResponse(provider, eventType, result) };
+    const eventType = eventTypeForInput(provider, input, options);
+    return { envelope: null, result, native: renderNativeResponse(provider, eventType, result, { input }) };
   }
   const adapter = createAdapter(provider, effectiveOptions);
   try {
@@ -181,18 +167,19 @@ async function runHook(provider, input, options = {}) {
         .sort((left, right) => right.realPath.length - left.realPath.length)[0];
       if (matching) effectiveOptions.projectRealPath = matching.realPath;
     }
-    if (envelope.eventType === "write.before" && Array.isArray(effectiveOptions.projects) && !effectiveOptions.projectRealPath) {
+    const capability = envelope.eventType === "write.before" ? adapter.classifyTool(envelope.tool) : null;
+    if (envelope.eventType === "write.before" && capability?.kind !== "read-only" && Array.isArray(effectiveOptions.projects) && !effectiveOptions.projectRealPath) {
       throw new WorkspaceError("TASK_PROJECT_NOT_REGISTERED", "The Hook write target is not inside a registered Workspace project.", {
         cwd: envelope.cwd,
         remediation: "Register the project with code-w project add, then retry the Agent operation.",
       });
     }
     const result = await processEnvelope(envelope, effectiveOptions);
-    return { envelope, result, native: renderNativeResponse(provider, envelope.eventType, result) };
+    return { envelope, result, native: renderNativeResponse(provider, envelope.eventType, result, { input, nativeEventName: envelope.nativeEventName }) };
   } catch (error) {
     const result = { decision: "RETRY_COORDINATION_FAILURE", error: { code: error.code || "HOOK_INTERNAL_ERROR", message: error.message, details: error.details || {} }, remediation: "The coordination Hook failed closed. Inspect the error and retry after fixing the workspace state." };
-    const eventType = getHookAdapter(provider).eventTypeForNative(input?.hook_event_name || input?.hookEventName || input?.event_name || input?.eventName || input?.type || "Unknown");
-    return { envelope: null, result, native: renderNativeResponse(provider, eventType, result) };
+    const eventType = eventTypeForInput(provider, input, effectiveOptions);
+    return { envelope: null, result, native: renderNativeResponse(provider, eventType, result, { input }) };
   }
 }
 
@@ -203,7 +190,7 @@ async function runHookStdin(provider, options = {}) {
   try { input = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
   catch (error) {
     const adapter = createAdapter(provider, options);
-    return adapter.render({ decision: "RETRY_COORDINATION_FAILURE", remediation: `Invalid Hook JSON: ${error.message}` });
+    return adapter.renderResponse({ eventType: null, result: { decision: "RETRY_COORDINATION_FAILURE", remediation: `Invalid Hook JSON: ${error.message}` } });
   }
   const output = await runHook(provider, input, options);
   return output.native;

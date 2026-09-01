@@ -5,12 +5,39 @@ const path = require("node:path");
 
 const { atomicWrite } = require("./fs");
 const { WorkspaceError } = require("./errors");
+const { ADAPTERS, getAdapter } = require("../hooks/adapters");
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
-const CODEX_TEMPLATE = path.join(PACKAGE_ROOT, "artifacts", "templates", "codex", "task-coordination-hooks.json");
-const CLAUDE_TEMPLATE = path.join(PACKAGE_ROOT, "artifacts", "templates", "claude", "task-coordination-settings.json");
-const CODEX_TARGET = ".codex/hooks.json";
-const CLAUDE_TARGET = ".claude/settings.json";
+function adapterFor(provider) {
+  return getAdapter(provider);
+}
+
+function templatePath(provider) {
+  const adapter = adapterFor(provider);
+  const relative = String(adapter.coordinationTemplate || "");
+  const resolved = path.resolve(PACKAGE_ROOT, relative);
+  if (!relative || (resolved !== PACKAGE_ROOT && !resolved.startsWith(`${PACKAGE_ROOT}${path.sep}`))) {
+    throw new WorkspaceError("TASK_HOOK_TEMPLATE_INVALID", `Invalid coordination Hook template for ${provider}.`, { provider, template: relative || null });
+  }
+  return resolved;
+}
+
+function targetPath(root, provider) {
+  return path.join(root, adapterFor(provider).target);
+}
+
+function coordinationHookTargets(root, tools = Object.keys(ADAPTERS)) {
+  return [...new Set(tools || [])]
+    .filter((tool) => Object.hasOwn(ADAPTERS, tool))
+    .map((tool) => targetPath(root, tool));
+}
+
+// Kept as compatibility exports for callers that used the old constants. New
+// code resolves all Provider targets/templates through the adaptor metadata.
+const CODEX_TEMPLATE = templatePath("codex");
+const CLAUDE_TEMPLATE = templatePath("claude");
+const CODEX_TARGET = adapterFor("codex").target;
+const CLAUDE_TARGET = adapterFor("claude").target;
 
 function loadJson(file, fallback) {
   if (!fs.existsSync(file)) return fallback;
@@ -39,7 +66,7 @@ function coordinationCommand(provider, root) {
 }
 
 function coordinationFragment(provider, root) {
-  const source = JSON.parse(fs.readFileSync(provider === "codex" ? CODEX_TEMPLATE : CLAUDE_TEMPLATE, "utf8"));
+  const source = JSON.parse(fs.readFileSync(templatePath(provider), "utf8"));
   if (!root) return source;
   for (const entries of Object.values(source.hooks || {})) {
     for (const entry of Array.isArray(entries) ? entries : []) {
@@ -81,11 +108,11 @@ function writeJson(file, value) {
   atomicWrite(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function installCoordinationHooks(root, tools = ["codex", "claude"], options = {}) {
-  const selected = [...new Set(tools)].filter((tool) => ["codex", "claude"].includes(tool));
+function installCoordinationHooks(root, tools = Object.keys(ADAPTERS), options = {}) {
+  const selected = [...new Set(tools)].filter((tool) => Object.hasOwn(ADAPTERS, tool));
   const plans = [];
   for (const tool of selected) {
-    const target = path.join(root, tool === "codex" ? CODEX_TARGET : CLAUDE_TARGET);
+    const target = targetPath(root, tool);
     const fragment = coordinationFragment(tool, root);
     const before = loadJson(target, {});
     const after = mergeHooks(before, fragment, tool);
@@ -105,11 +132,11 @@ function installCoordinationHooks(root, tools = ["codex", "claude"], options = {
   return plans.map(({ before: _before, after: _after, ...plan }) => plan);
 }
 
-function removeCoordinationHooks(root, tools = ["codex", "claude"], options = {}) {
-  const selected = [...new Set(tools)].filter((tool) => ["codex", "claude"].includes(tool));
+function removeCoordinationHooks(root, tools = Object.keys(ADAPTERS), options = {}) {
+  const selected = [...new Set(tools)].filter((tool) => Object.hasOwn(ADAPTERS, tool));
   const plans = [];
   for (const tool of selected) {
-    const target = path.join(root, tool === "codex" ? CODEX_TARGET : CLAUDE_TARGET);
+    const target = targetPath(root, tool);
     if (!fs.existsSync(target)) { plans.push({ tool, target, action: "skip" }); continue; }
     const before = loadJson(target, {});
     const after = stripHooks(before, tool);
@@ -120,11 +147,11 @@ function removeCoordinationHooks(root, tools = ["codex", "claude"], options = {}
   return plans.map(({ before: _before, after: _after, ...plan }) => plan);
 }
 
-function installCoordinationArtifacts(root, tools = ["codex", "claude"], options = {}) {
-  const selected = [...new Set(tools)].filter((tool) => ["codex", "claude"].includes(tool));
+function installCoordinationArtifacts(root, tools = Object.keys(ADAPTERS), options = {}) {
+  const selected = [...new Set(tools)].filter((tool) => Object.hasOwn(ADAPTERS, tool));
   const plans = selected.map((tool) => {
-    const source = tool === "codex" ? CODEX_TEMPLATE : CLAUDE_TEMPLATE;
-    const target = path.join(root, tool === "codex" ? ".codex/task-coordination-hooks.json" : ".claude/task-coordination-settings.json");
+    const source = templatePath(tool);
+    const target = path.join(root, adapterFor(tool).coordinationArtifact);
     const content = fs.readFileSync(source);
     const exists = fs.existsSync(target);
     const current = exists ? fs.readFileSync(target) : null;
@@ -137,4 +164,16 @@ function installCoordinationArtifacts(root, tools = ["codex", "claude"], options
   return plans.map(({ content: _content, ...plan }) => plan);
 }
 
-module.exports = { CODEX_TARGET, CLAUDE_TARGET, CODEX_TEMPLATE, CLAUDE_TEMPLATE, coordinationFragment, mergeHooks, stripHooks, installCoordinationHooks, removeCoordinationHooks, installCoordinationArtifacts };
+module.exports = {
+  CODEX_TARGET,
+  CLAUDE_TARGET,
+  CODEX_TEMPLATE,
+  CLAUDE_TEMPLATE,
+  coordinationFragment,
+  coordinationHookTargets,
+  mergeHooks,
+  stripHooks,
+  installCoordinationHooks,
+  removeCoordinationHooks,
+  installCoordinationArtifacts,
+};

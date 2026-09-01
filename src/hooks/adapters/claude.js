@@ -1,9 +1,18 @@
 "use strict";
 
-const { ABSTRACT_HOOK_EVENTS, normalizeAbstractEvent } = require("./common");
+const {
+  ABSTRACT_HOOK_EVENTS,
+  HOOK_ADAPTER_CONTRACT_VERSION,
+  normalizeAbstractEvent,
+  normalizeProviderInput,
+  classifyTool,
+} = require("./common");
 
 const provider = "claude";
+const contractVersion = HOOK_ADAPTER_CONTRACT_VERSION;
 const target = ".claude/settings.json";
+const coordinationTemplate = "artifacts/templates/claude/task-coordination-settings.json";
+const coordinationArtifact = ".claude/task-coordination-settings.json";
 const EVENT_MAP = Object.freeze({
   "task.started": ["SessionStart"],
   "task.activity": ["UserPromptSubmit", "PermissionRequest"],
@@ -17,6 +26,16 @@ const EVENT_MAP = Object.freeze({
 
 function nativeEvents(event) {
   return EVENT_MAP[normalizeAbstractEvent(event)] || [];
+}
+
+function nativeEventName(input, options = {}) {
+  return normalizeProviderInput(input, options).nativeEventName;
+}
+
+function normalizeInput(input, options = {}) {
+  const normalized = normalizeProviderInput(input, options);
+  if (/Failure$/i.test(normalized.nativeEventName)) normalized.success = false;
+  return normalized;
 }
 
 function renderEntry(declaration) {
@@ -41,21 +60,20 @@ function eventTypeForNative(nativeEventName) {
   if (/^PostToolUse(?:Failure)?$/i.test(nativeEventName)) return "write.after";
   if (/^SubagentStart$/i.test(nativeEventName)) return "task.subagent-started";
   if (/^SubagentStop$/i.test(nativeEventName)) return "task.subagent-ended";
-  return "task.activity";
+  return null;
 }
 
 function renderDecision(result) {
   const decision = result?.decision || "RETRY_COORDINATION_FAILURE";
   if (decision === "ALLOW") {
-    return { continue: true, decision: "allow", hookSpecificOutput: { schemaVersion: 1, hookEventName: "PreToolUse", permissionDecision: "allow", decision: "ALLOW" } };
+    return { continue: true, hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" } };
   }
-  const reason = result?.remediation || "Task coordination blocked this operation.";
+  const reason = String(result?.remediation || "Task coordination blocked this operation.").trim() || "Task coordination blocked this operation.";
   return {
     continue: false,
     decision: "block",
     reason,
-    decisionRequestId: result?.decisionRequestId || null,
-    hookSpecificOutput: { schemaVersion: 1, hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason, decision, decisionRequestId: result?.decisionRequestId || null },
+    hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason },
   };
 }
 
@@ -63,4 +81,32 @@ function renderAcknowledgement() {
   return { continue: true };
 }
 
-module.exports = { provider, target, ABSTRACT_HOOK_EVENTS, EVENT_MAP, nativeEvents, renderDeclaration, eventTypeForNative, renderDecision, renderAcknowledgement };
+function renderFailure(result) {
+  const reason = String(result?.remediation || "Task coordination Hook failed closed.").trim() || "Task coordination Hook failed closed.";
+  return { continue: false, decision: "block", reason };
+}
+
+function renderResponse({ eventType, result } = {}) {
+  if (!eventType) return renderFailure(result);
+  return eventType === "write.before" ? renderDecision(result) : renderAcknowledgement(eventType, result);
+}
+
+module.exports = {
+  provider,
+  contractVersion,
+  target,
+  coordinationTemplate,
+  coordinationArtifact,
+  ABSTRACT_HOOK_EVENTS,
+  EVENT_MAP,
+  nativeEvents,
+  nativeEventName,
+  normalizeInput,
+  classifyTool,
+  renderDeclaration,
+  eventTypeForNative,
+  renderDecision,
+  renderAcknowledgement,
+  renderFailure,
+  renderResponse,
+};

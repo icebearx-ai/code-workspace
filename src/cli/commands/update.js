@@ -13,7 +13,7 @@ const { WorkspaceError } = require("../../core/errors");
 const { commitUpdateState, loadInitManifest } = require("../../core/init");
 const { workspaceGuide } = require("../../core/language");
 const { inspectManagedFiles, installManagedFiles, planManagedFiles } = require("../../core/managed-files");
-const { installCoordinationHooks, removeCoordinationHooks } = require("../../core/task-coordination-managed");
+const { coordinationHookTargets, installCoordinationHooks, removeCoordinationHooks } = require("../../core/task-coordination-managed");
 const { planWorkspaceMaintenance } = require("../../core/migration");
 const { inspectProjectPermissions } = require("../../core/permissions");
 const { resolveWorkspaceTools } = require("../../core/tools");
@@ -93,9 +93,9 @@ function updateWorkspace(root, options = {}) {
     resolveProjectConfigPath(root),
     statePath(root),
     ...managedPlan.plans.map((plan) => plan.target),
-    ...(coordination || removedCoordinationTools.length > 0
-      ? [path.join(root, ".codex", "hooks.json"), path.join(root, ".claude", "settings.json")]
-      : []),
+    ...coordinationHookTargets(root, coordination
+      ? [...new Set([...tools, ...removedCoordinationTools])]
+      : removedCoordinationTools),
     ...obsoletePlan.map((plan) => path.join(root, plan.target)),
   ]);
   try {
