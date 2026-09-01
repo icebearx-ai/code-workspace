@@ -111,6 +111,7 @@ async function executeInitUnlocked(invocation, root) {
   const extensionPreparation = prepareExtensionPlans(extensionCatalogResult, requestedExtensions, { tools, state: extensionState, stateError: extensionStateInspection.error });
   const extensionPlans = extensionPreparation.plans;
   const toolSelection = { tools, source: plan ? (options.tools !== undefined ? "cli" : "interactive") : resolvedTools.source };
+  const coordination = options.coordination === true || existingState?.coordination === true;
   const result = await initializeWorkspace(root, {
     run,
     tools,
@@ -120,7 +121,7 @@ async function executeInitUnlocked(invocation, root) {
     workspaceUuid: plan?.workspace.uuid,
     monitor: plan?.monitor.enable ?? (options.monitor === true ? true : options["no-monitor"] === true ? false : undefined),
     monitorUrl: plan?.monitor.url || options["monitor-url"],
-    coordination: options.coordination === true,
+    coordination,
     language: plan?.language || options.language,
     interactive: false,
     initPlan: plan,
@@ -173,7 +174,7 @@ async function executeInitUnlocked(invocation, root) {
     monitor: result.workspaceConfig.monitor,
     language: result.language,
     tools: toolSelection,
-    coordination: options.coordination === true,
+    coordination,
     migration: migrationData(result.migration),
     permissions: result.permissions,
     verification: result.verification,

@@ -24,15 +24,43 @@ function loadJson(file, fallback) {
 }
 
 function hookCommand(entry, provider) {
-  return entry?.hooks?.some((hook) => hook?.type === "command" && String(hook.command || "").includes(`code-workspace-task-hook ${provider}`));
+  const marker = new RegExp(`(?:^|\\s)code-workspace-task-hook\\s+${provider}(?:\\s|$)`);
+  return entry?.hooks?.some((hook) => hook?.type === "command" && marker.test(String(hook.command || "")));
+}
+
+function coordinationCommand(provider, root) {
+  const command = `code-workspace-task-hook ${provider}`;
+  if (!root) return command;
+  const resolvedRoot = path.resolve(root);
+  let canonicalRoot = resolvedRoot;
+  try { canonicalRoot = fs.realpathSync.native(resolvedRoot); } catch { /* the root is created by the caller before installation */ }
+  const encodedRoot = Buffer.from(canonicalRoot).toString("base64url");
+  return `${command} --workspace-root-b64 ${encodedRoot}`;
+}
+
+function coordinationFragment(provider, root) {
+  const source = JSON.parse(fs.readFileSync(provider === "codex" ? CODEX_TEMPLATE : CLAUDE_TEMPLATE, "utf8"));
+  if (!root) return source;
+  for (const entries of Object.values(source.hooks || {})) {
+    for (const entry of Array.isArray(entries) ? entries : []) {
+      for (const hook of Array.isArray(entry.hooks) ? entry.hooks : []) {
+        if (hook?.type === "command" && String(hook.command || "").includes(`code-workspace-task-hook ${provider}`)) {
+          hook.command = coordinationCommand(provider, root);
+        }
+      }
+    }
+  }
+  return source;
 }
 
 function mergeHooks(document, fragment, provider) {
   const output = { ...document, hooks: { ...(document.hooks || {}) } };
   for (const [event, entries] of Object.entries(fragment.hooks || {})) {
     const current = Array.isArray(output.hooks[event]) ? [...output.hooks[event]] : [];
-    const additions = (Array.isArray(entries) ? entries : []).filter((entry) => !current.some((existing) => hookCommand(existing, provider) && JSON.stringify(existing) === JSON.stringify(entry)));
-    output.hooks[event] = [...current, ...additions];
+    const retained = current.filter((existing) => !hookCommand(existing, provider));
+    const additions = (Array.isArray(entries) ? entries : [])
+      .filter((entry) => !retained.some((existing) => JSON.stringify(existing) === JSON.stringify(entry)));
+    output.hooks[event] = [...retained, ...additions.map((entry) => structuredClone(entry))];
   }
   return output;
 }
@@ -58,7 +86,7 @@ function installCoordinationHooks(root, tools = ["codex", "claude"], options = {
   const plans = [];
   for (const tool of selected) {
     const target = path.join(root, tool === "codex" ? CODEX_TARGET : CLAUDE_TARGET);
-    const fragment = JSON.parse(fs.readFileSync(tool === "codex" ? CODEX_TEMPLATE : CLAUDE_TEMPLATE, "utf8"));
+    const fragment = coordinationFragment(tool, root);
     const before = loadJson(target, {});
     const after = mergeHooks(before, fragment, tool);
     plans.push({ tool, target, action: JSON.stringify(before) === JSON.stringify(after) ? "skip" : "write", before, after });
@@ -109,4 +137,4 @@ function installCoordinationArtifacts(root, tools = ["codex", "claude"], options
   return plans.map(({ content: _content, ...plan }) => plan);
 }
 
-module.exports = { CODEX_TARGET, CLAUDE_TARGET, CODEX_TEMPLATE, CLAUDE_TEMPLATE, mergeHooks, stripHooks, installCoordinationHooks, removeCoordinationHooks, installCoordinationArtifacts };
+module.exports = { CODEX_TARGET, CLAUDE_TARGET, CODEX_TEMPLATE, CLAUDE_TEMPLATE, coordinationFragment, mergeHooks, stripHooks, installCoordinationHooks, removeCoordinationHooks, installCoordinationArtifacts };

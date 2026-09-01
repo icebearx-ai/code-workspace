@@ -34,7 +34,7 @@ code-workspace init . \
 ```
 
 可用 `--tools claude`、`--tools codex` 或 `--tools none` 覆盖默认工具选择。选择 Codex 时默认启用监控；可传 `--no-monitor` 关闭。
-传入 `--coordination` 可为选中的工具安装与 Monitor 独立的写入协调 Hook 制品。
+传入 `--coordination` 可把与 Monitor 独立的写入协调 Hook 安装到选中工具的原生配置中。
 
 初始化只写入 Workspace 自有状态和集成：
 
@@ -42,7 +42,7 @@ code-workspace init . \
 - `USER_GUIDE.md`
 - `CLAUDE.md` 和/或 `AGENTS.md`
 - 名称以 `code-workspace-` 开头或使用 `/code-workspace` 命名空间的 Workspace 专用命令与 Skill
-- 启用监控时的 `.codex/hooks.json`
+- 启用监控或 Codex 协调时的 `.codex/hooks.json`，以及启用 Claude 协调时的 `.claude/settings.json`
 
 它不会创建 `openspec/`，不会安装原生 `/opsx` 命令，也不会安装原生 `openspec-*` Skill。
 

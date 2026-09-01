@@ -13,7 +13,8 @@
   },
   "bin": {
     "code-workspace": "bin/code-workspace.js",
-    "code-w": "bin/code-workspace.js"
+    "code-w": "bin/code-workspace.js",
+    "code-workspace-task-hook": "bin/code-workspace-task-hook.js"
   },
   "files": [
     "assets",

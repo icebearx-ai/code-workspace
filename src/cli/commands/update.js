@@ -13,7 +13,7 @@ const { WorkspaceError } = require("../../core/errors");
 const { commitUpdateState, loadInitManifest } = require("../../core/init");
 const { workspaceGuide } = require("../../core/language");
 const { inspectManagedFiles, installManagedFiles, planManagedFiles } = require("../../core/managed-files");
-const { installCoordinationArtifacts } = require("../../core/task-coordination-managed");
+const { installCoordinationHooks, removeCoordinationHooks } = require("../../core/task-coordination-managed");
 const { planWorkspaceMaintenance } = require("../../core/migration");
 const { inspectProjectPermissions } = require("../../core/permissions");
 const { resolveWorkspaceTools } = require("../../core/tools");
@@ -21,8 +21,8 @@ const { createFileTransaction } = require("../../core/transaction");
 const { success } = require("../result");
 const { migrationData } = require("./init");
 
-function verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables) {
-  const inspection = inspectManagedFiles(root, manifest, tools, capabilities, variables);
+function verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables, options = {}) {
+  const inspection = inspectManagedFiles(root, manifest, tools, capabilities, variables, options);
   const incomplete = [
     ...inspection.managedOld.map((target) => ({ target, state: "managed-old" })),
     ...inspection.replaceable.map((target) => ({ target, state: "replaceable" })),
@@ -55,6 +55,10 @@ function updateWorkspace(root, options = {}) {
     manifestTools: manifest.tools,
   });
   const tools = toolSelection.tools;
+  const previousCoordination = initialState.coordination === true;
+  const previousTools = Array.isArray(initialState.tools) ? initialState.tools : [];
+  const removedCoordinationTools = previousCoordination ? previousTools.filter((tool) => !tools.includes(tool)) : [];
+  const coordination = options.coordination === true || initialState.coordination === true;
   const migration = planWorkspaceMaintenance(root, {
     language: options.language,
     allowLegacy: true,
@@ -64,7 +68,7 @@ function updateWorkspace(root, options = {}) {
   const config = loadConfig(root, { defaultLanguage: language });
   const nextConfig = { ...config, workspace: { ...config.workspace, language } };
   const capabilities = nextConfig.monitor.enable ? ["monitor"] : [];
-  if (options.coordination === true) capabilities.push("coordination");
+  if (coordination) capabilities.push("coordination");
   const variables = { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) };
   let managedPlan;
   let obsoletePlan;
@@ -72,6 +76,7 @@ function updateWorkspace(root, options = {}) {
     managedPlan = planManagedFiles(root, manifest, tools, {
       force: options.force === true,
       capabilities,
+      coordination,
       variables,
     });
     obsoletePlan = planObsoleteAssets(root, tools, { force: options.force === true });
@@ -88,7 +93,9 @@ function updateWorkspace(root, options = {}) {
     resolveProjectConfigPath(root),
     statePath(root),
     ...managedPlan.plans.map((plan) => plan.target),
-    ...(options.coordination === true ? [path.join(root, ".codex", "task-coordination-hooks.json"), path.join(root, ".claude", "task-coordination-settings.json")] : []),
+    ...(coordination || removedCoordinationTools.length > 0
+      ? [path.join(root, ".codex", "hooks.json"), path.join(root, ".claude", "settings.json")]
+      : []),
     ...obsoletePlan.map((plan) => path.join(root, plan.target)),
   ]);
   try {
@@ -97,25 +104,31 @@ function updateWorkspace(root, options = {}) {
     const managedFiles = installManagedFiles(root, manifest, tools, {
       force: options.force === true,
       capabilities,
+      coordination,
       variables,
     });
-    if (options.coordination === true) {
-      managedFiles.push(...installCoordinationArtifacts(root, tools, { force: options.force === true }).map((entry) => ({ ...entry, id: `task-coordination-${entry.tool}` })));
+    managedFiles.push(...removeCoordinationHooks(root, removedCoordinationTools).map((entry) => ({ ...entry, id: `task-coordination-remove-${entry.tool}` })));
+    if (coordination) {
+      managedFiles.push(...installCoordinationHooks(root, tools, { force: options.force === true }).map((entry) => ({ ...entry, id: `task-coordination-${entry.tool}` })));
     }
     options.injectFailure?.("after-managed-install", managedFiles);
     saveConfig(root, nextConfig);
     options.injectFailure?.("after-config-save", nextConfig);
-    verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables);
-    if (options.coordination === true) {
-      const coordinationIncomplete = installCoordinationArtifacts(root, tools, { dryRun: true }).filter((entry) => entry.action !== "skip");
+    verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables, { coordination });
+    if (coordination) {
+      const coordinationIncomplete = installCoordinationHooks(root, tools, { dryRun: true }).filter((entry) => entry.action !== "skip");
       if (coordinationIncomplete.length > 0) {
         throw new WorkspaceError("UPDATE_POSTCONDITION_FAILED", "Coordination Hook artifacts failed verification.", { files: coordinationIncomplete, remediation: "Run code-w update --coordination again after reviewing the reported files." });
       }
     }
+    const removedCoordinationIncomplete = removeCoordinationHooks(root, removedCoordinationTools, { dryRun: true }).filter((entry) => entry.action !== "skip");
+    if (removedCoordinationIncomplete.length > 0) {
+      throw new WorkspaceError("UPDATE_POSTCONDITION_FAILED", "Obsolete coordination Hook entries failed verification.", { files: removedCoordinationIncomplete, remediation: "Run code-w update again after reviewing the reported files." });
+    }
     const result = {
       language,
       tools: toolSelection,
-      coordination: options.coordination === true,
+      coordination,
       migration: migrationData(migration),
       obsoleteFiles,
       managedFiles,
@@ -141,6 +154,7 @@ function updateWorkspace(root, options = {}) {
     options.injectFailure?.("after-verify", result);
     const state = commitUpdateState(root, manifest, {
       tools,
+      coordination,
       removeLegacyWorkspaceLanguage: true,
     });
     options.injectFailure?.("after-state-save", state);

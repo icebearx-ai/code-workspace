@@ -11,6 +11,7 @@ const {
   projectConfigPath,
   ensureLocalIgnore,
   loadConfig,
+  loadState,
   normalizeConfig,
   resolveProjectConfigPath,
   saveConfig,
@@ -28,7 +29,7 @@ const {
 } = require("./init");
 const { applyPermissionPlan, permissionTargets, planPermissionChanges } = require("./permissions");
 const { installManagedFiles } = require("./managed-files");
-const { installCoordinationArtifacts } = require("./task-coordination-managed");
+const { installCoordinationHooks, removeCoordinationHooks } = require("./task-coordination-managed");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { planWorkspaceMaintenance } = require("./migration");
 const { createFileTransaction } = require("./transaction");
@@ -144,12 +145,20 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     const core = installManagedFiles(root, manifest, options.tools, {
       force: options.force === true,
       capabilities,
+      coordination: options.coordination === true,
       variables: { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) },
     });
-    const coordination = options.coordination === true
-      ? installCoordinationArtifacts(root, options.tools, { force: options.force === true })
+    const removedCoordination = options.previousCoordination === true
+      ? removeCoordinationHooks(root, (options.previousTools || []).filter((tool) => !options.tools.includes(tool)))
       : [];
-    return [...core, ...coordination.map((entry) => ({ ...entry, id: `task-coordination-${entry.tool}` }))];
+    const coordination = options.coordination === true
+      ? installCoordinationHooks(root, options.tools, { force: options.force === true })
+      : [];
+    return [
+      ...core,
+      ...removedCoordination.map((entry) => ({ ...entry, id: `task-coordination-remove-${entry.tool}` })),
+      ...coordination.map((entry) => ({ ...entry, id: `task-coordination-${entry.tool}` })),
+    ];
   });
 
   const localConfig = await stage("Prepare local workspace configuration", () => {
@@ -189,6 +198,7 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
       manifestFile: options.manifestFile || MANIFEST_FILE,
       tools: options.tools,
       language,
+      coordination: options.coordination === true,
     })
   );
 
@@ -219,6 +229,12 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
 
 async function initializeWorkspace(rootInput, options = {}) {
   const root = path.resolve(rootInput || ".");
+  const existingState = loadState(root);
+  const coordination = options.coordination === true || existingState?.coordination === true;
+  const previousTools = Array.isArray(existingState?.tools) ? existingState.tools : [];
+  const removedCoordinationTools = existingState?.coordination === true
+    ? previousTools.filter((tool) => !options.tools?.includes(tool))
+    : [];
   const manifest = loadInitManifest(options.manifestFile || MANIFEST_FILE);
   const projectFile = fs.existsSync(configPath(root))
     ? resolveProjectConfigPath(root)
@@ -229,14 +245,22 @@ async function initializeWorkspace(rootInput, options = {}) {
     projectFile,
     path.join(root, ".gitignore"),
     path.join(root, ".codex", "config.toml"),
-    ...(options.coordination === true ? [path.join(root, ".codex", "task-coordination-hooks.json"), path.join(root, ".claude", "task-coordination-settings.json")] : []),
+    ...(coordination || removedCoordinationTools.length > 0
+      ? [path.join(root, ".codex", "hooks.json"), path.join(root, ".claude", "settings.json")]
+      : []),
     ...permissionTargets(root, options.tools),
     ...manifest.managedFiles.map((entry) => path.join(root, entry.target)),
     ...OBSOLETE_ASSETS.map((target) => path.join(root, target)),
   ];
   const transaction = createFileTransaction(files);
   try {
-    const result = await initializeWorkspaceStages(root, { ...options, transaction });
+    const result = await initializeWorkspaceStages(root, {
+      ...options,
+      coordination,
+      previousCoordination: existingState?.coordination === true,
+      previousTools,
+      transaction,
+    });
     transaction.commit();
     return result;
   } catch (error) {

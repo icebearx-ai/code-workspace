@@ -113,6 +113,7 @@ function installWorkspaceDependencies(root, options = {}) {
 
 function commitInitializationState(root, manifest, options = {}) {
   const current = loadState(root) || {};
+  const coordination = options.coordination === undefined ? current.coordination === true : options.coordination === true;
   const state = {
     ...current,
     schemaVersion: 2,
@@ -120,6 +121,7 @@ function commitInitializationState(root, manifest, options = {}) {
     appliedReleaseVersion: manifest.releaseVersion,
     appliedManifestSha256: sha256(fs.readFileSync(options.manifestFile || MANIFEST_FILE)),
     tools: options.tools || manifest.tools,
+    coordination,
   };
   delete state.workspaceLanguage;
   saveState(root, state);
@@ -140,6 +142,7 @@ function commitUpdateState(root, manifest, options = {}) {
     appliedReleaseVersion: manifest.releaseVersion,
     appliedManifestSha256: sha256(fs.readFileSync(options.manifestFile || MANIFEST_FILE)),
     ...(options.tools !== undefined ? { tools: options.tools } : {}),
+    ...(options.coordination !== undefined ? { coordination: options.coordination === true } : {}),
   };
   if (options.removeLegacyWorkspaceLanguage === true) delete state.workspaceLanguage;
   saveState(root, state);

@@ -56,4 +56,8 @@ function renderDecision(result) {
   };
 }
 
-module.exports = { provider, target, ABSTRACT_HOOK_EVENTS, EVENT_MAP, nativeEvents, renderDeclaration, eventTypeForNative, renderDecision };
+function renderAcknowledgement() {
+  return {};
+}
+
+module.exports = { provider, target, ABSTRACT_HOOK_EVENTS, EVENT_MAP, nativeEvents, renderDeclaration, eventTypeForNative, renderDecision, renderAcknowledgement };

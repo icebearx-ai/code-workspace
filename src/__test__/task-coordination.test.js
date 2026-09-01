@@ -111,6 +111,16 @@ test("provider adapters normalize Codex and Claude events to the same core envel
   assert.equal(protocol.renderNativeDecision("codex", { decision: "DENY_FILE_CONFLICT" }).decision, "block");
 });
 
+test("lifecycle coordination Hooks acknowledge without blocking the provider", async () => {
+  const fx = fixture();
+  const input = { hook_event_name: "SessionStart", session_id: "lifecycle", event_id: "lifecycle-start", cwd: fx.root, workspace_uuid: fx.workspaceUuid };
+  const options = { workspaceRoot: fx.root, workspaceUuid: fx.workspaceUuid, stateDirectory: fx.stateDirectory };
+  const codex = await protocol.runHook("codex", input, options);
+  const claude = await protocol.runHook("claude", input, options);
+  assert.deepEqual(codex.native, {});
+  assert.deepEqual(claude.native, { continue: true });
+});
+
 test("multi-range reservations are atomic and PROJECT_WIDE is bidirectionally exclusive", async () => {
   const fx = fixture();
   const owner = await c.beforeWrite({ ...fx, event: event(fx, "owner", "owner-before"), scopes: ["a.txt"], operationId: "owner-op" });
@@ -171,6 +181,8 @@ test("coordination managed Hook fragments are idempotent and preserve user setti
   const output = JSON.parse(fs.readFileSync(settings, "utf8"));
   assert.deepEqual(output.permissions, { allow: ["Read"] });
   assert.equal(output.hooks.PreToolUse.some((entry) => entry.hooks?.some((hook) => /task-hook claude/.test(hook.command))), true);
+  const command = output.hooks.PreToolUse.find((entry) => entry.hooks?.some((hook) => /task-hook claude/.test(hook.command))).hooks[0].command;
+  assert.equal(Buffer.from(command.split(" ").at(-1), "base64url").toString("utf8"), fs.realpathSync(fx.root));
 });
 
 function worker(input) {

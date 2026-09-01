@@ -34,7 +34,7 @@ code-workspace init . \
 ```
 
 Use `--tools claude`, `--tools codex`, or `--tools none` to override the default tool selection. Codex monitoring is enabled by default when Codex is selected; use `--no-monitor` to disable it.
-Pass `--coordination` to install the provider-neutral write-coordination Hook artifacts for the selected tools.
+Pass `--coordination` to install the write-coordination Hooks into the selected providers' native configuration.
 
 Initialization writes only Workspace-owned state and integrations:
 
@@ -42,7 +42,7 @@ Initialization writes only Workspace-owned state and integrations:
 - `USER_GUIDE.md`
 - `CLAUDE.md` and/or `AGENTS.md`
 - Workspace-specific commands and skills whose names start with `code-workspace-` or use the `/code-workspace` namespace
-- `.codex/hooks.json` when monitoring is enabled
+- `.codex/hooks.json` when monitoring or Codex coordination is enabled, and `.claude/settings.json` when Claude coordination is enabled
 
 It does not create `openspec/`, install native `/opsx` commands, or install native `openspec-*` skills.
 

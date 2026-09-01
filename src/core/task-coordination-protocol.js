@@ -118,6 +118,11 @@ function renderNativeDecision(provider, result) {
   return providerAdapter.renderDecision({ ...result, decision, remediation: reason });
 }
 
+function renderNativeResponse(provider, eventType, result) {
+  if (eventType === "write.before") return renderNativeDecision(provider, result);
+  return getHookAdapter(provider).renderAcknowledgement(eventType, result);
+}
+
 function createAdapter(provider, options = {}) {
   const providerAdapter = getHookAdapter(provider);
   return {
@@ -157,16 +162,22 @@ async function runHook(provider, input, options = {}) {
   } catch (error) {
     const adapter = createAdapter(provider, options);
     const result = { decision: "RETRY_COORDINATION_FAILURE", error: { code: error.code || "HOOK_WORKSPACE_CONFIG_INVALID", message: error.message, details: error.details || {} }, remediation: "The coordination Hook could not load Workspace identity/projects; repair the Workspace configuration and retry." };
-    return { envelope: null, result, native: adapter.render(result) };
+    const eventType = adapter.nativeEvents ? getHookAdapter(provider).eventTypeForNative(input?.hook_event_name || input?.hookEventName || input?.event_name || input?.eventName || input?.type || "Unknown") : null;
+    return { envelope: null, result, native: renderNativeResponse(provider, eventType, result) };
   }
   const adapter = createAdapter(provider, effectiveOptions);
   try {
     const envelope = adapter.normalize(input, effectiveOptions);
     if (!effectiveOptions.projectRealPath && Array.isArray(effectiveOptions.projects)) {
-      const cwd = path.resolve(envelope.cwd || process.cwd());
+      const canonical = (value) => {
+        const resolved = path.resolve(value);
+        try { return fs.realpathSync.native(resolved); } catch { return resolved; }
+      };
+      const cwd = canonical(envelope.cwd || process.cwd());
       const matching = effectiveOptions.projects
         .map((project) => ({ ...project, realPath: project.realPath || project.location }))
-        .filter((project) => project.realPath && (cwd === path.resolve(project.realPath) || cwd.startsWith(`${path.resolve(project.realPath)}${path.sep}`)))
+        .map((project) => ({ ...project, realPath: project.realPath ? canonical(project.realPath) : null }))
+        .filter((project) => project.realPath && (cwd === project.realPath || cwd.startsWith(`${project.realPath}${path.sep}`)))
         .sort((left, right) => right.realPath.length - left.realPath.length)[0];
       if (matching) effectiveOptions.projectRealPath = matching.realPath;
     }
@@ -177,10 +188,11 @@ async function runHook(provider, input, options = {}) {
       });
     }
     const result = await processEnvelope(envelope, effectiveOptions);
-    return { envelope, result, native: adapter.render(result) };
+    return { envelope, result, native: renderNativeResponse(provider, envelope.eventType, result) };
   } catch (error) {
     const result = { decision: "RETRY_COORDINATION_FAILURE", error: { code: error.code || "HOOK_INTERNAL_ERROR", message: error.message, details: error.details || {} }, remediation: "The coordination Hook failed closed. Inspect the error and retry after fixing the workspace state." };
-    return { envelope: null, result, native: adapter.render(result) };
+    const eventType = getHookAdapter(provider).eventTypeForNative(input?.hook_event_name || input?.hookEventName || input?.event_name || input?.eventName || input?.type || "Unknown");
+    return { envelope: null, result, native: renderNativeResponse(provider, eventType, result) };
   }
 }
 

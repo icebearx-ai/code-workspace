@@ -1,6 +1,7 @@
 const { CURRENT_CONFIG_VERSION, inspectConfigDomains, loadState } = require("./config");
 const { add, result } = require("./diagnostics");
 const { inspectManagedFiles } = require("./managed-files");
+const { installCoordinationHooks } = require("./task-coordination-managed");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { inspectProjectPermissions } = require("./permissions");
 const { validateProjects } = require("./validation");
@@ -36,13 +37,17 @@ function doctorWorkspace(root, manifest, options = {}) {
     add(output, "error", "WORKSPACE_IDENTITY_MISSING", "Local workspace name and UUID are missing. Re-run `code-w init .` to generate them.");
   }
 
+  const state = loadState(root);
   const toolSelection = options.toolSelection || resolveWorkspaceTools({
     explicit: options.tools,
     state: loadState(root),
     manifestTools: manifest.tools,
   });
   const tools = toolSelection.tools;
-  const capabilities = options.capabilities || (inspection.monitor.valid && config.monitor?.enable ? ["monitor"] : []);
+  const capabilities = options.capabilities || [
+    ...(inspection.monitor.valid && config.monitor?.enable ? ["monitor"] : []),
+    ...(state?.coordination === true ? ["coordination"] : []),
+  ];
   if (inspection.monitor.valid && config.monitor?.enable && !tools.includes("codex")) {
     add(output, "error", "MONITOR_CODEX_REQUIRED", "Agent monitoring is enabled, but Codex is not one of the selected tools.");
   }
@@ -56,7 +61,7 @@ function doctorWorkspace(root, manifest, options = {}) {
       const managed = inspectManagedFiles(root, manifest, tools, capabilities, {
         WORKSPACE_LANGUAGE: language || DEFAULT_WORKSPACE_LANGUAGE,
         WORKSPACE_USER_GUIDE: workspaceGuide(language || DEFAULT_WORKSPACE_LANGUAGE),
-      });
+      }, { coordination: capabilities.includes("coordination") });
       for (const file of [...managed.managedOld, ...managed.replaceable]) {
         add(output, "error", "MANAGED_FILE_OUTDATED", `Managed file is not at the desired version: ${file}`);
       }
@@ -70,6 +75,21 @@ function doctorWorkspace(root, manifest, options = {}) {
     }
   } catch (error) {
     add(output, "error", "MANAGED_FILE_MANIFEST_INVALID", error.message);
+  }
+  if (capabilities.includes("coordination")) {
+    try {
+      const coordination = installCoordinationHooks(root, tools, { dryRun: true });
+      output.coordinationHooks = coordination;
+      for (const entry of coordination.filter((item) => item.action !== "skip")) {
+        add(output, "error", "TASK_HOOK_NOT_INSTALLED", `Coordination Hook is not installed for ${entry.tool}: ${entry.target}`, {
+          tool: entry.tool,
+          target: entry.target,
+          remediation: "Run code-w update --coordination and retry.",
+        });
+      }
+    } catch (error) {
+      add(output, "error", error.code || "TASK_HOOK_INSPECTION_FAILED", error.message, error.details || {});
+    }
   }
   if (inspection.projects.valid && config.projects.length > 0) {
     try {
@@ -89,7 +109,6 @@ function doctorWorkspace(root, manifest, options = {}) {
     }
   }
 
-  const state = loadState(root);
   if (!options.allowIncompleteState) {
     if (!state || state.status !== "healthy") add(output, "error", "INIT_STATE_UNHEALTHY", "Local initialization state is missing or unhealthy.");
     else {

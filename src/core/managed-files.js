@@ -8,6 +8,7 @@ const { atomicWrite, sha256 } = require("./fs");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { CODEX_HOOKS_TARGET, composeHookContent } = require("./extension-artifacts");
 const { composeHookDocument } = require("./hooks");
+const { coordinationFragment, mergeHooks } = require("./task-coordination-managed");
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 const ARTIFACTS_ROOT = path.join(PACKAGE_ROOT, "artifacts");
@@ -66,14 +67,34 @@ function hasExtensionHooks(state) {
   );
 }
 
-function desiredManagedContent(root, entry, variables, extensionState, includeCore = true) {
+function desiredManagedContent(root, entry, variables, extensionState, includeCore = true, options = {}) {
   if (entry.target !== CODEX_HOOKS_TARGET) return renderManagedContent(entry, variables);
   const target = path.join(root, entry.target);
-  if (extensionState === null && fs.existsSync(target)) return fs.readFileSync(target);
-  const base = includeCore ? renderManagedContent(entry, variables) : Buffer.from('{\n  "hooks": {}\n}\n');
-  const legacy = composeHookContent(base, extensionState || { extensions: {} });
+  if (extensionState === null && fs.existsSync(target) && options.coordination !== true) return fs.readFileSync(target);
+  let base;
+  const preserveExisting = options.coordination === true && fs.existsSync(target);
+  if (preserveExisting) {
+    let existing;
+    try { existing = JSON.parse(fs.readFileSync(target, "utf8")); }
+    catch (error) { throw new WorkspaceError("MANAGED_FILE_UNKNOWN", `Cannot parse managed Hook target: ${target}: ${error.message}`, { target }); }
+    base = includeCore
+      ? mergeHooks(existing, JSON.parse(renderManagedContent(entry, variables).toString("utf8")), "codex")
+      : existing;
+  } else {
+    base = includeCore ? renderManagedContent(entry, variables) : Buffer.from('{\n  "hooks": {}\n}\n');
+  }
+  if (preserveExisting) {
+    const withCoordination = mergeHooks(base, coordinationFragment("codex", root), "codex");
+    return Buffer.from(`${JSON.stringify(withCoordination, null, 2)}\n`);
+  }
+  const legacy = composeHookContent(
+    typeof base === "string" || Buffer.isBuffer(base) ? base : JSON.stringify(base),
+    extensionState || { extensions: {} }
+  );
   const composed = composeHookDocument(legacy, "codex", { extensions: {} }, extensionState || { extensions: {} });
-  return Buffer.from(`${JSON.stringify(composed, null, 2)}\n`);
+  if (options.coordination !== true) return Buffer.from(`${JSON.stringify(composed, null, 2)}\n`);
+  const withCoordination = mergeHooks(composed, coordinationFragment("codex", root), "codex");
+  return Buffer.from(`${JSON.stringify(withCoordination, null, 2)}\n`);
 }
 
 function resolveArtifact(relativePath) {
@@ -196,12 +217,19 @@ function previousInstalledSha(state, entry) {
   return previous?.installedSha256 || previous?.sha256 || null;
 }
 
-function classifyManagedFile(root, entry, state, variables = {}, extensionState, includeCore = true) {
+function classifyManagedFile(root, entry, state, variables = {}, extensionState, includeCore = true, options = {}) {
   const target = path.join(root, entry.target);
-  const desiredSha256 = sha256(desiredManagedContent(root, entry, variables, extensionState, includeCore));
+  const desiredSha256 = sha256(desiredManagedContent(root, entry, variables, extensionState, includeCore, options));
   if (!fs.existsSync(target)) return { state: "missing", target, sha256: null, desiredSha256 };
   const actualSha256 = sha256(fs.readFileSync(target));
   if (actualSha256 === desiredSha256) return { state: "current", target, sha256: actualSha256, desiredSha256 };
+  // Provider Hook documents are shared with the user. When coordination is
+  // enabled, the desired document is built by merging managed contributions
+  // into the current document, so arbitrary user entries must not be treated
+  // as an unknown managed-file overwrite.
+  if (entry.target === CODEX_HOOKS_TARGET && options.coordination === true) {
+    return { state: "replaceable", target, sha256: actualSha256, desiredSha256 };
+  }
   if (actualSha256 === previousInstalledSha(state, entry)) return { state: "managed-old", target, sha256: actualSha256, desiredSha256 };
   if ((entry.replaceable || []).some((accepted) => accepted.sha256 === actualSha256)) {
     return { state: "replaceable", target, sha256: actualSha256, desiredSha256 };
@@ -218,7 +246,7 @@ function inspectManagedFiles(root, manifest, tools, capabilities = [], variables
   if (hookEntry && (hasExtensionHooks(hooksState) || (hooksState === null && fs.existsSync(path.join(root, CODEX_HOOKS_TARGET))))) selected.add(hookEntry.id);
   const output = { current: [], managedOld: [], replaceable: [], missing: [], unknown: [], files: [] };
   for (const entry of manifest.managedFiles.filter((entry) => selected.has(entry.id))) {
-    const classified = classifyManagedFile(root, entry, state, variables, hooksState, coreSelected.has(entry.id));
+    const classified = classifyManagedFile(root, entry, state, variables, hooksState, coreSelected.has(entry.id), options);
     const key = classified.state === "managed-old" ? "managedOld" : classified.state;
     output[key].push(entry.target);
     output.files.push({
@@ -244,6 +272,19 @@ function planManagedFiles(root, manifest, tools, options = {}) {
   for (const entry of manifest.managedFiles) {
     if (!selected.has(entry.id)) {
       const previousSha = previousInstalledSha(state, entry);
+      if (entry.target === CODEX_HOOKS_TARGET && options.coordination === true) {
+        if (previousSha) {
+          plans.push({
+            entry,
+            target: path.join(root, entry.target),
+            action: "forget",
+            previous: null,
+            reason: "coordination-managed",
+            desiredSha256: null,
+          });
+        }
+        continue;
+      }
       if (!previousSha) continue;
       const target = path.join(root, entry.target);
       const exists = fs.existsSync(target);
@@ -261,7 +302,7 @@ function planManagedFiles(root, manifest, tools, options = {}) {
       });
       continue;
     }
-    const classified = classifyManagedFile(root, entry, state, options.variables, hooksState, coreSelected.has(entry.id));
+    const classified = classifyManagedFile(root, entry, state, options.variables, hooksState, coreSelected.has(entry.id), options);
     if (classified.state === "current") {
       plans.push({ entry, target: classified.target, action: "skip", previous: null, reason: "current", desiredSha256: classified.desiredSha256 });
       continue;
@@ -278,7 +319,7 @@ function planManagedFiles(root, manifest, tools, options = {}) {
       action: "write",
       reason: classified.state,
       previous: fs.existsSync(classified.target) ? fs.readFileSync(classified.target) : null,
-      content: desiredManagedContent(root, entry, options.variables, hooksState, coreSelected.has(entry.id)),
+      content: desiredManagedContent(root, entry, options.variables, hooksState, coreSelected.has(entry.id), options),
       desiredSha256: classified.desiredSha256,
     });
   }
