@@ -88,6 +88,7 @@ function renderFailure(result) {
 
 function renderResponse({ eventType, result } = {}) {
   if (!eventType) return renderFailure(result);
+  if (result?.disabled === true || result?.warning) return renderAcknowledgement(eventType, result);
   return eventType === "write.before" ? renderDecision(result) : renderAcknowledgement(eventType, result);
 }
 

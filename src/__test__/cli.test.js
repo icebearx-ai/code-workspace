@@ -364,19 +364,26 @@ test("init and update install native coordination Hook entries and preserve them
   assert.equal(output.coordination, true);
   const codex = JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"));
   const claude = JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"));
-  const commandFor = (document, event) => document.hooks[event].flatMap((entry) => entry.hooks || []).find((hook) => hook.command)?.command;
+  const commandFor = (document, event) => (document.hooks?.[event] || []).flatMap((entry) => entry.hooks || []).find((hook) => hook.command)?.command;
   const codexCommand = commandFor(codex, "PreToolUse");
   const claudeCommand = commandFor(claude, "PreToolUse");
   assert.match(codexCommand, /^code-workspace-task-hook codex --workspace-root-b64 /);
   assert.match(claudeCommand, /^code-workspace-task-hook claude --workspace-root-b64 /);
   assert.equal(Buffer.from(codexCommand.split(" ").at(-1), "base64url").toString("utf8"), fs.realpathSync(root));
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".code-workspace", "state.json"), "utf8")).coordination, true);
+  assert.equal(yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8")).coordination.enabled, true);
 
   const updated = run(root, ["update", "--json"]);
   assert.equal(updated.status, 0, updated.stderr);
   assert.equal(jsonData(updated).coordination, true);
   assert.match(commandFor(JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8")), "PreToolUse"), /code-workspace-task-hook codex/);
   assert.match(commandFor(JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")), "PreToolUse"), /code-workspace-task-hook claude/);
+
+  const disabled = run(root, ["update", "--no-coordination", "--json"]);
+  assert.equal(disabled.status, 0, disabled.stderr);
+  assert.equal(jsonData(disabled).coordination, false);
+  assert.equal(yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8")).coordination?.enabled, false);
+  assert.equal(commandFor(JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8")), "PreToolUse"), undefined);
 });
 
 test("project inspect is read-only and project add registers an explicit record", () => {

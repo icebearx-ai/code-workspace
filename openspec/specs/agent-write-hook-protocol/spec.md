@@ -34,26 +34,26 @@ Claude 适配器 MUST 支持 `SessionStart`、`UserPromptSubmit`、`PermissionRe
 - **WHEN** 核心对 `PreToolUse` 返回 `DENY_FILE_CONFLICT`
 - **THEN** Provider 工具不会执行，用户和 Agent 能看到结构化冲突原因
 
-### Requirement: Hook 内部失败必须 fail closed
-Pre-write runner MUST 捕获台账、路径解析、Git、适配或内部异常并尽可能返回合法的 Provider 阻断结果；它 MUST NOT 把协调错误解释为允许。
+### Requirement: 实验性 Hook 内部失败不得阻断普通操作
+Pre-write runner MUST 捕获台账、路径解析、Git、适配或内部异常并返回合法的 Provider 中性允许响应，同时发出结构化 warning；实验性协调故障不得把普通操作变成阻断。核心协调 API 仍 MUST 保留稳定错误码供诊断和测试。
 
 #### Scenario: ledger mutex 获取失败
 - **WHEN** PreToolUse runner 在有界时间内无法完成协调事务
-- **THEN** runner 阻断工具并提示安全重试，而不是静默 exit-success
+- **THEN** runner 放行 Provider 操作并发出 `COORDINATION_RUNTIME_UNAVAILABLE` warning，而不是让实验性 Hook 阻断普通操作
 
 ### Requirement: 工具目标提取采用显式能力表
-每个 Provider 适配器 MUST 维护版本化工具能力表，把工具分类为只读、exact-file、multi-file、directory-tree 或 unknown-write；未知工具 MUST NOT 默认归类为只读。
+每个 Provider 适配器 MUST 维护版本化工具能力表，把工具分类为只读、exact-file、multi-file、directory-tree 或 unknown；只有能够证明写入效果并安全提取目标范围的工具才进入强写保护。未知工具 MUST NOT 被伪装成已知写入。
 
 #### Scenario: 新出现的未知工具
 - **WHEN** Provider 发出能力表中不存在的工具调用且其效果不能证明为只读
-- **THEN** 适配器把它归类为 unknown-write 并请求 `PROJECT_WIDE` 协调
+- **THEN** 适配器把它归类为 unknown，记录结构化 warning，并不请求强制 `PROJECT_WIDE` 协调
 
 ### Requirement: 路径提取失败不得缩小保护范围
 当工具被识别为可能写入但目标字段缺失、动态生成或无法安全规范化时，适配器 MUST 使用 directory/project 范围或阻断，MUST NOT 以空目标集合放行。
 
 #### Scenario: shell 动态命令
 - **WHEN** shell 命令通过变量和脚本动态决定输出文件，适配器无法证明具体目标
-- **THEN** 事件使用 `PROJECT_WIDE` 范围并服从未知写入强互斥规则
+- **THEN** 事件归类为 unknown，记录 `WRITE_SCOPE_UNKNOWN` warning 并放行；只有受支持且显式声明 project-wide 的工具才使用 `PROJECT_WIDE`
 
 ### Requirement: Hook 事件幂等且关联 operation
 适配器 MUST 为可重试事件生成稳定 eventId，并保留原生 tool call ID 作为 operationId；核心 MUST 忽略重复事件且只允许匹配 operationId 的 after-event转换 reservation。

@@ -123,9 +123,7 @@ test("Provider adaptors own native IO and Codex PreToolUse output stays schema-c
   assert.equal(codex.nativeEventName(input), "PreToolUse");
   assert.equal(codex.normalizeInput(input).nativeSessionId, "codex-session");
   assert.equal(codex.eventTypeForNative("NotARealCodexEvent"), null);
-  assert.deepEqual(codex.renderDecision({ decision: "ALLOW" }), {
-    hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
-  });
+  assert.deepEqual(codex.renderDecision({ decision: "ALLOW" }), {});
   assert.equal(Object.hasOwn(codex.renderDecision({ decision: "ALLOW" }), "decision"), false);
   assert.deepEqual(codex.renderDecision({ decision: "DENY_FILE_CONFLICT", remediation: "conflict" }), {
     decision: "block",
@@ -159,10 +157,13 @@ test("read-only shell inspection commands do not enter write coordination", () =
   ]) {
     assert.deepEqual(protocol.classifyTool({ name: "shell", input: { command } }).kind, "read-only", command);
   }
-  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "sed -i s/a/b/ a.txt" } }).kind, "unknown-write");
-  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "command rm -f a.txt" } }).kind, "unknown-write");
-  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "awk 'BEGIN { system(\"rm a.txt\") }'" } }).kind, "unknown-write");
-  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "sed 's/a/b/w out.txt' a.txt" } }).kind, "unknown-write");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "sed -i s/a/b/ a.txt" } }).kind, "unknown");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "command rm -f a.txt" } }).kind, "unknown");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "awk 'BEGIN { system(\"rm a.txt\") }'" } }).kind, "unknown");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "sed 's/a/b/w out.txt' a.txt" } }).kind, "unknown");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "code-w project show portal" } }).kind, "read-only");
+  assert.equal(protocol.classifyTool({ name: "apply_patch", input: { patch: "*** Begin Patch\n*** Update File: src/a.txt\n@@\n-old\n+new\n*** End Patch" } }).scopes[0].path, "src/a.txt");
+  assert.equal(protocol.classifyTool({ name: "shell", input: { command: "apply_patch <<'PATCH'\n*** Begin Patch\n*** Update File: src/b.txt\n@@\n-old\n+new\n*** End Patch\nPATCH" } }).scopes[0].path, "src/b.txt");
   assert.equal(protocol.classifyTool({ name: "shell_command", input: { command: "nl -ba a.txt" } }).kind, "read-only");
 });
 
@@ -182,8 +183,48 @@ test("read-only PreToolUse does not require a registered project", async () => {
     cwd: fx.root,
     tool_name: "shell",
     tool_input: { command: "nl -ba a.txt" },
-  }, { workspaceRoot: fx.root, workspaceUuid: fx.workspaceUuid, projects: [], stateDirectory: fx.stateDirectory });
-  assert.deepEqual(output.native, { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" } });
+  }, { workspaceRoot: fx.root, workspaceUuid: fx.workspaceUuid, projects: [], coordinationEnabled: true, stateDirectory: fx.stateDirectory });
+  assert.deepEqual(output.native, {});
+});
+
+test("unknown and control actions are advisory and do not require project registration", async () => {
+  const fx = fixture();
+  const output = await protocol.runHook("codex", {
+    hook_event_name: "PreToolUse",
+    session_id: "unknown-session",
+    event_id: "unknown-event",
+    cwd: path.join(fx.root, ".code-workspace"),
+    tool_name: "shell",
+    tool_input: { command: "code-w project show portal" },
+  }, { workspaceRoot: fx.root, workspaceUuid: fx.workspaceUuid, projects: [], coordinationEnabled: true, stateDirectory: fx.stateDirectory });
+  assert.equal(output.result.decision, "ALLOW");
+  assert.equal(output.result.warning, undefined);
+
+  const unknown = await protocol.runHook("codex", {
+    hook_event_name: "PreToolUse",
+    session_id: "unknown-session-2",
+    event_id: "unknown-event-2",
+    cwd: fx.root,
+    tool_name: "shell",
+    tool_input: { command: "npm run generate" },
+  }, { workspaceRoot: fx.root, workspaceUuid: fx.workspaceUuid, projects: [], coordinationEnabled: true, stateDirectory: fx.stateDirectory });
+  assert.equal(unknown.result.decision, "ALLOW");
+  assert.equal(unknown.result.warning.code, "COMMAND_EFFECT_UNKNOWN");
+});
+
+test("disabled experimental coordination is a neutral no-op", async () => {
+  const fx = fixture();
+  const output = await protocol.runHook("codex", {
+    hook_event_name: "PreToolUse",
+    session_id: "disabled-session",
+    event_id: "disabled-event",
+    cwd: fx.project,
+    tool_name: "Edit",
+    tool_input: { file_path: path.join(fx.project, "a.txt") },
+  }, { workspaceRoot: fx.root, workspaceUuid: fx.workspaceUuid, projects: [{ location: fx.project }], coordinationEnabled: false, stateDirectory: fx.stateDirectory });
+  assert.equal(output.result.disabled, true);
+  assert.deepEqual(output.native, {});
+  assert.equal(fs.existsSync(c.resolveStateDirectory(fx).ledgerPath), false);
 });
 
 test("lifecycle coordination Hooks acknowledge without blocking the provider", async () => {

@@ -34,7 +34,7 @@ code-workspace init . \
 ```
 
 Use `--tools claude`, `--tools codex`, or `--tools none` to override the default tool selection. Codex monitoring is enabled by default when Codex is selected; use `--no-monitor` to disable it.
-Pass `--coordination` to install the write-coordination Hooks into the selected providers' native configuration.
+Pass `--coordination` to install the experimental write-coordination Hooks and enable `coordination.enabled: true` in `.code-workspace/config.yaml`; pass `--no-coordination` to disable and remove them. The feature is disabled by default and protects only verified write tools with an extractable target path.
 
 Initialization writes only Workspace-owned state and integrations:
 
@@ -196,10 +196,10 @@ Hook support matrix (schema v1):
 
 | Provider | Lifecycle events | Write events | Target handling |
 | --- | --- | --- | --- |
-| Codex | `SessionStart`, `UserPromptSubmit`, `PermissionRequest`, `Stop`, `SessionEnd` | `PreToolUse`, `PostToolUse` and available failure events | Known Edit/Write-style tools use exact files; unknown shell/tools use `PROJECT_WIDE` |
+| Codex | `SessionStart`, `UserPromptSubmit`, `PermissionRequest`, `Stop`, `SessionEnd` | `PreToolUse`, `PostToolUse` and available failure events | Verified Edit/Write/apply_patch-style tools with extractable targets use exact files; unknown operations are advisory |
 | Claude | `SessionStart`, `UserPromptSubmit`, `PermissionRequest`, `Stop`, `StopFailure`, `SessionEnd` | `PreToolUse`, `PostToolUse`, `PostToolUseFailure` | Same normalized core decisions and scope rules as Codex |
 
-The adapters are versioned fixtures rather than a promise that future Agent releases keep identical native fields. New or unrecognized tools fail closed as possible writes; Hook enforcement does not cover bypassed or disabled Hooks, external editors, or arbitrary OS processes.
+The adapters are versioned fixtures rather than a promise that future Agent releases keep identical native fields. New or unrecognized tools are warned and allowed rather than treated as writes; Hook enforcement does not cover bypassed or disabled Hooks, external editors, or arbitrary OS processes. This is experimental known-write coordination, not comprehensive write protection.
 
 ## Update and language
 

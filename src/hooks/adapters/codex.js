@@ -66,7 +66,9 @@ function eventTypeForNative(nativeEventName) {
 function renderDecision(result) {
   const decision = result?.decision || "RETRY_COORDINATION_FAILURE";
   if (decision === "ALLOW") {
-    return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" } };
+    // Codex rejects the Claude-style permissionDecision=allow payload. An
+    // empty successful response is the native allow/no-op acknowledgement.
+    return {};
   }
   const reason = String(result?.remediation || "Task coordination blocked this operation.").trim() || "Task coordination blocked this operation.";
   return {
@@ -87,6 +89,7 @@ function renderFailure(result) {
 
 function renderResponse({ eventType, result } = {}) {
   if (!eventType) return renderFailure(result);
+  if (result?.disabled === true || result?.warning) return renderAcknowledgement(eventType, result);
   return eventType === "write.before" ? renderDecision(result) : renderAcknowledgement(eventType, result);
 }
 

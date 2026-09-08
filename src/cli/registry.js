@@ -38,12 +38,12 @@ const COMMAND_SUMMARIES = {
 const COMMANDS = [
   { path: ["init"], args: [{ name: "path", required: false }], workspace: "target", config: [], interaction: "optional", effects: "planned-write", options: {
     tools: { type: "string" }, extensions: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" },
-    monitor: { type: "boolean" }, "no-monitor": { type: "boolean" }, "monitor-url": { type: "string" }, coordination: { type: "boolean" }, yes: { type: "boolean" }, force: { type: "boolean" },
+    monitor: { type: "boolean" }, "no-monitor": { type: "boolean" }, "monitor-url": { type: "string" }, coordination: { type: "boolean" }, "no-coordination": { type: "boolean" }, yes: { type: "boolean" }, force: { type: "boolean" },
   } },
   { path: ["monitor"], args: [], workspace: "none", config: [], interaction: "never", effects: "external", options: { port: { type: "string", aliases: ["p"] } } },
   { path: ["monitor", "report"], args: [], workspace: "optional", config: ["identity", "monitor"], interaction: "never", effects: "external", options: {} },
   { path: ["update"], args: [], workspace: "required", config: [], interaction: "optional", effects: "planned-write", options: {
-    tools: { type: "string" }, language: { type: "string" }, coordination: { type: "boolean" }, force: { type: "boolean" },
+    tools: { type: "string" }, language: { type: "string" }, coordination: { type: "boolean" }, "no-coordination": { type: "boolean" }, force: { type: "boolean" },
   } },
   { path: ["language"], args: [], workspace: "required", config: ["language"], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "inspect"], args: [{ name: "path", required: true }], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },

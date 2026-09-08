@@ -119,6 +119,11 @@ function normalizeMonitor(value) {
   return { ...monitor, enable, url: parsed.toString().replace(/\/$/, "") };
 }
 
+function normalizeCoordination(value) {
+  const coordination = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return { ...coordination, enabled: coordination.enabled === true };
+}
+
 function normalizeProjects(value) {
   if (value == null) return [];
   if (!Array.isArray(value)) throw new WorkspaceError("PROJECT_REGISTRY_INVALID", "projects must be an array");
@@ -309,13 +314,17 @@ function normalizeConfig(value, options = {}) {
   const migration = planConfigMigration(source);
   const config = migration.value;
   const projects = options.projects !== undefined ? normalizeProjects(options.projects) : normalizeProjects(config.projects);
-  return {
+  const normalized = {
     ...config,
     schemaVersion: configVersion(config),
     workspace: normalizeWorkspace(config.workspace, options),
     monitor: normalizeMonitor(config.monitor),
     projects,
   };
+  if (Object.prototype.hasOwnProperty.call(config, "coordination") || options.coordination !== undefined) {
+    normalized.coordination = normalizeCoordination(options.coordination !== undefined ? options.coordination : config.coordination);
+  }
+  return normalized;
 }
 
 function loadConfig(root, options = {}) {
@@ -362,6 +371,7 @@ function loadConfigProjection(root, domains, options = {}) {
       attachFile(error);
     }
   }
+  if (requested.has("coordination")) projected.coordination = normalizeCoordination(document.value.coordination);
   if (requested.has("projects")) {
     try {
       const reference = normalizeProjectReference(document.value.projects, { file: document.file });
@@ -392,6 +402,7 @@ function inspectConfigDomains(root, options = {}) {
       identity: { valid: false, value: null, diagnostics: [] },
       language: { valid: false, value: null, diagnostics: [] },
       monitor: { valid: false, value: null, diagnostics: [] },
+      coordination: { valid: false, value: null, diagnostics: [] },
       projects: { valid: false, value: null, diagnostics: [] },
     };
   }
@@ -410,6 +421,7 @@ function inspectConfigDomains(root, options = {}) {
     identity: inspect(() => normalizeWorkspaceIdentity(document.value.workspace)),
     language: inspect(() => normalizeWorkspaceLanguage(document.value.workspace?.language, options)),
     monitor: inspect(() => normalizeMonitor(document.value.monitor)),
+    coordination: inspect(() => normalizeCoordination(document.value.coordination)),
     projects: inspect(() => {
       const reference = normalizeProjectReference(document.value.projects, { file: document.file });
       const projectDocument = readProjectConfigDocument(root, reference);
@@ -533,6 +545,7 @@ module.exports = {
   loadState,
   normalizeConfig,
   normalizeMonitor,
+  normalizeCoordination,
   normalizeProjects,
   normalizeProjectReference,
   normalizeWorkspace,

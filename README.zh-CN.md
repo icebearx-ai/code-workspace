@@ -34,7 +34,7 @@ code-workspace init . \
 ```
 
 可用 `--tools claude`、`--tools codex` 或 `--tools none` 覆盖默认工具选择。选择 Codex 时默认启用监控；可传 `--no-monitor` 关闭。
-传入 `--coordination` 可把与 Monitor 独立的写入协调 Hook 安装到选中工具的原生配置中。
+传入 `--coordination` 可把与 Monitor 独立的实验性写入协调 Hook 安装到选中工具的原生配置中，并在 `.code-workspace/config.yaml` 写入 `coordination.enabled: true`；传入 `--no-coordination` 可关闭并移除该能力。该功能默认关闭，只保护已验证、明确目标路径的少量写入工具。
 
 初始化只写入 Workspace 自有状态和集成：
 
@@ -194,10 +194,10 @@ Hook 支持矩阵（schema v1）：
 
 | Provider | 生命周期事件 | 写入事件 | 目标处理 |
 | --- | --- | --- | --- |
-| Codex | `SessionStart`、`UserPromptSubmit`、`PermissionRequest`、`Stop`、`SessionEnd` | `PreToolUse`、`PostToolUse` 及可用失败事件 | 已知 Edit/Write 类工具使用 exact 文件；未知 Shell/工具使用 `PROJECT_WIDE` |
+| Codex | `SessionStart`、`UserPromptSubmit`、`PermissionRequest`、`Stop`、`SessionEnd` | `PreToolUse`、`PostToolUse` 及可用失败事件 | 已验证且能提取目标的 Edit/Write/apply_patch 类工具使用 exact 文件；未知操作只告警放行 |
 | Claude | `SessionStart`、`UserPromptSubmit`、`PermissionRequest`、`Stop`、`StopFailure`、`SessionEnd` | `PreToolUse`、`PostToolUse`、`PostToolUseFailure` | 与 Codex 使用相同的归一化核心决策和范围规则 |
 
-适配器通过版本化 fixture 固化输入，而不是承诺未来 Agent 版本保持相同原生字段。新增或无法识别的工具按可能写入处理并 fail closed；Hook 强制范围不包含被绕过或禁用的 Hook、外部编辑器或任意 OS 进程。
+适配器通过版本化 fixture 固化输入，而不是承诺未来 Agent 版本保持相同原生字段。新增或无法识别的工具不进入强写保护，只记录告警；Hook 强制范围不包含被绕过或禁用的 Hook、外部编辑器或任意 OS 进程。该功能是实验性“已知写入冲突协调”，不是全面写保护。
 
 ## 更新与语言
 

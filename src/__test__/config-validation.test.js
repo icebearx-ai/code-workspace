@@ -188,6 +188,24 @@ test("monitor configuration is loopback-only and canonical", () => {
   }), /loopback host/);
 });
 
+test("experimental coordination defaults disabled and persists as a workspace setting", () => {
+  const root = temporaryRoot();
+  const base = {
+    schemaVersion: 2,
+    workspace: { name: "coordination", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "zh-CN" },
+    monitor: { enable: false, url: "http://127.0.0.1:3211" },
+    coordination: { enabled: true },
+    projects: [],
+  };
+  saveConfig(root, base);
+  assert.equal(loadConfigProjection(root, ["coordination"]).coordination.enabled, true);
+  assert.equal(loadConfig(root).coordination.enabled, true);
+
+  const disabledRoot = temporaryRoot();
+  saveConfig(disabledRoot, { ...base, coordination: { enabled: false } });
+  assert.equal(loadConfigProjection(disabledRoot, ["coordination"]).coordination.enabled, false);
+});
+
 test("workspace language is required, validated, and preserved", () => {
   const root = temporaryRoot();
   const workspace = { name: "team", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" };

@@ -50,7 +50,7 @@ const READ_ONLY_TOOLS = Object.freeze(new Set([
 ]));
 
 const EXACT_TOOLS = Object.freeze(new Set([
-  "Edit", "Write", "NotebookEdit", "MultiEdit", "CreateFile", "DeleteFile", "Patch",
+  "Edit", "Write", "NotebookEdit", "MultiEdit", "CreateFile", "DeleteFile", "Patch", "apply_patch",
 ]));
 
 const SHELL_READ_ONLY_COMMANDS = Object.freeze(new Set([
@@ -58,6 +58,12 @@ const SHELL_READ_ONLY_COMMANDS = Object.freeze(new Set([
   "sed", "awk", "cut", "sort", "uniq", "tr", "stat", "file", "du", "df",
   "git", "printf", "echo", "test", "[", "true", "false", "exit",
   "which", "type", "basename", "dirname", "realpath", "readlink",
+]));
+
+const CONTROL_READ_ONLY_COMMANDS = Object.freeze(new Set([
+  "project inspect", "project list", "project show", "project verify",
+  "project branch inspect", "project branch verify", "task list", "task show",
+  "task lock list", "task decision show", "doctor", "language", "completion",
 ]));
 
 const SHELL_CONTROL_WORDS = new Set(["if", "then", "else", "elif", "fi"]);
@@ -74,6 +80,22 @@ function extractPaths(value) {
   for (const key of ["paths", "files", "filePaths", "targets"]) if (Array.isArray(input[key])) input[key].forEach(add);
   if (Array.isArray(input.edits)) input.edits.forEach((edit) => add(edit?.file_path || edit?.filePath || edit?.path));
   if (Array.isArray(input.files)) input.files.forEach((edit) => add(typeof edit === "string" ? edit : edit?.path || edit?.file_path));
+  return [...new Set(paths)];
+}
+
+function extractPatchPaths(value) {
+  const input = readToolInput(value);
+  const patch = [input.patch, input.diff, input.content, input.text, input.command]
+    .filter((entry) => typeof entry === "string")
+    .join("\n");
+  if (!patch) return [];
+  const paths = [];
+  const add = (entry) => {
+    const path = String(entry || "").trim().replace(/^['"]|['"]$/g, "");
+    if (path && path !== "/dev/null") paths.push(path.replace(/^[ab]\//, ""));
+  };
+  for (const match of patch.matchAll(/^\*\*\*\s+(?:Update|Add|Delete|Move)\s+File:\s*(.+)$/gm)) add(match[1]);
+  for (const match of patch.matchAll(/^(?:---|\+\+\+)\s+([^\s]+)(?:\s+.*)?$/gm)) add(match[1]);
   return [...new Set(paths)];
 }
 
@@ -111,22 +133,43 @@ function shellCommandIsReadOnly(command) {
   return true;
 }
 
+function controlCommandIsReadOnly(command) {
+  const words = shellWords(String(command || "").trim());
+  if (words.length < 2 || !["code-w", "code-workspace"].includes(words[0])) return false;
+  const commandPath = [];
+  for (const word of words.slice(1)) {
+    if (word.startsWith("-")) continue;
+    commandPath.push(word.replace(/^['"]|['"]$/g, ""));
+    const candidate = commandPath.join(" ");
+    if (CONTROL_READ_ONLY_COMMANDS.has(candidate)) return true;
+    if (commandPath.length >= 3) break;
+  }
+  return false;
+}
+
 function classifyTool(tool = {}) {
   const name = String(tool.name || tool.toolName || "");
   const input = readToolInput(tool.input || tool.toolInput);
   if (READ_ONLY_TOOLS.has(name)) return { kind: "read-only", scopes: [] };
   if (EXACT_TOOLS.has(name)) {
-    const paths = extractPaths(input);
-    if (paths.length === 0) return { kind: "unknown-write", scopes: [{ type: "PROJECT_WIDE" }] };
-    return { kind: paths.length > 1 ? "multi-file" : "exact", scopes: paths.map((entry) => ({ type: "EXACT_FILE", path: entry })) };
+    const paths = ["Patch", "apply_patch"].includes(name) ? [...extractPaths(input), ...extractPatchPaths(input)] : extractPaths(input);
+    const uniquePaths = [...new Set(paths)];
+    if (uniquePaths.length === 0) return { kind: "unknown", reason: "WRITE_TARGET_MISSING", scopes: [] };
+    return { kind: uniquePaths.length > 1 ? "multi-file" : "exact", scopes: uniquePaths.map((entry) => ({ type: "EXACT_FILE", path: entry })) };
   }
   if (/^(bash|shell|shell_command|local_shell|command|exec|exec_command|run|run_shell_command|terminal)$/i.test(name)) {
     const command = String(input.command || input.cmd || input.script || "").trim();
+    if (controlCommandIsReadOnly(command)) return { kind: "read-only", category: "control", scopes: [] };
+    const commandName = shellWords(command)[0]?.replace(/^['"]|['"]$/g, "");
+    if (commandName === "apply_patch") {
+      const paths = extractPatchPaths({ command });
+      if (paths.length > 0) return { kind: paths.length > 1 ? "multi-file" : "exact", scopes: paths.map((entry) => ({ type: "EXACT_FILE", path: entry })) };
+      return { kind: "unknown", reason: "WRITE_TARGET_MISSING", scopes: [] };
+    }
     if (shellCommandIsReadOnly(command)) return { kind: "read-only", scopes: [] };
-    return { kind: "unknown-write", scopes: [{ type: "PROJECT_WIDE" }] };
+    return { kind: "unknown", reason: "COMMAND_EFFECT_UNKNOWN", scopes: [] };
   }
-  // Unknown tools are never implicitly considered safe.
-  return { kind: "unknown-write", scopes: [{ type: "PROJECT_WIDE" }] };
+  return { kind: "unknown", reason: "TOOL_UNSUPPORTED", scopes: [] };
 }
 
 function firstValue(source, keys, fallback = null) {
@@ -212,6 +255,8 @@ module.exports = {
   operationId,
   classifyTool,
   extractPaths,
+  extractPatchPaths,
+  controlCommandIsReadOnly,
   canonicalize,
   canonicalJson,
 };

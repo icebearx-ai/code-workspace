@@ -86,6 +86,37 @@ function renderNativeResponse(provider, eventType, result, context = {}) {
   return providerAdapter.renderAcknowledgement(eventType, result, context);
 }
 
+function canonicalPath(value) {
+  const resolved = path.resolve(String(value));
+  try { return fs.realpathSync.native(resolved); } catch { return resolved; }
+}
+
+function projectCandidates(projects) {
+  return (Array.isArray(projects) ? projects : [])
+    .map((project) => ({ ...project, realPath: project.realPath || project.location }))
+    .map((project) => ({ ...project, realPath: project.realPath ? canonicalPath(project.realPath) : null }))
+    .filter((project) => project.realPath);
+}
+
+function projectForScopes(projects, scopes, cwd) {
+  const candidates = projectCandidates(projects);
+  const paths = (Array.isArray(scopes) ? scopes : [])
+    .map((scope) => scope?.path)
+    .filter((value) => typeof value === "string" && value.trim())
+    .map((value) => path.isAbsolute(value) ? canonicalPath(value) : canonicalPath(path.resolve(cwd, value)));
+  if (paths.length === 0) return null;
+  return candidates
+    .filter((project) => paths.every((target) => target === project.realPath || target.startsWith(`${project.realPath}${path.sep}`)))
+    .sort((left, right) => right.realPath.length - left.realPath.length)[0] || null;
+}
+
+function advisoryAllow(reason, details = {}) {
+  return {
+    decision: "ALLOW",
+    warning: { code: reason, ...details },
+  };
+}
+
 function eventTypeForInput(provider, input, options = {}) {
   const providerAdapter = getHookAdapter(provider);
   try {
@@ -121,6 +152,7 @@ function createAdapter(provider, options = {}) {
 }
 
 async function processEnvelope(envelope, options = {}) {
+  if (options.coordinationEnabled === false) return { decision: "ALLOW", disabled: true, warning: { code: "COORDINATION_DISABLED" } };
   const adapter = createAdapter(envelope.provider, options);
   if (envelope.eventType === "write.before") {
     const capability = adapter.classifyTool(envelope.tool);
@@ -128,7 +160,14 @@ async function processEnvelope(envelope, options = {}) {
       await applyTaskEvent({ ...options, event: { ...envelope, eventType: "task.activity" } });
       return { decision: "ALLOW", taskId: taskIdFor({ workspaceUuid: envelope.workspaceUuid, provider: envelope.provider, nativeSessionId: envelope.agent.parentSessionId || envelope.nativeSessionId, generation: envelope.generation || 1 }) };
     }
-    return beforeWrite({ ...options, event: envelope, projectRealPath: options.projectRealPath || options.project?.realPath || envelope.cwd, scopes: capability.scopes });
+    if (capability.kind === "unknown") {
+      return advisoryAllow(capability.reason || "TOOL_EFFECT_UNKNOWN", { tool: envelope.tool?.name || null });
+    }
+    const projectRealPath = options.projectRealPath || options.project?.realPath || null;
+    if (!projectRealPath || !Array.isArray(capability.scopes) || capability.scopes.length === 0) {
+      return advisoryAllow(!projectRealPath ? "PROJECT_CONTEXT_UNKNOWN" : "WRITE_SCOPE_UNKNOWN", { tool: envelope.tool?.name || null });
+    }
+    return beforeWrite({ ...options, event: envelope, projectRealPath, scopes: capability.scopes });
   }
   if (envelope.eventType === "write.after") return afterWrite({ ...options, event: envelope, operationId: envelope.operationId });
   return applyTaskEvent({ ...options, event: envelope });
@@ -138,46 +177,47 @@ async function runHook(provider, input, options = {}) {
   let effectiveOptions = { ...options };
   const initialAdapter = createAdapter(provider, options);
   try {
-    if (!effectiveOptions.workspaceUuid) {
+    if (!effectiveOptions.workspaceUuid || effectiveOptions.coordinationEnabled === undefined) {
       const normalizedInput = initialAdapter.normalizeInput(input);
       const root = effectiveOptions.workspaceRoot || findWorkspaceRoot(normalizedInput?.cwd || process.cwd());
       if (root) {
-        const projection = loadConfigProjection(root, ["identity", "projects"]);
-        effectiveOptions = { ...effectiveOptions, workspaceRoot: root, workspaceUuid: projection.workspace.uuid, projects: projection.projects };
+        const projection = loadConfigProjection(root, ["identity", "projects", "coordination"]);
+        effectiveOptions = {
+          ...effectiveOptions,
+          workspaceRoot: root,
+          workspaceUuid: effectiveOptions.workspaceUuid || projection.workspace.uuid,
+          projects: effectiveOptions.projects || projection.projects,
+          coordinationEnabled: effectiveOptions.coordinationEnabled === undefined
+            ? projection.coordination.enabled
+            : effectiveOptions.coordinationEnabled,
+        };
       }
     }
   } catch (error) {
-    const result = { decision: "RETRY_COORDINATION_FAILURE", error: { code: error.code || "HOOK_WORKSPACE_CONFIG_INVALID", message: error.message, details: error.details || {} }, remediation: "The coordination Hook could not load Workspace identity/projects; repair the Workspace configuration and retry." };
+    const result = advisoryAllow("COORDINATION_CONFIG_UNAVAILABLE", { cause: error.code || "HOOK_WORKSPACE_CONFIG_INVALID", message: error.message });
     const eventType = eventTypeForInput(provider, input, options);
+    return { envelope: null, result, native: renderNativeResponse(provider, eventType, result, { input }) };
+  }
+  if (effectiveOptions.coordinationEnabled !== true) {
+    const eventType = eventTypeForInput(provider, input, effectiveOptions);
+    const result = { decision: "ALLOW", disabled: true, warning: { code: "COORDINATION_DISABLED" } };
     return { envelope: null, result, native: renderNativeResponse(provider, eventType, result, { input }) };
   }
   const adapter = createAdapter(provider, effectiveOptions);
   try {
     const envelope = adapter.normalize(input, effectiveOptions);
-    if (!effectiveOptions.projectRealPath && Array.isArray(effectiveOptions.projects)) {
-      const canonical = (value) => {
-        const resolved = path.resolve(value);
-        try { return fs.realpathSync.native(resolved); } catch { return resolved; }
-      };
-      const cwd = canonical(envelope.cwd || process.cwd());
-      const matching = effectiveOptions.projects
-        .map((project) => ({ ...project, realPath: project.realPath || project.location }))
-        .map((project) => ({ ...project, realPath: project.realPath ? canonical(project.realPath) : null }))
-        .filter((project) => project.realPath && (cwd === project.realPath || cwd.startsWith(`${project.realPath}${path.sep}`)))
-        .sort((left, right) => right.realPath.length - left.realPath.length)[0];
-      if (matching) effectiveOptions.projectRealPath = matching.realPath;
-    }
     const capability = envelope.eventType === "write.before" ? adapter.classifyTool(envelope.tool) : null;
-    if (envelope.eventType === "write.before" && capability?.kind !== "read-only" && Array.isArray(effectiveOptions.projects) && !effectiveOptions.projectRealPath) {
-      throw new WorkspaceError("TASK_PROJECT_NOT_REGISTERED", "The Hook write target is not inside a registered Workspace project.", {
-        cwd: envelope.cwd,
-        remediation: "Register the project with code-w project add, then retry the Agent operation.",
-      });
+    if (envelope.eventType === "write.before" && capability?.kind !== "read-only" && capability?.kind !== "unknown" && !effectiveOptions.projectRealPath) {
+      const matching = projectForScopes(effectiveOptions.projects, capability.scopes, envelope.cwd || process.cwd());
+      if (matching) effectiveOptions.projectRealPath = matching.realPath;
     }
     const result = await processEnvelope(envelope, effectiveOptions);
     return { envelope, result, native: renderNativeResponse(provider, envelope.eventType, result, { input, nativeEventName: envelope.nativeEventName }) };
   } catch (error) {
-    const result = { decision: "RETRY_COORDINATION_FAILURE", error: { code: error.code || "HOOK_INTERNAL_ERROR", message: error.message, details: error.details || {} }, remediation: "The coordination Hook failed closed. Inspect the error and retry after fixing the workspace state." };
+    const result = advisoryAllow("COORDINATION_RUNTIME_UNAVAILABLE", {
+      cause: error.code || "HOOK_INTERNAL_ERROR",
+      message: error.message,
+    });
     const eventType = eventTypeForInput(provider, input, effectiveOptions);
     return { envelope: null, result, native: renderNativeResponse(provider, eventType, result, { input }) };
   }
@@ -193,6 +233,9 @@ async function runHookStdin(provider, options = {}) {
     return adapter.renderResponse({ eventType: null, result: { decision: "RETRY_COORDINATION_FAILURE", remediation: `Invalid Hook JSON: ${error.message}` } });
   }
   const output = await runHook(provider, input, options);
+  if (output.result?.warning) {
+    process.stderr.write(`[code-workspace:${output.result.warning.code}] coordination advisory\n`);
+  }
   return output.native;
 }
 

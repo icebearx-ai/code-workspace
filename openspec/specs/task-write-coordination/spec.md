@@ -48,15 +48,15 @@
 - **WHEN** task-A 持有 `src/generated/` 的 tree reservation，task-B 准备写 `src/generated/a.js`
 - **THEN** 系统把两个范围判定为重叠并执行文件冲突规则
 
-### Requirement: 未知写入范围使用项目级强 reservation
-对可能写入但不能可靠提取目标的工具，系统 MUST 使用 `PROJECT_WIDE` reservation；存在其他任务参与或 claim 时 MUST 返回 `DENY_UNKNOWN_WRITE_SCOPE`，且用户不能用保护性项目确认覆盖。
+### Requirement: 未知写入范围不进入强保护
+对无法确认写入效果、无法可靠提取目标或无法确认项目归属的工具，系统 MUST 记录结构化 warning 并放行，不得伪造 `PROJECT_WIDE` reservation。只有受支持且明确声明 project-wide 的工具才可使用 `PROJECT_WIDE` reservation。
 
 #### Scenario: 并发项目中运行未知脚本
 - **WHEN** 项目已有 task-A 的参与关系，task-B 请求运行无法确定写入目标的脚本
-- **THEN** 系统强制拒绝 task-B，并解释无法证明脚本不会修改 task-A 的文件
+- **THEN** 系统记录 `WRITE_EFFECT_UNKNOWN` warning 并允许脚本继续，不创建强制 claim
 
-#### Scenario: 未知脚本独占执行期间出现新任务
-- **WHEN** task-A 已取得 `PROJECT_WIDE` reservation，task-B 准备写该项目任意文件
+#### Scenario: 明确 project-wide 工具独占执行期间出现新任务
+- **WHEN** task-A 使用受支持且明确声明 project-wide 的工具取得 `PROJECT_WIDE` reservation，task-B 准备写该项目任意文件
 - **THEN** task-B 被当作范围重叠强制拒绝
 
 ### Requirement: 工具结束后转换 reservation

@@ -77,7 +77,7 @@ workspaceUuid + provider + nativeSessionId + generation
 
 `ACTIVE` dirty claim 在后续证实 dirty-to-clean 时可以停止互斥效力；`UNKNOWN` dirty claim 即使已经 clean，也只能更新证据，不能自动释放。对 `UNKNOWN WRITE_RESERVATION` 不允许单独释放一个 claim，因为缺失 after-event 仍可能意味着旧工具尚未开始写入；安全解除必须放弃整个 generation，并撤销其迟到事件。
 
-### 2.5 范围先规范化，未知写入扩大保护
+### 2.5 仅对已知写入和明确范围提供保护
 
 目标路径必须关联到已注册项目，并在项目 real path 内完成 canonical 化：已存在路径使用 realpath，未存在文件使用最近已存在父目录的 realpath。符号链接、`..`、平台大小写别名或路径逃逸不得绕过重叠判断。
 
@@ -87,7 +87,7 @@ workspaceUuid + provider + nativeSessionId + generation
 - `DIRECTORY_TREE`：目录及其后代；
 - `PROJECT_WIDE`：项目内所有可能写入。
 
-能力表能可靠提取目标时使用 exact/tree；无法证明目标集合的 Shell、动态脚本或未知工具使用 `PROJECT_WIDE`。已有项目参与者或 claim 时，新的未知写入直接返回 `DENY_UNKNOWN_WRITE_SCOPE`，不通过项目确认放行。
+能力表能可靠提取目标时使用 exact/tree 并进入写保护。无法证明是否写入、无法提取目标或无法确认项目归属的 Shell、动态脚本和未知工具不再伪装成 `PROJECT_WIDE` 写入，而是记录结构化 warning 并放行。`PROJECT_WIDE` 只保留给未来明确声明该范围的受支持写工具。
 
 ### 2.6 台账事务短、原子、fail closed
 
@@ -195,7 +195,7 @@ flowchart LR
 - 生成稳定 `eventId`、保留 `operationId` 并填充统一 envelope；
 - 根据版本化能力表提取 exact/tree/project-wide 范围；
 - 调用协调核心并渲染 Provider 原生 allow/block 结果；
-- 在 PreToolUse 内部异常时 fail closed；
+- 在 PreToolUse 内部异常时返回中性允许响应并发出 warning，不让实验性功能阻断普通操作；核心 API 保留稳定错误码；
 - 记录子 Agent 观察信息，但把 owner 归并到父任务。
 
 适配器不负责复制 claim 算法、直接写 ledger、等待用户输入或执行被阻断的工具。
@@ -241,11 +241,11 @@ Managed 安装负责：
 ## 5. 安全边界与已知限制
 
 - 强制互斥只覆盖已安装、已启用、已信任且经过支持的 Provider Hook 入口；绕过 Hook 的写入无法由本机制保证。
-- 未知或无法安全提取目标的工具使用 `PROJECT_WIDE`，会牺牲并行度换取安全范围；并发项目中可能直接被拒绝。
+- 未知或无法安全提取目标的工具不进入强写保护，只记录 warning；本功能不承诺覆盖这些操作。
 - `UNKNOWN` 可能在用户处理前持续阻断写入，这是安全恢复路径的一部分，不是自动过期锁。
 - 进程存活检查受 PID 复用、远程会话和平台能力影响，只能辅助人工裁决。
 - ledger 是本机 Workspace 级状态，不提供跨机器一致性；用户状态目录损坏或权限不足时，写入会 fail closed。
-- 工具版本变化可能改变原生字段或工具名；适配器通过版本化 fixture 和能力表固化已知支持范围，未知输入默认按可能写入处理。
+- 工具版本变化可能改变原生字段或工具名；适配器通过版本化 fixture 和能力表固化已知支持范围，未知输入按 advisory 处理。
 - 本机制协调“谁可以开始写”，不保证外部写入者在工具运行期间不修改文件，也不替用户解决业务层合并冲突。
 
 ## 6. 支持矩阵

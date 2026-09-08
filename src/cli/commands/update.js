@@ -57,8 +57,14 @@ function updateWorkspace(root, options = {}) {
   const tools = toolSelection.tools;
   const previousCoordination = initialState.coordination === true;
   const previousTools = Array.isArray(initialState.tools) ? initialState.tools : [];
-  const removedCoordinationTools = previousCoordination ? previousTools.filter((tool) => !tools.includes(tool)) : [];
-  const coordination = options.coordination === true || initialState.coordination === true;
+  const coordination = options.coordination === true
+    ? true
+    : options["no-coordination"] === true
+      ? false
+      : initialState.coordination === true;
+  const removedCoordinationTools = previousCoordination
+    ? coordination ? previousTools.filter((tool) => !tools.includes(tool)) : previousTools
+    : [];
   const migration = planWorkspaceMaintenance(root, {
     language: options.language,
     allowLegacy: true,
@@ -66,7 +72,11 @@ function updateWorkspace(root, options = {}) {
   });
   const language = migration.language.value;
   const config = loadConfig(root, { defaultLanguage: language });
-  const nextConfig = { ...config, workspace: { ...config.workspace, language } };
+  const nextConfig = {
+    ...config,
+    workspace: { ...config.workspace, language },
+    coordination: { ...config.coordination, enabled: coordination },
+  };
   const capabilities = nextConfig.monitor.enable ? ["monitor"] : [];
   if (coordination) capabilities.push("coordination");
   const variables = { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) };

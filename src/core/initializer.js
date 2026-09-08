@@ -50,6 +50,7 @@ const INITIALIZATION_STAGE_IDS = Object.freeze({
 
 async function collectWorkspaceSetup(root, options = {}) {
   const language = options.language || DEFAULT_WORKSPACE_LANGUAGE;
+  const coordinationEnabled = options.coordinationEnabled !== undefined ? options.coordinationEnabled : options.coordination;
   const file = configPath(root);
   if (fs.existsSync(file)) {
     const current = loadConfig(root, { defaultLanguage: language });
@@ -64,6 +65,7 @@ async function collectWorkspaceSetup(root, options = {}) {
         ...(options.monitor !== undefined ? { enable: options.monitor === true } : {}),
         ...(options.monitorUrl ? { url: options.monitorUrl } : {}),
       },
+      ...(coordinationEnabled !== undefined ? { coordination: { ...current.coordination, enabled: coordinationEnabled === true } } : {}),
     });
   }
 
@@ -88,6 +90,7 @@ async function collectWorkspaceSetup(root, options = {}) {
       enable: options.tools.includes("codex") && monitorEnabled !== false,
       url: options.monitorUrl || DEFAULT_MONITOR_URL,
     },
+    coordination: { enabled: coordinationEnabled === true },
     projects: [],
   });
 }
@@ -230,10 +233,10 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
 async function initializeWorkspace(rootInput, options = {}) {
   const root = path.resolve(rootInput || ".");
   const existingState = loadState(root);
-  const coordination = options.coordination === true || existingState?.coordination === true;
+  const coordination = options.coordination !== undefined ? options.coordination === true : existingState?.coordination === true;
   const previousTools = Array.isArray(existingState?.tools) ? existingState.tools : [];
   const removedCoordinationTools = existingState?.coordination === true
-    ? previousTools.filter((tool) => !options.tools?.includes(tool))
+    ? coordination ? previousTools.filter((tool) => !options.tools?.includes(tool)) : previousTools
     : [];
   const coordinationHookTools = coordination
     ? [...new Set([...(options.tools || []), ...removedCoordinationTools])]
