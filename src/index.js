@@ -9,6 +9,8 @@ const monitor = require("./monitor");
 const monitorPage = require("./monitor/page");
 const project = require("./core/project");
 const validation = require("./core/validation");
+const hooks = require("./hooks");
+const hookAdapters = require("./hooks/adapters");
 
 module.exports = {
   ...config,

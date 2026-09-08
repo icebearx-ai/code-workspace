@@ -44,16 +44,4 @@ function eventTypeForNative(nativeEventName) {
   return "task.activity";
 }
 
-function renderDecision(result) {
-  const decision = result?.decision || "RETRY_COORDINATION_FAILURE";
-  if (decision === "ALLOW") return { decision: "allow", hookSpecificOutput: { schemaVersion: 1, decision: "ALLOW" } };
-  const reason = result?.remediation || "Task coordination blocked this operation.";
-  return {
-    decision: "block",
-    reason,
-    decisionRequestId: result?.decisionRequestId || null,
-    hookSpecificOutput: { schemaVersion: 1, decision, decisionRequestId: result?.decisionRequestId || null },
-  };
-}
-
-module.exports = { provider, target, ABSTRACT_HOOK_EVENTS, EVENT_MAP, nativeEvents, renderDeclaration, eventTypeForNative, renderDecision };
+module.exports = { provider, target, ABSTRACT_HOOK_EVENTS, EVENT_MAP, nativeEvents, renderDeclaration, eventTypeForNative };
