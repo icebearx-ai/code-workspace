@@ -51,9 +51,11 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 
 ```bash
 code-w init . --extensions zhuiyi-jira-mcp --yes
+code-w init . --extensions zhuiyi-opensvn-mcp --yes
 code-w init . --extensions none --yes
 code-w extension install
 code-w extension install zhuiyi-jira-mcp --yes
+code-w extension install zhuiyi-opensvn-mcp --yes
 code-w extension uninstall zhuiyi-jira-mcp --yes
 ```
 
@@ -63,7 +65,9 @@ Users select names, not versions; `zhuiyi-jira-mcp@0.1.0` is intentionally rejec
 
 `extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run.
 
-The bundled `zhuiyi-jira-mcp` extension configures the Jira MCP service for the selected Agent tools. It does not create an `openspec/` directory or install native OpenSpec commands.
+The bundled `zhuiyi-jira-mcp` and `zhuiyi-opensvn-mcp` extensions configure the Jira and OpenSVN MCP services for the selected Agent tools. They do not create an `openspec/` directory or install native OpenSpec commands.
+
+`zhuiyi-opensvn-mcp` accesses OpenSVN static resources through `opssvn.in.wezhuiyi.com`. Its runtime configuration requires `SVN_AUTHORIZATION` and optionally accepts `SVN_OUTPUT_DIR` and `SVN_MAX_RESOURCES`; credentials are not stored in the extension package and should be supplied through local configuration or the runtime environment.
 
 Extension entries run in separate Node processes and generate files in temporary staging directories. The host rejects undeclared, missing, symbolic-link, non-file, path-escaping, conflicting, and checksum-mismatched artifacts before transactionally installing them. Per-Workspace state is stored in `.code-workspace/ext-manifest.json`. A failed extension is reported as a warning and does not roll back successful core initialization or stop later extensions; a failed upgrade restores and retains the previous installed version.
 

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
+  "experimental": true,
+  "id": "zhuiyi-opensvn-mcp",
+  "name": "Zhuiyi OpenSVN MCP",
+  "version": "0.1.0",
+  "entry": "init.js",
+  "entrySha256": "014e5e698d63df7341a322fc8a739932954c019305456fb6bfe64dcf78e5443d",
+  "timeoutMs": 120000,
+  "capabilities": {
+    "networkHosts": ["gitee.com"]
+  },
+  "outputs": [
+    {
+      "id": "runtime",
+      "kind": "directory",
+      "ownership": "exclusive",
+      "target": ".code-workspace/extensions/zhuiyi-opensvn-mcp/0.1.0"
+    },
+    {
+      "id": "codex-config",
+      "kind": "text-block",
+      "ownership": "shared",
+      "target": ".codex/config.toml",
+      "format": "toml",
+      "tools": ["codex"]
+    },
+    {
+      "id": "claude-config",
+      "kind": "json-member",
+      "ownership": "shared",
+      "target": ".mcp.json",
+      "selector": "/mcpServers/zhuiyi-opensvn",
+      "tools": ["claude"]
+    }
+  ]
+}

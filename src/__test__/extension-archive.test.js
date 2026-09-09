@@ -7,20 +7,17 @@ const zlib = require("node:zlib");
 
 const EXTENSIONS_ROOT = path.resolve(__dirname, "..", "..", "extensions");
 
-function findArchiveExtensionRoot() {
-  for (const extension of fs.readdirSync(EXTENSIONS_ROOT, { withFileTypes: true })) {
-    if (!extension.isDirectory() || extension.isSymbolicLink()) continue;
-    const extensionRoot = path.join(EXTENSIONS_ROOT, extension.name);
-    for (const version of fs.readdirSync(extensionRoot, { withFileTypes: true })) {
-      if (!version.isDirectory() || version.isSymbolicLink()) continue;
-      const versionRoot = path.join(extensionRoot, version.name);
-      if (fs.existsSync(path.join(versionRoot, "release.json")) && fs.existsSync(path.join(versionRoot, "lib", "archive.js"))) return versionRoot;
-    }
+function findArchiveExtensionRoot(id) {
+  const extensionRoot = path.join(EXTENSIONS_ROOT, id);
+  for (const version of fs.readdirSync(extensionRoot, { withFileTypes: true })) {
+    if (!version.isDirectory() || version.isSymbolicLink()) continue;
+    const versionRoot = path.join(extensionRoot, version.name);
+    if (fs.existsSync(path.join(versionRoot, "release.json")) && fs.existsSync(path.join(versionRoot, "lib", "archive.js"))) return versionRoot;
   }
-  throw new Error("No archive-backed extension fixture found");
+  throw new Error(`No archive-backed extension fixture found for ${id}`);
 }
 
-const JIRA_EXTENSION_ROOT = findArchiveExtensionRoot();
+const JIRA_EXTENSION_ROOT = findArchiveExtensionRoot("zhuiyi-jira-mcp");
 const extensionManifest = JSON.parse(fs.readFileSync(path.join(JIRA_EXTENSION_ROOT, "manifest.json"), "utf8"));
 const EXTENSION_ID = extensionManifest.id;
 const EXTENSION_VERSION = extensionManifest.version;

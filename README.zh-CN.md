@@ -51,9 +51,11 @@ code-workspace init . \
 
 ```bash
 code-w init . --extensions zhuiyi-jira-mcp --yes
+code-w init . --extensions zhuiyi-opensvn-mcp --yes
 code-w init . --extensions none --yes
 code-w extension install
 code-w extension install zhuiyi-jira-mcp --yes
+code-w extension install zhuiyi-opensvn-mcp --yes
 code-w extension uninstall zhuiyi-jira-mcp --yes
 ```
 
@@ -63,7 +65,9 @@ code-w extension uninstall zhuiyi-jira-mcp --yes
 
 `extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。
 
-当前随包提供的内置扩展是 `zhuiyi-jira-mcp`，用于为选中的 Agent 工具配置 Jira MCP 服务；它不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
+当前随包提供的内置扩展包括 `zhuiyi-jira-mcp` 和 `zhuiyi-opensvn-mcp`，分别用于为选中的 Agent 工具配置 Jira MCP 与 OpenSVN MCP 服务；它们不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
+
+`zhuiyi-opensvn-mcp` 使用 `opssvn.in.wezhuiyi.com` 访问 OpenSVN 静态资源。运行时必须在对应 Agent 配置中提供 `SVN_AUTHORIZATION`，可选配置 `SVN_OUTPUT_DIR` 和 `SVN_MAX_RESOURCES`；认证信息不会写入扩展包，应通过本地配置或运行环境注入。
 
 扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.code-workspace/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
 
