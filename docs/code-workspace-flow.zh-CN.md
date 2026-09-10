@@ -36,8 +36,8 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[显式项目路径] --> I[project inspect 只读检查]
-    I --> R[用户或 Skill 补全项目记录]
+    A[显式项目路径] --> I[一次只读采集<br/>逐项目隔离 inspect]
+    I --> R[汇总有效记录与失败路径<br/>补全有效项目记录]
     R --> V[批量校验名称、真实路径和 Git 分支]
     V --> Q{确认写入?}
     Q -- 否 --> X[不修改]
@@ -66,12 +66,12 @@ projects: []
 
 ```bash
 code-workspace project inspect /absolute/path/to/project --json
-code-workspace project add --projects-file projects.json --yes --json
+cat projects.json | code-workspace project add --stdin --yes --json
 code-workspace project list --json
 code-workspace project verify "<project-name>" --json
 ```
 
-Claude Code 使用 `/code-workspace:add-projects`；Codex 使用 `$code-workspace-add-projects`。两者都要求用户给出显式路径，不得根据对话猜测。
+Claude Code 使用 `/code-workspace:add-projects`；Codex 使用 `$code-workspace-add-projects`。两者都要求用户给出显式路径，不得根据对话猜测。采集阶段逐项目报告失败并继续；写入阶段只接收用户确认的有效记录，并通过 `project add --stdin` 在现有全量校验和单事务内完成注册与授权。
 
 ## 分支不一致恢复
 

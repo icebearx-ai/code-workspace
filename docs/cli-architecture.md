@@ -16,6 +16,8 @@ Every command is declared in `src/cli/registry.js`. Its declaration is the sourc
 
 Handlers must consume the parser result. They must not reinterpret raw `argv`, silently accept unknown options, or ignore extra positionals.
 
+When a command explicitly declares a stdin input mode, that mode is part of the command's parser and interaction contract. The handler may read fd 0 only through that declared mode, must reject conflicting positional or file inputs before reading, and must keep planning, confirmation, transactions, postcondition verification, and JSON diagnostics identical to the equivalent file or argument input path.
+
 A command may declare only its final positional argument as `variadic: true`. The parser then accepts zero or more values for an optional variadic argument, or one or more values for a required variadic argument. Each value remains a separate shell argument; commands must not invent comma-delimited positional parsing.
 
 Supported classifications are:

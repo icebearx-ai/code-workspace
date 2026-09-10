@@ -92,11 +92,13 @@ Claude Code 用户可显式调用：
 /code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
-Codex 用户可对相同的显式路径调用 `$code-workspace-add-projects`。底层自动化可准备完整项目记录，然后运行：
+Codex 用户可对相同的显式路径调用 `$code-workspace-add-projects`。底层自动化可通过 stdin 一次传入完整项目记录：
 
 ```bash
-code-workspace project add --projects-file projects.json --yes --json
+cat projects.json | code-workspace project add --stdin --yes --json
 ```
+
+`--stdin` 接受 `{ "schemaVersion": 1, "projects": [...] }` 形式且与 `--projects-file` 相同语义的 JSON，必须与 `--yes` 一起使用，并在输入为空、无效或超过 1 MiB 时于写入前失败。`--stdin`、`--project-file`、`--projects-file` 与位置路径只能选择一个。
 
 注册表保存项目名称、真实路径、注册分支、类型和上下文。注册分支是 Code Workspace 的期望状态，实际分支是从选中 Git worktree 观测到的状态。Workspace 不会根据对话猜测路径，也不会自动判断哪一侧分支更权威。
 
@@ -122,7 +124,7 @@ projects:
       服务职责和代码导航上下文。
 ```
 
-`projects.ref` 相对于 `config.yaml` 解析，必须是同一 `.code-workspace` 目录下的安全普通文件名。不支持 URL、glob、绝对路径、路径逃逸或内联 `projects` 数组。所有项目 CLI 的语义保持不变，只是改为读取和写入引用文件。`.code-workspace/` 默认被忽略；如需 Git 历史，需要显式制定仓库策略。
+`projects.ref` 相对于 `config.yaml` 解析，必须是同一 `.code-workspace` 目录下的安全普通文件名。不支持 URL、glob、绝对路径、路径逃逸或内联 `projects` 数组。项目命令的现有参数和行为保持兼容，`project add` 额外支持 `--stdin`；项目数据仍只读取和写入引用文件。`.code-workspace/` 默认被忽略；如需 Git 历史，需要显式制定仓库策略。
 
 例如，`ref: team-projects.yaml` 会将项目注册表放在 `.code-workspace/team-projects.yaml`；默认名称仍为 `config-projects.yaml`。
 

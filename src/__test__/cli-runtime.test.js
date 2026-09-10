@@ -78,6 +78,18 @@ test("semantic parser rejects unknown options, duplicates, and extra arguments",
   );
 });
 
+test("project add declares stdin as a boolean input option", () => {
+  assert.deepEqual(parse(argv("project", "add", "--stdin", "--yes", "--json")).options, {
+    stdin: true,
+    yes: true,
+    json: true,
+  });
+  assert.throws(
+    () => parse(argv("project", "add", "--stdin", "--stdin", "--yes")),
+    (error) => error.code === "CLI_DUPLICATE_OPTION" && error.details.option === "stdin"
+  );
+});
+
 test("semantic parser accepts targeted project verification with valid option ordering", () => {
   const before = parse(argv("project", "verify", "--json", "service"));
   const after = parse(argv("project", "verify", "service", "--json"));

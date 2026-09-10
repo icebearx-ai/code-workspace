@@ -2,6 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+const { Readable } = require("node:stream");
 const test = require("node:test");
 
 const { loadConfig, saveConfig, updateProjectBranch } = require("../core/config");
@@ -10,6 +12,7 @@ const { sha256 } = require("../core/fs");
 const { MANIFEST_FILE, loadInitManifest } = require("../core/init");
 const { INITIALIZATION_STAGE_IDS, initializeWorkspace } = require("../core/initializer");
 const { applyPermissionPlan, planPermissionChanges } = require("../core/permissions");
+const { executeProject } = require("../cli/commands/project");
 const { applyAcceptActual, batchAcceptActual, batchUseRegistered } = require("../cli/commands/project-branch");
 const { applyProjectConfiguration } = require("../core/project-configuration");
 const { updateWorkspace } = require("../cli/commands/update");
@@ -323,6 +326,52 @@ test("project configuration restores config and permissions at each write bounda
     assert.deepEqual(fs.readFileSync(codexPermissionsFile), baselineCodexPermissions, stageId);
     assert.deepEqual(fs.readFileSync(claudePermissionsFile), baselineClaudePermissions, stageId);
   }
+});
+
+test("project add stdin restores the project registry when a write postcondition fails", async () => {
+  const parent = temporaryRoot();
+  const root = path.join(parent, "workspace");
+  const repository = path.join(parent, "stdin-rollback");
+  fs.mkdirSync(root);
+  fs.mkdirSync(repository);
+  spawnSync("git", ["init", "-b", "main"], { cwd: repository, stdio: "ignore" });
+  saveConfig(root, {
+    schemaVersion: 2,
+    workspace: { name: "stdin-rollback", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
+    monitor: { enable: false, url: "http://127.0.0.1:3211" },
+    projects: [],
+  });
+  const projectFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const before = fs.readFileSync(projectFile, "utf8");
+  const batch = {
+    schemaVersion: 1,
+    projects: [{
+      name: "stdin-rollback",
+      location: fs.realpathSync(repository),
+      branch: "main",
+      type: "backend",
+      context: "职责：回滚测试。",
+    }],
+  };
+
+  await assert.rejects(executeProject({
+    args: [],
+    root,
+    config: loadConfig(root),
+    definition: { path: ["project", "add"] },
+    options: {
+      stdin: true,
+      yes: true,
+      tools: "none",
+      dependencies: {
+        input: Readable.from([JSON.stringify(batch)]),
+        injectFailure: (stage) => {
+          if (stage === "after-config-save") throw new Error("injected stdin add failure");
+        },
+      },
+    },
+  }), (error) => error.code === "PROJECT_CONFIGURATION_UPDATE_FAILED" && error.details.workspaceRolledBack === true);
+  assert.equal(fs.readFileSync(projectFile, "utf8"), before);
 });
 
 test("accepting an actual branch rolls back configuration at apply and verification boundaries", () => {

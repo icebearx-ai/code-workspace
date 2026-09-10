@@ -16,7 +16,7 @@ Claude Code：
 /code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
-根据提示检查项目记录并确认。add-projects skill 会运行 `code-workspace language --json`，使用标准结果信封中的 `data.projectContext` 标签，并以 `data.language` 生成项目 context。
+根据提示检查项目记录并只确认一次。add-projects skill 会用一次只读采集逐项检查路径；某个项目失败时会报告具体诊断并继续检查其他项目，不会静默忽略失败项。确认后，所有有效记录通过 stdin 一次交给 `project add`，不需要临时 JSON 文件，也不会默认追加第二次 verify。
 
 ## 升级 Code Workspace
 

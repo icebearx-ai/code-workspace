@@ -11,6 +11,7 @@ const { confirm } = require("../confirmation");
 const { fromDiagnostics, selectionResult, success } = require("../result");
 
 const PROJECT_FIELDS = ["name", "location", "branch", "type", "context"];
+const PROJECT_STDIN_MAX_BYTES = 1024 * 1024;
 
 function projectError(code, message, details = {}) {
   return new WorkspaceError(code, message, details);
@@ -25,13 +26,44 @@ function assertNoProjectConflict(config, project) {
   throw projectError("PROJECT_CONFLICT", `Project conflicts with existing local entry: ${conflict.name}`, { project: project.name, conflict: conflict.name });
 }
 
+function parseJsonText(content, label, details = {}) {
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    throw projectError("PROJECT_INPUT_READ_FAILED", `Cannot parse ${label}: ${error.message}`, details);
+  }
+}
+
 function readJsonFile(input, label) {
   const file = path.resolve(input);
+  let content;
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
+    content = fs.readFileSync(file, "utf8");
   } catch (error) {
     throw projectError("PROJECT_INPUT_READ_FAILED", `Cannot read ${label} ${file}: ${error.message}`, { file });
   }
+  return parseJsonText(content, `${label} ${file}`, { file });
+}
+
+async function readStdinJson(input = process.stdin) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of input) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.length;
+    if (size > PROJECT_STDIN_MAX_BYTES) {
+      throw projectError("PROJECT_INPUT_TOO_LARGE", `--stdin input exceeds ${PROJECT_STDIN_MAX_BYTES} bytes.`, {
+        input: "stdin",
+        limitBytes: PROJECT_STDIN_MAX_BYTES,
+        actualBytesAtLeast: size,
+      });
+    }
+    chunks.push(bytes);
+  }
+  if (size === 0) throw projectError("PROJECT_INPUT_EMPTY", "--stdin requires a non-empty JSON document.", { input: "stdin" });
+  const content = Buffer.concat(chunks).toString("utf8");
+  if (content.trim() === "") throw projectError("PROJECT_INPUT_EMPTY", "--stdin requires a non-empty JSON document.", { input: "stdin" });
+  return parseJsonText(content, "--stdin input", { input: "stdin" });
 }
 
 function readTextFile(input, label) {
@@ -72,12 +104,41 @@ function normalizeProjectRecord(value) {
   return project;
 }
 
-function projectRecordsFromInput(args, options) {
-  if (options["project-file"] && options["projects-file"]) {
-    throw projectError("PROJECT_INPUT_MODE_CONFLICT", "Use only one of --project-file or --projects-file.");
+function normalizeBatchInput(input, label) {
+  if (input === null || typeof input !== "object") {
+    throw projectError("PROJECT_INPUT_INVALID", `${label} must contain a project object or projects array.`, { input: label });
+  }
+  if (input.schemaVersion != null && input.schemaVersion !== 1) {
+    throw projectError("PROJECT_INPUT_SCHEMA_UNSUPPORTED", `Unsupported project input schemaVersion: ${input.schemaVersion}`, { version: input.schemaVersion });
+  }
+  const projects = Array.isArray(input) ? input : input.projects;
+  if (!Array.isArray(projects) || projects.length === 0) {
+    throw projectError("PROJECT_INPUT_INVALID", `${label} must contain a non-empty projects array.`, { input: label });
+  }
+  return projects.map(normalizeProjectRecord);
+}
+
+async function projectRecordsFromInput(args, options, dependencies = {}) {
+  const inputModes = [
+    options["project-file"] ? "--project-file" : null,
+    options["projects-file"] ? "--projects-file" : null,
+    options.stdin ? "--stdin" : null,
+    args.length > 0 ? "project path" : null,
+  ].filter(Boolean);
+  if (inputModes.length > 1) {
+    throw projectError("PROJECT_INPUT_MODE_CONFLICT", `Use only one project input source: ${inputModes.join(", ")}.`, {
+      inputs: inputModes,
+    });
+  }
+  if (options.stdin) {
+    if (options.yes !== true) {
+      throw projectError("CLI_CONFIRMATION_REQUIRED", "project add --stdin requires --yes to confirm the batch non-interactively.", {
+        remediation: "Re-run the command with --yes.",
+      });
+    }
+    return normalizeBatchInput(await readStdinJson(dependencies.input || process.stdin), "--stdin");
   }
   if (options["project-file"]) {
-    if (args.length > 0) throw projectError("PROJECT_INPUT_MODE_CONFLICT", "project add does not accept a path with --project-file.");
     const input = readJsonFile(options["project-file"], "--project-file");
     if (input.schemaVersion != null && input.schemaVersion !== 1) {
       throw projectError("PROJECT_INPUT_SCHEMA_UNSUPPORTED", `Unsupported project input schemaVersion: ${input.schemaVersion}`, { version: input.schemaVersion });
@@ -88,16 +149,8 @@ function projectRecordsFromInput(args, options) {
     return [normalizeProjectRecord(project)];
   }
   if (options["projects-file"]) {
-    if (args.length > 0) throw projectError("PROJECT_INPUT_MODE_CONFLICT", "project add does not accept paths with --projects-file.");
     const input = readJsonFile(options["projects-file"], "--projects-file");
-    if (input.schemaVersion != null && input.schemaVersion !== 1) {
-      throw projectError("PROJECT_INPUT_SCHEMA_UNSUPPORTED", `Unsupported projects input schemaVersion: ${input.schemaVersion}`, { version: input.schemaVersion });
-    }
-    const projects = Array.isArray(input) ? input : input.projects;
-    if (!Array.isArray(projects) || projects.length === 0) {
-      throw projectError("PROJECT_INPUT_INVALID", "--projects-file must contain a non-empty projects array.");
-    }
-    return projects.map(normalizeProjectRecord);
+    return normalizeBatchInput(input, "--projects-file");
   }
   const location = args[0];
   if (!location) throw projectError("PROJECT_PATH_REQUIRED", "project add requires a project path or project JSON file.");
@@ -197,7 +250,7 @@ async function executeProject(invocation) {
     }, `Local project verification passed: ${name}.`);
   }
   if (action === "add") {
-    const candidates = projectRecordsFromInput(args, options);
+    const candidates = await projectRecordsFromInput(args, options, options.dependencies);
     const additions = [];
     const skipped = [];
     const planned = [...config.projects];

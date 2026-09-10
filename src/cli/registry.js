@@ -40,7 +40,7 @@ const COMMANDS = [
   { path: ["language"], args: [], workspace: "required", config: ["language"], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "inspect"], args: [{ name: "path", required: true }], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },
   { path: ["project", "add"], args: [{ name: "path", required: false }], workspace: "required", config: ["complete"], interaction: "required", effects: "planned-write", options: {
-    "project-file": { type: "string" }, "projects-file": { type: "string" }, name: { type: "string" }, type: { type: "string" },
+    "project-file": { type: "string" }, "projects-file": { type: "string" }, stdin: { type: "boolean" }, name: { type: "string" }, type: { type: "string" },
     context: { type: "string" }, "context-file": { type: "string" }, yes: { type: "boolean" },
   } },
   { path: ["project", "remove"], args: [{ name: "name", required: true }], workspace: "required", config: ["complete"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },

@@ -94,11 +94,13 @@ Claude Code users can invoke:
 /code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
-Codex users can invoke `$code-workspace-add-projects` with the same explicit paths. For low-level automation, prepare a complete project record and run:
+Codex users can invoke `$code-workspace-add-projects` with the same explicit paths. For low-level automation, pass complete project records through stdin:
 
 ```bash
-code-workspace project add --projects-file projects.json --yes --json
+cat projects.json | code-workspace project add --stdin --yes --json
 ```
+
+`--stdin` accepts `{ "schemaVersion": 1, "projects": [...] }` JSON with the same semantics as `--projects-file`, requires `--yes`, and fails before writing when input is empty, invalid, or larger than 1 MiB. `--stdin`, `--project-file`, `--projects-file`, and a positional path are mutually exclusive.
 
 The registry stores each project's name, real location, registered branch, type, and context. The registered branch is the Code Workspace expected state; the actual branch is observed from the selected Git worktree. Workspace never guesses a path from a conversation or automatically decides which branch is authoritative.
 
@@ -124,7 +126,7 @@ projects:
       Service ownership and navigation context.
 ```
 
-`projects.ref` is resolved relative to `config.yaml`. It must be one safe regular filename in the same `.code-workspace` directory; URLs, globs, absolute paths, path traversal, and inline `projects` arrays are not supported. All project commands keep their existing CLI semantics; they read and write the referenced project file. The `.code-workspace/` directory is ignored by default, so Git history for this local registry requires an explicit repository policy.
+`projects.ref` is resolved relative to `config.yaml`. It must be one safe regular filename in the same `.code-workspace` directory; URLs, globs, absolute paths, path traversal, and inline `projects` arrays are not supported. Existing project command arguments and behavior remain compatible, `project add` additionally supports `--stdin`, and project data is still read from and written to the referenced file. The `.code-workspace/` directory is ignored by default, so Git history for this local registry requires an explicit repository policy.
 
 For example, `ref: team-projects.yaml` makes the project registry `.code-workspace/team-projects.yaml`; the default remains `config-projects.yaml`.
 

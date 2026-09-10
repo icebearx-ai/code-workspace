@@ -16,7 +16,7 @@ Claude Code:
 /code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
-Review the project records and confirm when prompted. The add-projects skill runs `code-workspace language --json`, uses `data.projectContext` from the standard result envelope, and writes each generated project context in `data.language`.
+Review the project records and confirm once. The add-projects skill uses one read-only collection to inspect every path independently; a failed project reports its diagnostic without stopping the remaining paths or being silently ignored. After confirmation, all valid records are sent to `project add` through stdin in one operation, with no temporary JSON file and no default second verify.
 
 ## Upgrade Code Workspace
 

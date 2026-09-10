@@ -18,6 +18,10 @@ function run(cwd, args) {
   return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8" });
 }
 
+function runWithInput(cwd, args, input) {
+  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", input });
+}
+
 function jsonData(result) {
   const envelope = JSON.parse(result.stdout);
   assert.equal(envelope.schemaVersion, 1);
@@ -114,15 +118,19 @@ test("init installs only workspace-owned integrations and does not create opensp
   const addProjectsSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-add-projects", "SKILL.md"), "utf8");
   const resolveBranchSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-resolve-branch", "SKILL.md"), "utf8");
   const addProjectsCommand = fs.readFileSync(path.join(root, ".claude", "commands", "code-workspace", "add-projects.md"), "utf8");
-  assert.match(addProjectsSkill, /project inspect ["']?<path>["']? --json/);
-  assert.match(addProjectsSkill, /project add --projects-file/);
+  assert.match(addProjectsSkill, /project inspect "\$path" --json/);
+  assert.match(addProjectsSkill, /project add --stdin --yes --json/);
   assert.match(addProjectsSkill, /explicitly invokes `\$code-workspace-add-projects`/);
   assert.match(addProjectsSkill, /\$code-workspace-add-projects \/absolute\/path\/to\/project-a \/absolute\/path\/to\/project-b/);
   assert.match(addProjectsSkill, /Do not infer this invocation/);
   assert.match(addProjectsSkill, /code-workspace language --json/);
+  assert.match(addProjectsSkill, /Do not stop at the first failed project/);
+  assert.match(addProjectsSkill, /Do not create a temporary JSON file/);
+  assert.match(addProjectsSkill, /Do not run `code-workspace project verify --json` by default/);
   assert.match(addProjectsSkill, /corresponding label returned in `data\.projectContext`/);
   assert.match(addProjectsSkill, /standard envelope fields `schemaVersion`, `ok`, `command`, `data`, and `diagnostics`/);
   assert.doesNotMatch(addProjectsSkill, /For `zh-CN`|For `en-US`/);
+  assert.doesNotMatch(addProjectsSkill, /--projects-file|temporary JSON document/);
   assert.match(resolveBranchSkill, /project branch inspect "<project-a>" "<project-b>" --json/);
   assert.match(resolveBranchSkill, /project branch use-registered "<project-a>" "<project-b>" --allow-remote --yes --json/);
   assert.match(resolveBranchSkill, /project branch accept-actual "<project-a>" "<project-b>" --yes --json/);
@@ -147,12 +155,16 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.doesNotMatch(resolveBranchSkill, /Coordinate through the branch CLI/);
   assert.doesNotMatch(resolveBranchSkill, /branchAsk|Workspace ASK language|\{\{WORKSPACE_LANGUAGE\}\}|Requirement:|Scenario:|Single-project example|Multi-project example|project verify|project list/);
   assert.doesNotMatch(resolveBranchSkill, /git status|git show-ref|git switch|\.code-workspace\/config\.yaml|project list --json/);
-  assert.match(addProjectsCommand, /project inspect ["']?<path>["']? --json/);
+  assert.match(addProjectsCommand, /project inspect "\$path" --json/);
   assert.match(addProjectsCommand, /explicitly invokes `\/code-workspace:add-projects`/);
   assert.match(addProjectsCommand, /\/code-workspace:add-projects \/absolute\/path\/to\/project-a \/absolute\/path\/to\/project-b/);
   assert.match(addProjectsCommand, /The values in `\$ARGUMENTS` are the project paths/);
   assert.match(addProjectsCommand, /Do not infer this invocation/);
   assert.match(addProjectsCommand, /code-workspace language --json/);
+  assert.match(addProjectsCommand, /project add --stdin --yes --json/);
+  assert.match(addProjectsCommand, /Do not stop at the first failed project/);
+  assert.match(addProjectsCommand, /Do not create a temporary JSON file/);
+  assert.doesNotMatch(addProjectsCommand, /--projects-file|temporary JSON document/);
   assert(!fs.existsSync(path.join(root, ".claude", "commands", "opsxw", "explore.md")));
   assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-explore", "SKILL.md")));
   const state = JSON.parse(fs.readFileSync(path.join(root, ".code-workspace", "state.json"), "utf8"));
@@ -417,6 +429,106 @@ test("project add rejects incomplete records and keeps JSON errors machine-reada
   assert.equal(output.ok, false);
   assert.equal(output.diagnostics[0].code, "PROJECT_INPUT_FIELD_REQUIRED");
   assert.match(output.diagnostics[0].message, /name/);
+});
+
+test("project add reads a batch from stdin without a temporary input file", () => {
+  const parent = temporaryRoot();
+  const workspace = path.join(parent, "workspace");
+  fs.mkdirSync(workspace);
+  const repository = gitRepository(parent, "stdin-service");
+  assert.equal(run(workspace, ["init", ".", "--tools", "claude", "--yes", "--json"]).status, 0);
+
+  const batch = {
+    schemaVersion: 1,
+    projects: [{
+      name: "stdin-service",
+      location: fs.realpathSync(repository),
+      branch: "main",
+      type: "backend",
+      context: "职责：stdin 服务。\n技术栈：Node.js。\n代码定位：src。\n项目边界：仅负责服务实现。",
+    }],
+  };
+  const added = runWithInput(workspace, ["project", "add", "--stdin", "--yes", "--json"], JSON.stringify(batch));
+  assert.equal(added.status, 0, added.stderr);
+  const output = JSON.parse(added.stdout);
+  assert.equal(output.ok, true);
+  assert.equal(output.data.action, "add");
+  assert.equal(output.data.project.name, "stdin-service");
+  assert.equal(output.data.permissions.tools[0].tool, "claude");
+  assert.equal(output.data.permissions.tools[0].verified, true);
+  assert.equal(loadProjectYaml(workspace).projects[0].name, "stdin-service");
+
+  const repeated = runWithInput(workspace, ["project", "add", "--stdin", "--yes", "--json"], JSON.stringify(batch));
+  assert.equal(repeated.status, 0, repeated.stderr);
+  assert.equal(JSON.parse(repeated.stdout).data.action, "skip");
+  assert.equal(loadProjectYaml(workspace).projects.length, 1);
+});
+
+test("project add stdin failures leave the project registry unchanged", () => {
+  const parent = temporaryRoot();
+  const workspace = path.join(parent, "workspace");
+  fs.mkdirSync(workspace);
+  const repository = gitRepository(parent, "stdin-failure");
+  assert.equal(run(workspace, ["init", ".", "--tools", "none", "--yes", "--json"]).status, 0);
+
+  const projectFile = path.join(workspace, ".code-workspace", "config-projects.yaml");
+  const before = fs.readFileSync(projectFile, "utf8");
+  const batch = JSON.stringify({
+    schemaVersion: 1,
+    projects: [{
+      name: "stdin-failure",
+      location: fs.realpathSync(repository),
+      branch: "main",
+      type: "backend",
+      context: "职责：失败测试。",
+    }],
+  });
+  const failures = [
+    {
+      args: ["project", "add", "--stdin", "--json"],
+      input: batch,
+      code: "CLI_CONFIRMATION_REQUIRED",
+    },
+    {
+      args: ["project", "add", "--stdin", "--yes", "--json"],
+      input: "",
+      code: "PROJECT_INPUT_EMPTY",
+    },
+    {
+      args: ["project", "add", "--stdin", "--yes", "--json"],
+      input: "{",
+      code: "PROJECT_INPUT_READ_FAILED",
+    },
+    {
+      args: ["project", "add", "--stdin", "--yes", "--json"],
+      input: "null",
+      code: "PROJECT_INPUT_INVALID",
+    },
+    {
+      args: ["project", "add", "--stdin", "--yes", "--json"],
+      input: "x".repeat((1024 * 1024) + 1),
+      code: "PROJECT_INPUT_TOO_LARGE",
+    },
+    {
+      args: ["project", "add", "--stdin", "--projects-file", "/tmp/ignored.json", "--yes", "--json"],
+      input: batch,
+      code: "PROJECT_INPUT_MODE_CONFLICT",
+    },
+    {
+      args: ["project", "add", "--stdin", repository, "--yes", "--json"],
+      input: batch,
+      code: "PROJECT_INPUT_MODE_CONFLICT",
+    },
+  ];
+
+  for (const failure of failures) {
+    const result = runWithInput(workspace, failure.args, failure.input);
+    assert.equal(result.status, 1, `${failure.code}: ${result.stderr}`);
+    const envelope = JSON.parse(result.stdout);
+    assert.equal(envelope.ok, false, failure.code);
+    assert.equal(envelope.diagnostics[0].code, failure.code);
+    assert.equal(fs.readFileSync(projectFile, "utf8"), before, failure.code);
+  }
 });
 
 test("project add validates duplicate names across a batch before writing any project", () => {
