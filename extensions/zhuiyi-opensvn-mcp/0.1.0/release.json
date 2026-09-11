@@ -1,7 +1,7 @@
 {
-  "url": "https://gitee.com/liutaigang/zhuiyi-opensvn-mcp/repository/archive/0.1.0.tar.gz",
-  "allowedHosts": ["gitee.com"],
-  "sha256": "4e1d8535dde6930a4abafdad4fa51b2da814dbda2fc001b9d18ba5c684024643",
+  "url": "https://gitee.com/liutaigang/zhuiyi-opensvn-mcp/raw/master/release/zhuiyi-opensvn-mcp-0.1.0.tar.gz",
+  "allowedHosts": ["gitee.com", "raw.giteeusercontent.com"],
+  "sha256": "5b4111e91bbedc2eaa18a746bca90adb93bd54f87958207d037f683d6d782865",
   "root": "zhuiyi-opensvn-mcp-0.1.0",
   "entry": "dist/index.js",
   "package": {

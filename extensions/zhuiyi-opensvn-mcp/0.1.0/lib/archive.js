@@ -82,9 +82,14 @@ function extractTarGz(archiveFile, outputRoot, options) {
     if (contentEnd > tar.length) throw archiveError("OPENSVN_ARCHIVE_INVALID", "Truncated tar entry");
     const content = tar.subarray(contentStart, contentEnd);
     offset = contentStart + Math.ceil(size / 512) * 512;
-    if (type === "x") { pax = parsePax(content); continue; }
-    if (type === "g") { parsePax(content); continue; }
-    if (type === "L") { longPath = content.toString("utf8").replace(/\0.*$/s, "").trim(); continue; }
+    if (type === "x") {
+      pax = parsePax(content);
+      continue;
+    }
+    if (type === "L") {
+      longPath = content.toString("utf8").replace(/\0.*$/s, "").trim();
+      continue;
+    }
     if (!["0", "\0", "5", "2"].includes(type)) throw archiveError("OPENSVN_ARCHIVE_UNSAFE", `Unsupported tar entry type ${JSON.stringify(type)} for ${name}`, { path: name, type });
     name = safeRelativePath(name);
     const rootPrefix = `${options.root}/`;
@@ -131,7 +136,9 @@ function validatePackage(outputRoot, release) {
   const packageFile = path.join(outputRoot, "package.json");
   let value;
   try { value = JSON.parse(fs.readFileSync(packageFile, "utf8")); } catch (error) { throw archiveError("OPENSVN_PACKAGE_INVALID", `Cannot read extracted package.json: ${error.message}`, { file: packageFile }); }
-  if (value.name !== release.package.name || value.version !== release.package.version) throw archiveError("OPENSVN_PACKAGE_INVALID", `Extracted package identity mismatch: expected ${release.package.name}@${release.package.version}`, { expected: release.package, actual: { name: value.name, version: value.version } });
+  if (value.name !== release.package.name || value.version !== release.package.version) {
+    throw archiveError("OPENSVN_PACKAGE_INVALID", `Extracted package identity mismatch: expected ${release.package.name}@${release.package.version}`, { expected: release.package, actual: { name: value.name, version: value.version } });
+  }
   const entry = path.join(outputRoot, ...release.entry.split("/"));
   if (!fs.existsSync(entry) || !fs.lstatSync(entry).isFile() || fs.lstatSync(entry).isSymbolicLink()) throw archiveError("OPENSVN_PACKAGE_INVALID", `Missing package entry: ${release.entry}`, { entry: release.entry });
 }
@@ -142,18 +149,23 @@ function download(url, file, options, redirects = 0) {
     let parsed;
     try { parsed = new URL(url); } catch { return reject(archiveError("OPENSVN_DOWNLOAD_FAILED", `Invalid download URL: ${url}`, { url })); }
     if (parsed.protocol !== "https:") return reject(archiveError("OPENSVN_DOWNLOAD_FAILED", `Download URL must use HTTPS: ${url}`, { url }));
-    if (!Array.isArray(options.allowedHosts) || !options.allowedHosts.includes(parsed.hostname)) return reject(archiveError("OPENSVN_DOWNLOAD_HOST_FORBIDDEN", `Download host is not allowed: ${parsed.hostname}`, { url, host: parsed.hostname }));
-    // Gitee's archive endpoint returns a challenge page for Node's default,
-    // browser-like, or custom User-Agent values. Its curl-compatible response
-    // is the actual signed tar.gz payload we need to verify and extract.
-    const request = https.get(parsed, { headers: { "user-agent": "curl/8.10.1" } }, (response) => {
+    if (!Array.isArray(options.allowedHosts) || !options.allowedHosts.includes(parsed.hostname)) {
+      return reject(archiveError("OPENSVN_DOWNLOAD_HOST_FORBIDDEN", `Download host is not allowed: ${parsed.hostname}`, { url, host: parsed.hostname }));
+    }
+    const request = https.get(parsed, { headers: { "user-agent": "zhuiyi-opensvn-mcp-extension/0.1.0" } }, (response) => {
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.resume();
         return download(new URL(response.headers.location, parsed).href, file, options, redirects + 1).then(resolve, reject);
       }
-      if (response.statusCode !== 200) { response.resume(); return reject(archiveError("OPENSVN_DOWNLOAD_FAILED", `Download returned HTTP ${response.statusCode}`, { url, statusCode: response.statusCode })); }
+      if (response.statusCode !== 200) {
+        response.resume();
+        return reject(archiveError("OPENSVN_DOWNLOAD_FAILED", `Download returned HTTP ${response.statusCode}`, { url, statusCode: response.statusCode }));
+      }
       const declared = Number(response.headers["content-length"] || 0);
-      if (declared > options.maxDownloadBytes) { response.resume(); return reject(archiveError("OPENSVN_DOWNLOAD_TOO_LARGE", `Download exceeds ${options.maxDownloadBytes} bytes`, { url, limit: options.maxDownloadBytes, actual: declared })); }
+      if (declared > options.maxDownloadBytes) {
+        response.resume();
+        return reject(archiveError("OPENSVN_DOWNLOAD_TOO_LARGE", `Download exceeds ${options.maxDownloadBytes} bytes`, { url, limit: options.maxDownloadBytes, actual: declared }));
+      }
       const stream = fs.createWriteStream(file, { flags: "wx", mode: 0o600 });
       const hash = crypto.createHash("sha256");
       let bytes = 0;
