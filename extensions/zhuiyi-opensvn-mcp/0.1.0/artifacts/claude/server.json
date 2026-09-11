@@ -5,7 +5,7 @@
   ],
   "env": {
     "SVN_AUTHORIZATION": "",
-    "SVN_OUTPUT_DIR": ".",
+    "SVN_OUTPUT_DIR": ".mcp-cache-opensvn",
     "SVN_MAX_RESOURCES": "200",
     "SVN_ALLOWED_HOSTS": "opssvn.in.wezhuiyi.com"
   }
