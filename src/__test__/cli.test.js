@@ -99,9 +99,9 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(codexInstructions, /The workspace is not a project/);
   assert.match(codexInstructions, /\$code-workspace-add-projects \/absolute\/path\/to\/project/);
   for (const instructions of [claudeInstructions, codexInstructions]) {
-    assert.match(instructions, /code-w project list --json/);
-    assert.match(instructions, /code-w project show "<project\.name>" --json/);
-    assert.match(instructions, /code-w project verify "<project\.name>" --json/);
+    assert.match(instructions, /codew project list --json/);
+    assert.match(instructions, /codew project show "<project\.name>" --json/);
+    assert.match(instructions, /codew project verify "<project\.name>" --json/);
     assert.match(instructions, /code-workspace-resolve-branch/);
     assert.match(instructions, /registeredBranch.*expected state/);
     assert.match(instructions, /actualBranch.*observed state/);

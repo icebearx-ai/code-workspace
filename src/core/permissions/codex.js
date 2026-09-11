@@ -110,14 +110,14 @@ const codexPermissionAdapter = {
       throw new WorkspaceError("WORKSPACE_PERMISSION_VERIFY_FAILED", `Cannot verify Codex directory authorization: ${error.message}`, {
         tool: this.id,
         file: plan.target,
-        remediation: "Inspect .codex/config.toml and re-run code-w permissions apply.",
+        remediation: "Inspect .codex/config.toml and re-run codew permissions apply.",
       });
     }
     if (actual !== plan.desiredContent) {
       throw new WorkspaceError("WORKSPACE_PERMISSION_VERIFY_FAILED", "Codex directory authorization does not match the confirmed plan.", {
         tool: this.id,
         file: plan.target,
-        remediation: "Inspect .codex/config.toml and re-run code-w permissions apply.",
+        remediation: "Inspect .codex/config.toml and re-run codew permissions apply.",
       });
     }
   },

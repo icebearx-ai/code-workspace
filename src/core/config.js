@@ -83,7 +83,7 @@ function normalizeWorkspaceLanguage(value, options = {}) {
     throw new WorkspaceError(code, `workspace.language must be one of: ${LANGUAGE_CODES.join(", ")}`, {
       actual: language || null,
       supported: LANGUAGE_CODES,
-      remediation: `code-w update --language ${LANGUAGE_CODES[0]}`,
+      remediation: `codew update --language ${LANGUAGE_CODES[0]}`,
     });
   }
   return language;

@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "a05c1611df919bcb05843d703a5a08c9d7e312c7dd69d1ac198f8bcfc266ec67"
+      "sha256": "919217e7d7a1c59775f13803a1bf7645b48c01ba53bbb2cea9d666022c7ce7fc"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "b4fb6dee108832c02fc09e179c051678406d486f341b3174aa5e57b4053d740a"
+      "sha256": "c41dd91cfeef475b48785f19253e1213fe14b3208b12c9dfd3e7aa7dad13a4a7"
     }
   ],
   "managedFiles": [
@@ -49,7 +49,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "6510cce83138fad46330d2c175506e56e9c98d5086195a699eafc7cc74163bf3"
+        "sha256": "f601879e19055172d4e5123e05ff59dce7bf16c6c9fbebade010e078d9416232"
       },
       "render": {
         "variables": [
@@ -72,7 +72,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "6510cce83138fad46330d2c175506e56e9c98d5086195a699eafc7cc74163bf3"
+        "sha256": "f601879e19055172d4e5123e05ff59dce7bf16c6c9fbebade010e078d9416232"
       },
       "render": {
         "variables": [
@@ -98,7 +98,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/codex/hooks.json",
-        "sha256": "64d68809a2681b11d4b50bee3ca711fa8f5ea0a297c2281e5c7f8937e968e22e"
+        "sha256": "ecba346e0ce73d931802615dd798b952f1d0afabef3c67d7d1ee21f81b133b46"
       },
       "provenance": {
         "kind": "template"
@@ -158,7 +158,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "d09b0e1847f5b39e6409ba3ac43f26fa5829a15690a3e216576e51535fb6b161"
+        "sha256": "df8c65fbadf917b7247bbd1f40144da8c904a95f2b3ee905a4d2d6176e0a5f1b"
       },
       "provenance": {
         "kind": "template"
@@ -173,7 +173,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "d09b0e1847f5b39e6409ba3ac43f26fa5829a15690a3e216576e51535fb6b161"
+        "sha256": "df8c65fbadf917b7247bbd1f40144da8c904a95f2b3ee905a4d2d6176e0a5f1b"
       },
       "provenance": {
         "kind": "template"

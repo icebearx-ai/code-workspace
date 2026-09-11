@@ -174,7 +174,7 @@ npm 包 SHALL 包含基于 Extension Spec v1 的 `zhuiyi-jira-mcp@0.1.0`。扩�
 - **THEN** Host 将候选目录安装到 `.code-workspace/extensions/zhuiyi-jira-mcp/0.1.0`，并为所选 Agent 安装指向 `dist/index.js` 的配置
 
 #### Scenario: 独立安装 Jira MCP
-- **WHEN** 用户执行 `code-w extension install zhuiyi-jira-mcp --yes`
+- **WHEN** 用户执行 `codew extension install zhuiyi-jira-mcp --yes`
 - **THEN** Host 不重跑核心 init，只执行 Extension Spec v1 并提交其运行目录、配置和 installed 状态
 
 #### Scenario: 预构建包安装不执行构建

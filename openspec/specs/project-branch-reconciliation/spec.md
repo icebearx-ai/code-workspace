@@ -26,7 +26,7 @@ CLI 必须（SHALL）在实现其他分支协调能力前，将所有分支比�
 - **THEN** 配置仍使用 `projects[].branch` 持久化注册分支，不要求配置 schema 迁移，公共分支状态将该值表达为 `registeredBranch`
 
 #### Scenario: 检查不一致的目标项目
-- **WHEN** 用户运行 `code-w project branch inspect <name> --json`，且目标项目的注册分支与实际分支不同
+- **WHEN** 用户运行 `codew project branch inspect <name> --json`，且目标项目的注册分支与实际分支不同
 - **THEN** 命令成功返回目标项目名称、位置、`registeredBranch`、`actualBranch`、`matches: false`、`worktreeClean` 和 `registeredBranchExists`
 
 #### Scenario: 检查已经一致的目标项目
@@ -163,7 +163,7 @@ CLI 必须（SHALL）提供 `project branch verify <name...>`，且该命令只�
 CLI 必须（SHALL）移除 `project sync-branch`，并以 `project branch accept-actual` 作为“实际分支写回注册表”的唯一受支持入口。
 
 #### Scenario: 调用旧命令
-- **WHEN** 用户运行 `code-w project sync-branch <name>`
+- **WHEN** 用户运行 `codew project sync-branch <name>`
 - **THEN** CLI 在 Workspace 发现和配置加载前返回未知命令诊断，并且帮助、补全、Skill 和文档均不列出旧命令
 
 ### Requirement: 分支域提供独立的最新版本更新命令

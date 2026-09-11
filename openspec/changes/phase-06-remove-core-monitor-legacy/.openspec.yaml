@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-09-10
+goal: Reduce core weight and remove Monitor-specific configuration, assets, CLI
+  wiring and public bridges after adoption is proven.

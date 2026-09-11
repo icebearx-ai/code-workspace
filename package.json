@@ -13,6 +13,7 @@
   },
   "bin": {
     "code-workspace": "bin/code-workspace.js",
+    "codew": "bin/code-workspace.js",
     "code-w": "bin/code-workspace.js"
   },
   "files": [

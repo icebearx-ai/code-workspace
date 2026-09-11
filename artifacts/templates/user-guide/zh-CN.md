@@ -24,8 +24,8 @@ Claude Code：
 
 ```bash
 npm install -g @icebearx-ai/code-workspace@latest
-code-w update
-code-w doctor
+codew update
+codew doctor
 ```
 
 `update` 会更新托管指令、Workspace 技能、Hook 和本指南。如果托管文件包含未知的本地修改，更新会停止。请先检查文件；只有明确要覆盖这些修改时才使用 `--force`。
@@ -35,14 +35,14 @@ code-w doctor
 初始化时可选择 Workspace 语言，也可以显式指定：
 
 ```bash
-code-w init --language zh-CN
-code-w language
+codew init --language zh-CN
+codew language
 ```
 
 所选偏好保存在 `.code-workspace/config.yaml` 的 `workspace.language`。已有工作区可通过以下命令切换语言：
 
 ```bash
-code-w update --language zh-CN
+codew update --language zh-CN
 ```
 
 该操作也会切换本托管指南。已有项目 context 不会自动翻译。
@@ -52,7 +52,7 @@ code-w update --language zh-CN
 为所有工作区启动一个全局 Monitor：
 
 ```bash
-code-w monitor
+codew monitor
 ```
 
 打开命令输出的本地地址。面板会显示工作区、执行状态、待授权请求、已完成轮次和实时信号。Monitor 语言在页面中单独选择，与 `workspace.language` 相互独立。
@@ -60,7 +60,7 @@ code-w monitor
 必要时可使用其他端口：
 
 ```bash
-code-w monitor --port 8080
+codew monitor --port 8080
 ```
 
 所有参与监控的工作区都必须在 `.code-workspace/config.yaml` 中使用相同 URL。初始化后，请在 Codex 中使用 `/hooks` 检查并信任项目 Hook。
@@ -69,17 +69,17 @@ code-w monitor --port 8080
 
 ```bash
 # 检查安装和工作区健康状态
-code-w doctor
+codew doctor
 
 # 更新所有托管文件
-code-w update
+codew update
 
 # 应用 Agent 项目目录授权
-code-w permissions apply --yes
+codew permissions apply --yes
 
 # 校验本地项目
-code-w project verify
-code-w project verify <project-name>
+codew project verify
+codew project verify <project-name>
 ```
 
 目录访问由用户授权。Code Workspace 负责展示请求的变更、实施并验证变更，以及报告结果。`permissions apply` 只补齐已注册项目缺失的授权，不撤销额外目录。普通 `update` 不会改变授权。

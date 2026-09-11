@@ -13,7 +13,7 @@ Code Workspace is a local multi-project registry and safety layer for Claude Cod
 npm install -g @icebearx-ai/code-workspace
 ```
 
-The package provides `code-workspace` and the shorter alias `code-w`.
+The package provides the `code-workspace` command and the shorter `codew` alias. The legacy `code-w` alias remains available for compatibility.
 
 ## Initialize
 
@@ -50,13 +50,13 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 `init` can install integrations from the versioned `extensions/` repository shipped inside this npm package. Select extension names interactively, or pass a comma-separated name list non-interactively. The dedicated install command accepts one or more names; without names it opens the built-in extension multiselect, where ESC exits without changes:
 
 ```bash
-code-w init . --extensions zhuiyi-jira-mcp --yes
-code-w init . --extensions zhuiyi-opensvn-mcp --yes
-code-w init . --extensions none --yes
-code-w extension install
-code-w extension install zhuiyi-jira-mcp --yes
-code-w extension install zhuiyi-opensvn-mcp --yes
-code-w extension uninstall zhuiyi-jira-mcp --yes
+codew init . --extensions zhuiyi-jira-mcp --yes
+codew init . --extensions zhuiyi-opensvn-mcp --yes
+codew init . --extensions none --yes
+codew extension install
+codew extension install zhuiyi-jira-mcp --yes
+codew extension install zhuiyi-opensvn-mcp --yes
+codew extension uninstall zhuiyi-jira-mcp --yes
 ```
 
 The Workspace operation lock shared by init, extension install, and extension uninstall is configured in the Code Workspace project's `.env` (not in the target Workspace). `CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` defaults to `5000`, and `CODE_WORKSPACE_INIT_LOCK_STALE_MS` defaults to `30000`; process environment variables take precedence. See `.env.example` for the project configuration names.
@@ -67,7 +67,7 @@ Users select names, not versions; `zhuiyi-jira-mcp@0.1.0` is intentionally rejec
 
 The bundled `zhuiyi-jira-mcp` and `zhuiyi-opensvn-mcp` extensions configure the Jira and OpenSVN MCP services for the selected Agent tools. They do not create an `openspec/` directory or install native OpenSpec commands.
 
-`zhuiyi-opensvn-mcp` accesses OpenSVN static resources through `opssvn.in.wezhuiyi.com`. Its runtime configuration requires `SVN_AUTHORIZATION` and optionally accepts `SVN_OUTPUT_DIR` and `SVN_MAX_RESOURCES`; credentials are not stored in the extension package and should be supplied through local configuration or the runtime environment.
+`zhuiyi-opensvn-mcp` accesses OpenSVN static resources through `opssvn.in.wezhuiyi.com`. Its bundled configuration sets `SVN_OUTPUT_DIR` to `.mcp-cache-opensvn`, requires `SVN_AUTHORIZATION`, and defaults `SVN_MAX_RESOURCES` to `200`; credentials are not stored in the extension package and should be supplied through local configuration or the runtime environment.
 
 Extension entries run in separate Node processes and generate files in temporary staging directories. The host rejects undeclared, missing, symbolic-link, non-file, path-escaping, conflicting, and checksum-mismatched artifacts before transactionally installing them. Per-Workspace state is stored in `.code-workspace/ext-manifest.json`. A failed extension is reported as a warning and does not roll back successful core initialization or stop later extensions; a failed upgrade restores and retains the previous installed version.
 
@@ -78,7 +78,7 @@ verified by Code Workspace; extensions never patch the real Workspace directly. 
 recorded installed state and does not execute extension code. Unknown changes to extension-owned
 files or contributions stop the operation instead of being overwritten.
 
-This is fault isolation, not a malicious-code security sandbox. The experimental release trusts only extension code shipped with Code Workspace; network sources, external extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `code-w update` are not supported. The developer contract is in `docs/extensions.md`.
+This is fault isolation, not a malicious-code security sandbox. The experimental release trusts only extension code shipped with Code Workspace; network sources, external extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`.
 
 ## Register projects
 

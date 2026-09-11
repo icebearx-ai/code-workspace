@@ -9,13 +9,13 @@ The registry is authoritative for project identity, ownership, location, and the
 If the user explicitly names a registered project, resolve it directly:
 
 ```bash
-code-w project show "<project.name>" --json
+codew project show "<project.name>" --json
 ```
 
 Only when project ownership cannot be determined, list registry metadata:
 
 ```bash
-code-w project list --json
+codew project list --json
 ```
 
 Use `name`, `type`, and `context` only to identify relevant candidates and ask the user to choose. Do not inspect candidate repositories while selecting.
@@ -33,13 +33,13 @@ Meta, help, or workspace-tool maintenance tasks that do not depend on registered
 Before reading or modifying selected project code, run:
 
 ```bash
-code-w project verify "<project.name>" --json
+codew project verify "<project.name>" --json
 ```
 
 For several explicitly selected projects, use:
 
 ```bash
-code-w project verify "<project-a>" "<project-b>" --json
+codew project verify "<project-a>" "<project-b>" --json
 ```
 
 - For one project, continue only when the targeted result has `ok: true`. For a multi-project result, evaluate every ordered project result independently: continue passed projects and keep failed projects paused even when the top-level `ok` is false.
@@ -50,7 +50,7 @@ code-w project verify "<project-a>" "<project-b>" --json
 - After branch verification succeeds—including projects whose branches were already aligned—run `project branch update-latest` for the selected projects:
 
 ```bash
-code-w project branch update-latest "<project-a>" "<project-b>" --json
+codew project branch update-latest "<project-a>" "<project-b>" --json
 ```
 
   Pass each selected project name as a separate argument; for a single project, pass only that project name. Evaluate each project result independently, including when the batch-level `ok` is `false`: continue only for projects whose individual result has `ok: true`, and treat `disabled` and `already-latest` as successful skips. If an update fails, keep that project paused and do not run ad-hoc `fetch`, `pull`, `reset`, `stash`, or `rebase` commands. For each successful or skipped project, discard pre-update context and rerun targeted `project verify` before starting project work.
@@ -63,7 +63,7 @@ The AI/Agent MUST NOT directly create, edit, move, or delete Workspace-owned fil
 - `.codex/config.toml`
 - `CLAUDE.md`, `AGENTS.md`, or other managed workspace files
 
-AI/Agent registry changes must use an approved `code-w` command. Users may manually edit `.code-workspace/config.yaml` and are responsible for the resulting configuration; AI/Agent must not imitate that edit with a script or direct file write. The CLI owns confirmation, concurrency checks, persistence or safe external effects, postconditions, rollback/compensation, and structured output. This boundary does not prevent user-requested production-code changes inside the selected external `project.location`.
+AI/Agent registry changes must use an approved `codew` command. Users may manually edit `.code-workspace/config.yaml` and are responsible for the resulting configuration; AI/Agent must not imitate that edit with a script or direct file write. The CLI owns confirmation, concurrency checks, persistence or safe external effects, postconditions, rollback/compensation, and structured output. This boundary does not prevent user-requested production-code changes inside the selected external `project.location`.
 
 ## Responsibilities
 

@@ -76,14 +76,14 @@ const claudePermissionAdapter = {
       throw new WorkspaceError("WORKSPACE_PERMISSION_VERIFY_FAILED", `Cannot verify Claude directory authorization: ${error.message}`, {
         tool: this.id,
         file: plan.target,
-        remediation: "Inspect .claude/settings.local.json and re-run code-w permissions apply.",
+        remediation: "Inspect .claude/settings.local.json and re-run codew permissions apply.",
       });
     }
     if (actual !== plan.desiredContent) {
       throw new WorkspaceError("WORKSPACE_PERMISSION_VERIFY_FAILED", "Claude directory authorization does not match the confirmed plan.", {
         tool: this.id,
         file: plan.target,
-        remediation: "Inspect .claude/settings.local.json and re-run code-w permissions apply.",
+        remediation: "Inspect .claude/settings.local.json and re-run codew permissions apply.",
       });
     }
   },

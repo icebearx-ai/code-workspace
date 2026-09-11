@@ -35,7 +35,7 @@ async function executeMonitor(invocation) {
     if (error.code === "EADDRINUSE") {
       throw new WorkspaceError("MONITOR_PORT_IN_USE", `Monitor port 127.0.0.1:${port} is already in use.`, {
         port,
-        remediation: `Start another port with code-w monitor -p 8080, then update monitor.url.`,
+        remediation: `Start another port with codew monitor -p 8080, then update monitor.url.`,
       });
     }
     throw error;

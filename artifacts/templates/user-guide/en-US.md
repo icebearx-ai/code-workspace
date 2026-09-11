@@ -24,8 +24,8 @@ Upgrade the global package, update the current workspace's managed files, then v
 
 ```bash
 npm install -g @icebearx-ai/code-workspace@latest
-code-w update
-code-w doctor
+codew update
+codew doctor
 ```
 
 `update` refreshes managed instructions, Workspace skills, hooks, and this guide. It stops if a managed file contains unknown local changes. Review the file first; use `--force` only when replacing those changes is intentional.
@@ -35,14 +35,14 @@ code-w doctor
 Choose the Workspace language during initialization, or pass it explicitly:
 
 ```bash
-code-w init --language en-US
-code-w language
+codew init --language en-US
+codew language
 ```
 
 The selected preference is stored at `workspace.language` in `.code-workspace/config.yaml`. Change an initialized workspace with:
 
 ```bash
-code-w update --language en-US
+codew update --language en-US
 ```
 
 This also switches this managed guide. Existing project context is not translated.
@@ -52,7 +52,7 @@ This also switches this managed guide. Existing project context is not translate
 Start one global monitor for all workspaces:
 
 ```bash
-code-w monitor
+codew monitor
 ```
 
 Open the printed local URL. The dashboard shows workspaces, execution state, pending approvals, completed turns, and live signals. Monitor language is selected on the page and is independent of `workspace.language`.
@@ -60,7 +60,7 @@ Open the printed local URL. The dashboard shows workspaces, execution state, pen
 Use another port when necessary:
 
 ```bash
-code-w monitor --port 8080
+codew monitor --port 8080
 ```
 
 Each participating workspace must use the same URL in `.code-workspace/config.yaml`. After initialization, review and trust the project hooks with `/hooks` in Codex.
@@ -69,17 +69,17 @@ Each participating workspace must use the same URL in `.code-workspace/config.ya
 
 ```bash
 # Check installation and workspace health
-code-w doctor
+codew doctor
 
 # Update all managed files
-code-w update
+codew update
 
 # Apply Agent project directory authorization
-code-w permissions apply --yes
+codew permissions apply --yes
 
 # Validate local projects
-code-w project verify
-code-w project verify <project-name>
+codew project verify
+codew project verify <project-name>
 ```
 
 Directory access is authorized by the user. Code Workspace shows the requested changes, applies and verifies them, and reports the result. `permissions apply` grants missing registered-project access without revoking additional directories. Ordinary `update` does not change authorization.

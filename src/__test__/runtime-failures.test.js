@@ -280,7 +280,7 @@ test("update never manufactures a healthy state and rejects missing initializati
   fs.unlinkSync(stateFile);
   assert.throws(
     () => updateWorkspace(root, { run: forbiddenRun }),
-    (error) => error.code === "UPDATE_STATE_MISSING" && /code-w init/.test(error.details.remediation)
+    (error) => error.code === "UPDATE_STATE_MISSING" && /codew init/.test(error.details.remediation)
   );
   assert.equal(fs.existsSync(stateFile), false);
 });

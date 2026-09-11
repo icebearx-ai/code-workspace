@@ -209,7 +209,7 @@ test("completion scripts include subcommands and command-specific options", () =
 test("completion returns the generated script in text and JSON modes", () => {
   const bash = run(os.tmpdir(), ["completion", "--shell", "bash"]);
   assert.equal(bash.status, 0, bash.stderr);
-  assert.match(bash.stdout, /complete -F _code_workspace code-workspace code-w/);
+  assert.match(bash.stdout, /complete -F _code_workspace code-workspace codew code-w/);
   assert.doesNotMatch(bash.stdout, /sync-branch/);
   assert.match(bash.stdout, /accept-actual/);
   assert.match(bash.stdout, /use-registered/);
@@ -219,8 +219,24 @@ test("completion returns the generated script in text and JSON modes", () => {
   const envelope = JSON.parse(zsh.stdout);
   assert.equal(envelope.command, "completion");
   assert.equal(envelope.data.shell, "zsh");
-  assert.match(envelope.data.script, /#compdef code-workspace code-w/);
+  assert.match(envelope.data.script, /#compdef code-workspace codew code-w/);
   assert.match(envelope.data.script, /--shell/);
+});
+
+test("codew is the recommended command while legacy aliases remain packaged", () => {
+  const packageJson = require("../../package.json");
+  const packageLock = require("../../package-lock.json");
+  const expectedBins = {
+    "code-workspace": "bin/code-workspace.js",
+    codew: "bin/code-workspace.js",
+    "code-w": "bin/code-workspace.js",
+  };
+  assert.deepEqual(packageJson.bin, expectedBins);
+  assert.deepEqual(packageLock.packages[""].bin, expectedBins);
+
+  const result = run(os.tmpdir(), ["help"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Usage: codew \[command\] \[options\]/);
 });
 
 test("removed context command is rejected before workspace discovery", () => {
@@ -1123,7 +1139,7 @@ test("final branch migration leaves no legacy public contract in implementation 
     "artifacts/templates/user-guide/zh-CN.md",
   ];
   const forbiddenGuideDetails = [
-    /code-w project branch/,
+    /codew project branch/,
     /`project branch (?:inspect|verify|accept-actual|use-registered)/,
     /registeredBranch/,
     /actualBranch/,

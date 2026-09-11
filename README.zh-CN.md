@@ -13,7 +13,7 @@ Code Workspace 是面向 Claude Code 与 Codex 的本地多项目注册表和安
 npm install -g @icebearx-ai/code-workspace
 ```
 
-软件包提供 `code-workspace` 命令及短别名 `code-w`。
+软件包提供 `code-workspace` 命令及短别名 `codew`。为保持兼容，旧别名 `code-w` 仍然可用。
 
 ## 初始化
 
@@ -50,13 +50,13 @@ code-workspace init . \
 `init` 可以从 npm 包内随附的版本化 `extensions/` 仓库安装集成。交互模式按扩展名多选；非交互模式传入逗号分隔的扩展名。独立安装命令接受一个或多个扩展名；不传名称时打开内置扩展多选，按 ESC 可无修改退出：
 
 ```bash
-code-w init . --extensions zhuiyi-jira-mcp --yes
-code-w init . --extensions zhuiyi-opensvn-mcp --yes
-code-w init . --extensions none --yes
-code-w extension install
-code-w extension install zhuiyi-jira-mcp --yes
-code-w extension install zhuiyi-opensvn-mcp --yes
-code-w extension uninstall zhuiyi-jira-mcp --yes
+codew init . --extensions zhuiyi-jira-mcp --yes
+codew init . --extensions zhuiyi-opensvn-mcp --yes
+codew init . --extensions none --yes
+codew extension install
+codew extension install zhuiyi-jira-mcp --yes
+codew extension install zhuiyi-opensvn-mcp --yes
+codew extension uninstall zhuiyi-jira-mcp --yes
 ```
 
 `init`、扩展安装和扩展卸载共享的 Workspace 操作锁配置在 Code Workspace 项目自身的 `.env` 中（不在目标 Workspace 中）。`CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` 默认值为 `5000`，`CODE_WORKSPACE_INIT_LOCK_STALE_MS` 默认值为 `30000`；进程环境变量优先于 `.env`。配置项名称见 `.env.example`。
@@ -67,7 +67,7 @@ code-w extension uninstall zhuiyi-jira-mcp --yes
 
 当前随包提供的内置扩展包括 `zhuiyi-jira-mcp` 和 `zhuiyi-opensvn-mcp`，分别用于为选中的 Agent 工具配置 Jira MCP 与 OpenSVN MCP 服务；它们不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
 
-`zhuiyi-opensvn-mcp` 使用 `opssvn.in.wezhuiyi.com` 访问 OpenSVN 静态资源。运行时必须在对应 Agent 配置中提供 `SVN_AUTHORIZATION`，可选配置 `SVN_OUTPUT_DIR` 和 `SVN_MAX_RESOURCES`；认证信息不会写入扩展包，应通过本地配置或运行环境注入。
+`zhuiyi-opensvn-mcp` 使用 `opssvn.in.wezhuiyi.com` 访问 OpenSVN 静态资源。内置配置将 `SVN_OUTPUT_DIR` 设为 `.mcp-cache-opensvn`，运行时必须提供 `SVN_AUTHORIZATION`，`SVN_MAX_RESOURCES` 默认为 `200`；认证信息不会写入扩展包，应通过本地配置或运行环境注入。
 
 扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.code-workspace/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
 
@@ -76,7 +76,7 @@ code-w extension uninstall zhuiyi-jira-mcp --yes
 Workspace 合成和验证，扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行
 扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
 
-这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码；暂不支持网络源、外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令，也不会通过 `code-w update` 自动更新扩展。开发契约见 `docs/extensions.zh-CN.md`。
+这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码；暂不支持网络源、外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令，也不会通过 `codew update` 自动更新扩展。开发契约见 `docs/extensions.zh-CN.md`。
 
 ## 注册项目
 

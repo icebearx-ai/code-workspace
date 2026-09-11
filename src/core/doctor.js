@@ -33,7 +33,7 @@ function doctorWorkspace(root, manifest, options = {}) {
   }
 
   if (inspection.identity.valid && !config.workspace) {
-    add(output, "error", "WORKSPACE_IDENTITY_MISSING", "Local workspace name and UUID are missing. Re-run `code-w init .` to generate them.");
+    add(output, "error", "WORKSPACE_IDENTITY_MISSING", "Local workspace name and UUID are missing. Re-run `codew init .` to generate them.");
   }
 
   const toolSelection = options.toolSelection || resolveWorkspaceTools({
@@ -80,7 +80,7 @@ function doctorWorkspace(root, manifest, options = {}) {
             tool: tool.tool,
             directory,
             file: tool.target,
-            remediation: "Review and run code-w permissions apply --yes.",
+            remediation: "Review and run codew permissions apply --yes.",
           });
         }
       }

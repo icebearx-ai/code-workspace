@@ -103,7 +103,7 @@ function renderBashCompletion(spec) {
     "  if [[ \"$current\" != -* ]]; then return; fi",
     optionBlocks,
     "}",
-    "complete -F _code_workspace code-workspace code-w",
+    "complete -F _code_workspace code-workspace codew code-w",
   ].filter(Boolean).join("\n");
 }
 
@@ -142,7 +142,7 @@ function renderZshCompletion(spec) {
     ].join("\n"))
     .join("\n");
   return [
-    "#compdef code-workspace code-w",
+    "#compdef code-workspace codew code-w",
     "_code_workspace() {",
     "  local current=\"${words[CURRENT]}\"",
     "  local command_index=2",
@@ -173,7 +173,7 @@ function renderZshCompletion(spec) {
     "  if [[ \"$current\" != -* ]]; then return; fi",
     optionBlocks,
     "}",
-    "compdef _code_workspace code-workspace code-w",
+    "compdef _code_workspace code-workspace codew code-w",
   ].filter(Boolean).join("\n");
 }
 

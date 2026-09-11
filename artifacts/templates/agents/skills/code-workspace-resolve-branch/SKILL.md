@@ -12,7 +12,7 @@ Resolve only the already selected registered project or projects. This Skill own
 Run one command from the Workspace for all selected projects whose targeted verification reported `PROJECT_BRANCH_MISMATCH`. Pass each project name as a separate argument; do not join names with commas:
 
 ```bash
-code-w project branch inspect "<project-a>" "<project-b>" --json
+codew project branch inspect "<project-a>" "<project-b>" --json
 ```
 
 For one project, require the existing standard envelope whose `data` contains all of: `project.name`, `project.location`, `registeredBranch`, `actualBranch`, `matches`, `worktreeClean`, `registeredBranchExists`, and `remoteBranchCandidates`. For several projects, read the ordered `data.results`; each successful result contains those facts in its `data`, while failed results are explained by the top-level diagnostics. Do not infer or independently inspect missing values.
@@ -67,8 +67,8 @@ Ask rules:
 
 ## Apply valid choices through the CLI
 
-- Group every project that selected choice 1 into one `code-w project branch use-registered "<project-a>" "<project-b>" --allow-remote --yes --json` invocation. Include only projects for which choice 1 is available. `--allow-remote` is harmless for projects whose local registered branch already exists and permits creation only from an existing unique remote-tracking branch.
-- Group every project that selected choice 2 into one `code-w project branch accept-actual "<project-a>" "<project-b>" --yes --json` invocation.
+- Group every project that selected choice 1 into one `codew project branch use-registered "<project-a>" "<project-b>" --allow-remote --yes --json` invocation. Include only projects for which choice 1 is available. `--allow-remote` is harmless for projects whose local registered branch already exists and permits creation only from an existing unique remote-tracking branch.
+- Group every project that selected choice 2 into one `codew project branch accept-actual "<project-a>" "<project-b>" --yes --json` invocation.
 - For choice 3, keep that project paused until the user confirms manual resolution is complete. Do not reuse any pre-resolution branch facts.
 
 If the registered branch is absent both locally and from remote-tracking refs, do not add `--remote` automatically. Tell the user that an explicit direct CLI invocation such as `project branch use-registered <name> --remote origin --yes --json` is required to authorize network fetch.
@@ -80,7 +80,7 @@ After all choices are valid and complete, run each non-empty automatic direction
 After both automatic direction groups finish, collect projects whose operations succeeded or skipped together with projects that were already matching during inspection, discard their cached branch-dependent context, and run one branch-only verification. After the user confirms one or more manual resolutions, verify those confirmed projects the same way:
 
 ```bash
-code-w project branch verify "<project-a>" "<project-b>" --json
+codew project branch verify "<project-a>" "<project-b>" --json
 ```
 
 Use each result independently. A successful result means branch reconciliation is complete and branch alignment has been verified for that project; a failed result remains unresolved. Complete all independent automatic operations and branch verification before giving one consolidated report of inspected failures, successful changes, skips, branch-verification failures, and projects awaiting manual handling.

@@ -32,7 +32,7 @@ function verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variable
     throw new WorkspaceError(
       "UPDATE_POSTCONDITION_FAILED",
       `Updated managed files failed verification: ${incomplete.map((entry) => `${entry.target} (${entry.state})`).join(", ")}`,
-      { files: incomplete, remediation: "Run code-w doctor --json, review the reported files, and retry update." }
+      { files: incomplete, remediation: "Run codew doctor --json, review the reported files, and retry update." }
     );
   }
   return inspection;
@@ -45,7 +45,7 @@ function updateWorkspace(root, options = {}) {
     throw new WorkspaceError(
       "UPDATE_STATE_MISSING",
       "Local initialization state is missing; update can only run on an initialized workspace.",
-      { file: statePath(root), remediation: "Re-run code-w init . --yes before updating this workspace." }
+      { file: statePath(root), remediation: "Re-run codew init . --yes before updating this workspace." }
     );
   }
   const toolSelection = resolveWorkspaceTools({
@@ -76,7 +76,7 @@ function updateWorkspace(root, options = {}) {
   } catch (error) {
     if (options.language && /unknown changes/.test(error.message)) {
       throw new WorkspaceError("MANAGED_FILE_UNKNOWN", `${error.message}. No configuration or artifacts were changed.`, {
-        remediation: `Review the file or re-run code-w update --language ${language} --force.`,
+        remediation: `Review the file or re-run codew update --language ${language} --force.`,
       });
     }
     throw error;
@@ -121,7 +121,7 @@ function updateWorkspace(root, options = {}) {
           tool: inspection.tool,
           directories: inspection.missing,
           file: inspection.target,
-          remediation: "Review and run code-w permissions apply --yes.",
+          remediation: "Review and run codew permissions apply --yes.",
         });
       }
     }

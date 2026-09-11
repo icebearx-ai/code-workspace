@@ -198,10 +198,10 @@ function documentedCommandReferences(content) {
   const references = [];
   const normalized = content.replace(/\\\n\s*/g, " ");
   for (const line of normalized.split("\n")) {
-    if (/^\s*code-(?:workspace|w)\s+/.test(line)) {
-      references.push(line.trim().replace(/^code-(?:workspace|w)\s+/, ""));
+    if (/^\s*(?:code-workspace|code-w|codew)\s+/.test(line)) {
+      references.push(line.trim().replace(/^(?:code-workspace|code-w|codew)\s+/, ""));
     }
-    for (const match of line.matchAll(/`code-(?:workspace|w)\s+([^`]+)`/g)) references.push(match[1]);
+    for (const match of line.matchAll(/`(?:code-workspace|code-w|codew)\s+([^`]+)`/g)) references.push(match[1]);
   }
   return references.map((reference) => reference.trim().replace(/[.,;:]$/, ""));
 }
@@ -224,7 +224,7 @@ function validateDocumentedCommands(root, validateCommandReference) {
       checked += 1;
     }
   }
-  if (checked === 0) problems.push(problem("DOCUMENTED_COMMANDS_MISSING", "No documented code-w commands were checked"));
+  if (checked === 0) problems.push(problem("DOCUMENTED_COMMANDS_MISSING", "No documented codew commands were checked"));
   return { problems, checked };
 }
 

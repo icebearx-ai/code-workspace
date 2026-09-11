@@ -181,9 +181,9 @@ test("one canonical template renders both workspace instructions with platform-s
   assert.equal(source.trimEnd().split("\n").length <= 80, true);
   for (const content of [claude, codex]) {
     assert.match(content, /The workspace is not a project/);
-    assert.match(content, /code-w project list --json/);
-    assert.match(content, /code-w project show "<project\.name>" --json/);
-    assert.match(content, /code-w project verify "<project\.name>" --json/);
+    assert.match(content, /codew project list --json/);
+    assert.match(content, /codew project show "<project\.name>" --json/);
+    assert.match(content, /codew project verify "<project\.name>" --json/);
     assert.match(content, /code-workspace-resolve-branch/);
     assert.match(content, /PROJECT_BRANCH_MISMATCH/);
     assert.match(content, /MUST NOT guess a project path/);

@@ -18,6 +18,7 @@ function findArchiveExtensionRoot(id) {
 }
 
 const JIRA_EXTENSION_ROOT = findArchiveExtensionRoot("zhuiyi-jira-mcp");
+const OPENSVN_EXTENSION_ROOT = findArchiveExtensionRoot("zhuiyi-opensvn-mcp");
 const extensionManifest = JSON.parse(fs.readFileSync(path.join(JIRA_EXTENSION_ROOT, "manifest.json"), "utf8"));
 const EXTENSION_ID = extensionManifest.id;
 const EXTENSION_VERSION = extensionManifest.version;
@@ -135,6 +136,13 @@ function context(plan, tools = ["codex", "claude"]) {
     tools,
   };
 }
+
+test("OpenSVN extension uses the documented output directory", () => {
+  const codexConfig = fs.readFileSync(path.join(OPENSVN_EXTENSION_ROOT, "artifacts", "codex", "config.toml"), "utf8");
+  const claudeConfig = JSON.parse(fs.readFileSync(path.join(OPENSVN_EXTENSION_ROOT, "artifacts", "claude", "server.json"), "utf8"));
+  assert.match(codexConfig, /^SVN_OUTPUT_DIR = "\.mcp-cache-opensvn"$/m);
+  assert.equal(claudeConfig.env.SVN_OUTPUT_DIR, ".mcp-cache-opensvn");
+});
 
 test("Jira manifest declares only generic outputs while private release metadata freezes download constraints", () => {
   const validated = validateManifest(extensionManifest, { protectedTargets: new Set() });

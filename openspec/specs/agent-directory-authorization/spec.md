@@ -10,15 +10,15 @@
 CLI 必须（SHALL）提供 `permissions apply`，用于应用已注册项目的目录授权；并且必须（SHALL）将已删除的 `sync` 命令识别为未知命令。
 
 #### Scenario: 为 Workspace 持久化工具应用权限
-- **WHEN** 用户运行不带 `--tools` 的 `code-w permissions apply`
+- **WHEN** 用户运行不带 `--tools` 的 `codew permissions apply`
 - **THEN** 命令使用 Workspace 中持久化的工具选择，并为这些工具所缺失的已注册项目目录准备授权操作
 
 #### Scenario: 为显式工具子集应用权限
-- **WHEN** 用户运行 `code-w permissions apply --tools claude,codex`
+- **WHEN** 用户运行 `codew permissions apply --tools claude,codex`
 - **THEN** 命令通过共享解析器验证工具名称，并将计划限制在请求的、具备权限能力的工具上
 
 #### Scenario: 已删除的 sync 命令
-- **WHEN** 用户调用 `code-w sync`
+- **WHEN** 用户调用 `codew sync`
 - **THEN** CLI 在发现 Workspace 之前返回稳定的未知命令诊断
 
 ### Requirement: 明确的授权操作
@@ -150,12 +150,12 @@ Claude 权限适配器必须（SHALL）修改 `.claude/settings.local.json` 中 
 - **THEN** 初始化保留现有授权，只应用已确认初始化计划中包含的缺失授权
 
 #### Scenario: 普通更新
-- **WHEN** 用户在没有授权命令的情况下运行 `code-w update`
+- **WHEN** 用户在没有授权命令的情况下运行 `codew update`
 - **THEN** 不修改任何 Agent 目录授权文件
 
 #### Scenario: 工具选择更新暴露缺失授权
 - **WHEN** update 启用了一个尚未获得已注册项目目录授权的工具
-- **THEN** update 在不授予访问权限的情况下完成，并报告补救说明，引导用户检查并运行 `code-w permissions apply`
+- **THEN** update 在不授予访问权限的情况下完成，并报告补救说明，引导用户检查并运行 `codew permissions apply`
 
 ### Requirement: 权限健康诊断
 Workspace 健康检查必须（SHALL）评估每个选中且具备权限能力的工具是否获得已注册项目授权，同时不得把额外授权目录视为不健康状态。
