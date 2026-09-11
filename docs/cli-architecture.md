@@ -103,7 +103,7 @@ Expected failures use `WorkspaceError` with a stable code. Include structured de
 
 Warnings belong in diagnostics so JSON and text renderers can apply their respective output policies.
 
-Single-target invocations retain their established data contract. Multi-target invocations return `data.scope: "selection"`, the requested target names, ordered per-target results, and succeeded/skipped/failed counts. Their top-level `ok` is false when any target fails, while the data still reports every completed target.
+Single-target invocations retain their established data contract, except that targeted `project verify <name>` returns the selected record as `data.project` and does not duplicate it in `data.projects`. Workspace-scoped `project verify` continues to return `data.projects`. Multi-target invocations return `data.scope: "selection"`, the requested target names, ordered per-target results, and succeeded/skipped/failed counts. Their top-level `ok` is false when any target fails, while the data still reports every completed target.
 
 ## 6. Required tests
 

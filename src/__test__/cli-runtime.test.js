@@ -935,7 +935,7 @@ test("project verify targets one project without unrelated branch or config-doma
   assert.equal(envelope.command, "project.verify");
   assert.equal(envelope.data.scope, "project");
   assert.equal(envelope.data.project.name, "service");
-  assert.deepEqual(envelope.data.projects.map((project) => project.name), ["service"]);
+  assert.equal("projects" in envelope.data, false);
   assert.deepEqual(envelope.diagnostics, []);
 
   const selectedText = run(root, ["project", "verify", "service"]);

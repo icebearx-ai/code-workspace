@@ -192,6 +192,12 @@ test("one canonical template renders both workspace instructions with platform-s
     assert.match(content, /actualBranch.*observed state/);
     assert.match(content, /freeze the scope to that project/);
     assert.match(content, /Do not list or verify unrelated projects/);
+    assert.match(content, /without rerunning targeted `project verify`/);
+    assert.match(content, /Do not rerun targeted `project verify` after update-latest/);
+    assert.match(content, /fastForwarded: true/);
+    assert.match(content, /re-read the project files and instructions/);
+    assert.doesNotMatch(content, /rerun targeted `project verify` for the successfully reconciled projects/);
+    assert.doesNotMatch(content, /discard pre-update context and rerun targeted `project verify`/);
     assert.doesNotMatch(content, /OpenSpec owns|Cross-project|Every capability|proposal|archive workflow/);
   }
   assert.match(claude, /\/code-workspace:add-projects \/absolute\/path\/to\/project/);

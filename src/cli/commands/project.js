@@ -246,7 +246,6 @@ async function executeProject(invocation) {
     return fromDiagnostics(command, output, {
       scope: "project",
       project,
-      projects: [project],
     }, `Local project verification passed: ${name}.`);
   }
   if (action === "add") {

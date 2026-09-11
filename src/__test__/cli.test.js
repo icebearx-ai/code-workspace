@@ -109,10 +109,16 @@ test("init installs only workspace-owned integrations and does not create opensp
     assert.match(instructions, /one combined choice/);
     assert.match(instructions, /one targeted `project verify` invocation/);
     assert.match(instructions, /project branch update-latest/);
+    assert.match(instructions, /without rerunning targeted `project verify`/);
+    assert.match(instructions, /Do not rerun targeted `project verify` after update-latest/);
+    assert.match(instructions, /fastForwarded: true/);
+    assert.match(instructions, /re-read the project files and instructions/);
     assert.match(instructions, /Users may manually edit `\.code-workspace\/config\.yaml`/);
     assert.match(instructions, /AI\/Agent must not imitate that edit/);
     assert.match(instructions, /effects, diagnostics, transactions, and verification results remain project-isolated/);
     assert.match(instructions, /even when the top-level `ok` is false/);
+    assert.doesNotMatch(instructions, /rerun targeted `project verify` for the successfully reconciled projects/);
+    assert.doesNotMatch(instructions, /discard pre-update context and rerun targeted `project verify`/);
     assert.doesNotMatch(instructions, /OpenSpec owns|Cross-project|Every capability/);
   }
   const addProjectsSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-add-projects", "SKILL.md"), "utf8");

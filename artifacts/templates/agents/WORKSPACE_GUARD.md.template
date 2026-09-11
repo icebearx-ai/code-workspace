@@ -44,16 +44,15 @@ codew project verify "<project-a>" "<project-b>" --json
 
 - For one project, continue only when the targeted result has `ok: true`. For a multi-project result, evaluate every ordered project result independently: continue passed projects and keep failed projects paused even when the top-level `ok` is false.
 - On `PROJECT_BRANCH_MISMATCH`, pause affected project work and invoke the installed `code-workspace-resolve-branch` Skill. The Skill may combine mismatches from the explicitly selected scope into one concise question; do not choose a branch direction yourself.
-- For any other failure, report the targeted diagnostics and wait for user direction for the affected project; a failure in one batch result does not block unrelated successful selected projects. Do not escalate to full-workspace validation.
-- The branch Skill completes after `project branch verify` confirms alignment; it does not own overall project readiness. After its handoff, discard branch-dependent context and rerun targeted `project verify` for the successfully reconciled projects before resuming work.
-- If that overall verification fails for a non-branch reason, keep the affected project paused and handle the project-level diagnostic here without treating the branch Skill as failed. If a new `PROJECT_BRANCH_MISMATCH` appears because the branch drifted again, re-enter the Skill. Do not list or verify unrelated projects.
+- For any other failure, report the targeted diagnostics and wait for user direction for the affected project; a failure in one batch result does not block unrelated successful selected projects. Do not escalate to full-workspace validation. Do not list or verify unrelated projects.
+- The branch Skill completes after `project branch verify` confirms alignment; it does not own overall project readiness. After its handoff, proceed directly to `project branch update-latest` without rerunning targeted `project verify`. If update-latest reports a new `PROJECT_BRANCH_MISMATCH`, re-enter the Skill using the new CLI observation.
 - After branch verification succeeds—including projects whose branches were already aligned—run `project branch update-latest` for the selected projects:
 
 ```bash
 codew project branch update-latest "<project-a>" "<project-b>" --json
 ```
 
-  Pass each selected project name as a separate argument; for a single project, pass only that project name. Evaluate each project result independently, including when the batch-level `ok` is `false`: continue only for projects whose individual result has `ok: true`, and treat `disabled` and `already-latest` as successful skips. If an update fails, keep that project paused and do not run ad-hoc `fetch`, `pull`, `reset`, `stash`, or `rebase` commands. For each successful or skipped project, discard pre-update context and rerun targeted `project verify` before starting project work.
+  Pass each selected project name as a separate argument; for a single project, pass only that project name. Evaluate each project result independently, including when the batch-level `ok` is `false`: continue only for projects whose individual result has `ok: true`, and treat `disabled` and `already-latest` as successful skips. If an update fails, keep that project paused and do not run ad-hoc `fetch`, `pull`, `reset`, `stash`, or `rebase` commands. Do not rerun targeted `project verify` after update-latest. For each `fastForwarded: true` result, discard pre-update context and re-read the project files and instructions before starting project work; `disabled` and `already-latest` results may continue with the existing context.
 
 ## Workspace Write Boundary
 

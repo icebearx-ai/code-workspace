@@ -85,12 +85,13 @@ flowchart LR
     USE --> BV[project branch verify name]
     ACCEPT --> BV
     MANUAL --> BV
-    BV -->|分支一致| V[Guard: project verify name]
+    BV -->|分支一致| U[project branch update-latest]
     BV -->|仍不一致| STOP[保持停止]
-    V -->|整体通过| U[project branch update-latest]
-    U -->|成功或 skip| CONTINUE[重新获取目标项目上下文后继续]
-    U -->|失败| STOP
-    V -->|项目级问题| STOP
+    U -->|PROJECT_BRANCH_MISMATCH| I
+    U -->|fastForwarded: true| REFRESH[丢弃更新前上下文<br/>重新读取项目文件和指令]
+    U -->|disabled / already-latest| CONTINUE[继续项目工作]
+    U -->|其他失败| STOP
+    REFRESH --> CONTINUE
 ```
 
 ```bash
@@ -99,10 +100,9 @@ code-workspace project branch use-registered "<project-name>" --allow-remote --y
 code-workspace project branch accept-actual "<project-name>" --yes --json
 code-workspace project branch verify "<project-name>" --json
 code-workspace project branch update-latest "<project-name>" --json
-code-workspace project verify "<project-name>" --json
 ```
 
-注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支默认要求干净 worktree 和已存在的本地分支；`--allow-remote` 可从唯一已有远程跟踪分支创建本地 tracking 分支，`--remote <name>` 经确认后仅 fetch 指定远程的注册分支。接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 根据所引用项目文件中的 `projects[].updateLatest` 调用 `project branch update-latest`，最后使用定向 `project verify` 接管项目整体健康校验。
+注册分支是 Workspace 期望状态，实际分支是目标 Git worktree 的观测状态，出现不一致时由用户选择方向。使用注册分支默认要求干净 worktree 和已存在的本地分支；`--allow-remote` 可从唯一已有远程跟踪分支创建本地 tracking 分支，`--remote <name>` 经确认后仅 fetch 指定远程的注册分支。接受实际分支只原子更新目标注册记录。两条协调命令都检查计划漂移并验证结果；分支 Skill 以 `project branch verify` 只确认分支一致性，然后由 Workspace Guard 根据所引用项目文件中的 `projects[].updateLatest` 调用 `project branch update-latest`，并以该结果作为项目工作前的最终状态门。发生 fast-forward 时，Guard 丢弃更新前上下文并重新读取项目文件和指令；跳过更新时直接继续。不再在分支协调后或 update-latest 后追加整体 `project verify`。
 
 ## 责任边界
 

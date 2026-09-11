@@ -49,7 +49,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "f601879e19055172d4e5123e05ff59dce7bf16c6c9fbebade010e078d9416232"
+        "sha256": "bddb8e2ee25b7a63614b4297453e5803d2740fc475d97f5d8489dbaf17380c2c"
       },
       "render": {
         "variables": [
@@ -72,7 +72,7 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "f601879e19055172d4e5123e05ff59dce7bf16c6c9fbebade010e078d9416232"
+        "sha256": "bddb8e2ee25b7a63614b4297453e5803d2740fc475d97f5d8489dbaf17380c2c"
       },
       "render": {
         "variables": [

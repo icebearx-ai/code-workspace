@@ -141,7 +141,15 @@ CLI 必须（SHALL）提供 `project branch verify <name...>`，且该命令只�
 - **THEN** 返回 `PROJECT_NOT_FOUND`，且不检查任何项目路径或修改任何状态
 
 ### Requirement: 分支协调链路支持独立参数的多项目批量处理
-`project branch inspect`、`project branch verify`、`project branch accept-actual`、`project branch use-registered` 和定向 `project verify` 必须（SHALL）接受一个或多个独立项目名参数。CLI 不得将逗号分隔字符串解释为多个项目。单项目调用必须保持原有数据合同；多项目调用必须返回 `scope: selection`、输入顺序的逐项目结果和成功、跳过、失败汇总。
+`project branch inspect`、`project branch verify`、`project branch accept-actual`、`project branch use-registered` 和定向 `project verify` 必须（SHALL）接受一个或多个独立项目名参数。CLI 不得将逗号分隔字符串解释为多个项目。四条分支命令的单项目调用必须保持原有数据合同；定向 `project verify` 的单项目调用必须返回 `scope: "project"` 和 `data.project`，且不得返回冗余的 `data.projects`。多项目调用必须返回 `scope: selection`、输入顺序的逐项目结果和成功、跳过、失败汇总。
+
+#### Scenario: 单项目 verify 返回精简结果
+- **WHEN** 用户运行 `project verify <name> --json` 且只指定一个项目
+- **THEN** `data` 包含 `scope: "project"` 和完整 `project` 对象，不包含 `projects`
+
+#### Scenario: 分支命令单项目合同保持不变
+- **WHEN** 用户对单个项目运行任一条 `project branch` 命令
+- **THEN** 该命令继续返回其既有的单项目 `data` 合同，不因定向 `project verify` 的精简而改变
 
 #### Scenario: 批量只读命令包含失败项目
 - **WHEN** 批量 `branch inspect`、`branch verify` 或定向 `project verify` 中某个项目不存在或检查失败
