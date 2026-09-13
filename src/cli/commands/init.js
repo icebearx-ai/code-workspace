@@ -14,6 +14,7 @@ const {
   runExtensionBatch,
 } = require("../../core/extensions");
 const { compareVersions, loadInitManifest, minimumFromRange, runCommand } = require("../../core/init");
+const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { initializeWorkspace } = require("../../core/initializer");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { collectInitPlan } = require("../../init/wizard");
@@ -135,7 +136,12 @@ async function executeInitUnlocked(invocation, root) {
       language: result.language,
     },
     tools,
-  }), { requested: requestedExtensions, preFailures: extensionPreparation.failures });
+  }), {
+    requested: requestedExtensions,
+    preFailures: extensionPreparation.failures,
+    useExtensionStore: true,
+    extensionStoreRoot: options.extensionStoreRoot || defaultExtensionStoreRoot(),
+  });
   const extensionDiagnostics = [
     ...extensionPreparation.diagnostics,
     ...extensionResult.results

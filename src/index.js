@@ -9,6 +9,8 @@ const monitor = require("./monitor");
 const monitorPage = require("./monitor/page");
 const project = require("./core/project");
 const validation = require("./core/validation");
+const extensionRuntime = require("./core/extension-runtime");
+const extensionRuntimeContract = require("./core/extension-runtime-contract");
 const hooks = require("./hooks");
 const hookAdapters = require("./hooks/adapters");
 
@@ -24,6 +26,8 @@ module.exports = {
   ...monitorPage,
   ...project,
   ...validation,
+  ...extensionRuntime,
+  ...extensionRuntimeContract,
   ...hooks,
   ...hookAdapters,
 };

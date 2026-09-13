@@ -23,7 +23,9 @@ The normative artifacts of Extension Spec v1 are:
 - the entry, capability, output, staging, installation, upgrade, verification, and uninstall semantics defined by this document;
 - manifest schema v3: `schemas/extension-manifest-v3.json`;
 - init context schema v1: `schemas/extension-init-context-v1.json`;
-- init result schema v1: `schemas/extension-init-result-v1.json`.
+- init result schema v1: `schemas/extension-init-result-v1.json`;
+- runtime context schema v1: `schemas/extension-runtime-context-v1.json`;
+- runtime result schema v1: `schemas/extension-runtime-result-v1.json`.
 
 The JSON Schemas define document structure. This document defines cross-document and lifecycle semantics. A conflict between them is a specification defect; Hosts and extensions MUST NOT infer compatibility from such a conflict.
 
@@ -92,6 +94,17 @@ A Spec v1 manifest uses manifest schema v3. The manifest is the static declarati
 ```
 
 The `codeWorkspace` product-version range is not part of Extension Spec and MUST NOT appear in a Spec v1 manifest.
+
+### 3.1 Runtime declaration
+
+A manifest MAY declare a `runtime` separate from its installation entry. Runtime declarations use
+an independent `runtimeProtocolVersion`, `entry`, `entrySha256`, `scope` (`workspace` or `global`),
+and `mode` (`oneshot` or `service`). Oneshot runtimes MUST declare `maxOutputBytes`; long-running
+services MUST declare `service.id`, `service.compatibilityGroup`, and `service.singleton: "user"`.
+The Host executes only supported runtime protocols and capabilities; unknown runtime capabilities
+block only that runtime and do not change installation compatibility. Runtime subprocesses are not a
+security sandbox. `global` means that a process may serve multiple Workspaces, not that it receives
+arbitrary Workspace paths, files, or credentials.
 
 Before confirmation, the Host MUST freeze the manifest, entry, and complete extension-version directory digest. The Host MUST verify them again before execution. An extension MUST NOT use a dynamic result to expand the declarations in its manifest.
 

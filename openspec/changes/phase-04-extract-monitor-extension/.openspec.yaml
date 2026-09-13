@@ -1,5 +1,0 @@
-schema: spec-driven
-created: 2026-09-10
-goal: Deliver Monitor runtime, dashboard, i18n, assets, config and observer
-  Hooks as an installable extension while retaining the core implementation as a
-  baseline.

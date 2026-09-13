@@ -90,11 +90,15 @@
           "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 300000 }
         }
       }
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
     }
   },
   "anyOf": [
     { "required": ["outputs"], "properties": { "outputs": { "minItems": 1 } } },
-    { "required": ["hooks"], "properties": { "hooks": { "minItems": 1 } } }
+    { "required": ["hooks"], "properties": { "hooks": { "minItems": 1 } } },
+    { "required": ["runtime"] }
   ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
@@ -104,6 +108,50 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//).+$"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtimeProtocolVersion", "entry", "entrySha256", "scope", "mode", "timeoutMs"],
+      "properties": {
+        "runtimeProtocolVersion": { "type": "integer", "minimum": 1 },
+        "requires": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "entry": { "$ref": "#/$defs/relativePath" },
+        "entrySha256": { "$ref": "#/$defs/sha256" },
+        "scope": { "enum": ["workspace", "global"] },
+        "mode": { "enum": ["oneshot", "service"] },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 300000 },
+        "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 4194304 },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "compatibilityGroup", "singleton"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "compatibilityGroup": { "$ref": "#/$defs/id" },
+            "singleton": { "const": "user" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "oneshot" } } },
+          "then": {
+            "properties": { "service": false }
+          }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "service" } } },
+          "then": {
+            "required": ["service"],
+            "properties": { "maxOutputBytes": false }
+          }
+        }
+      ]
     }
   }
 }

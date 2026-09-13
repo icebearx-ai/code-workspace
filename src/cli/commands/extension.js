@@ -11,6 +11,7 @@ const {
 } = require("../../core/extensions");
 const { loadInitManifest } = require("../../core/init");
 const { acquireInitLock } = require("../../core/init-lock");
+const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { createInteractiveUi } = require("../../init/ui");
 const { confirm } = require("../confirmation");
@@ -136,7 +137,12 @@ async function executeExtensionInstall(invocation) {
     extension: { id: extension.id, version: extension.version },
     workspace: { name: workspace.name, uuid: workspace.uuid, language: workspace.language },
     tools,
-  }), { requested, preFailures: preparation.failures });
+  }), {
+    requested,
+    preFailures: preparation.failures,
+    useExtensionStore: true,
+    extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+  });
   const failedIds = new Set(batch.results.filter((entry) => entry.status === "failed").map((entry) => entry.id));
   const diagnostics = [
     ...preparation.diagnostics.filter((entry) => !entry.extension || !failedIds.has(entry.extension)),
@@ -168,7 +174,10 @@ async function executeExtensionUninstall(invocation) {
   if (plan.action === "remove" && !(await confirm(`${planText}\nContinue?`, invocation.options))) {
     throw new WorkspaceError("CLI_CANCELLED", "Extension uninstall cancelled.");
   }
-  const result = applyExtensionUninstall(plan, invocation.dependencies);
+  const result = applyExtensionUninstall(plan, {
+    ...(invocation.dependencies || {}),
+    extensionStoreRoot: invocation.dependencies?.extensionStoreRoot || defaultExtensionStoreRoot(),
+  });
   const text = result.status === "skipped" ? planText : `${planText}\nExtension uninstalled and verified.`;
   return success(command, { ...result, targets: plan.targets }, text);
 }

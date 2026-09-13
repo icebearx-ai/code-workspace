@@ -1,4 +1,0 @@
-schema: spec-driven
-created: 2026-09-10
-goal: Enable trusted extensions to expose stable CLI entrypoints through one
-  core-owned code-w ext command without adding extension-specific core commands.

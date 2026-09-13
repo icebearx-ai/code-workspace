@@ -93,6 +93,12 @@ extensions/<extension-id>/<version>/
 
 Host 明确声明自己支持的 Extension Spec 版本集合，只有 manifest 的 `extensionSpecVersion` 属于该集合时才会执行扩展。静态 manifest 用于发现、规划、冲突预检和用户确认。它不描述扩展业务实现，不包含需要由 Host 理解的下载 URL、npm 包信息或归档格式。
 
+manifest 还可以声明独立的 `runtime` 入口。Runtime Host 只负责按 Store 中的精确版本校验
+入口、创建最小 context、管理 oneshot 或 service 进程生命周期；扩展 ID 后的参数由扩展自行
+解释。`workspace` runtime 依赖当前 Workspace activation，`global` runtime 不依赖全局
+Workspace，也不因此获得任意 Workspace 路径或凭证。Runtime 子进程与初始化子进程一样属于
+可信代码执行，不是安全沙箱。
+
 入口可能继续读取扩展包内的辅助代码、模板和私有元数据，因此仅校验 `init.js` 不能冻结完整执行输入。Host 在规划时还需要计算整个扩展版本目录的规范摘要，并在执行前重新验证，以防 manifest、入口、辅助代码或模板在计划确认后发生变化。
 
 ### 4.5 初始化入口

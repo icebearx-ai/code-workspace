@@ -22,7 +22,9 @@ Extension Spec v1 的规范性制品包括：
 - 本文定义的入口、能力、输出、staging、安装、升级、验证和卸载语义；
 - manifest schema v3：`schemas/extension-manifest-v3.json`；
 - init context schema v1：`schemas/extension-init-context-v1.json`；
-- init result schema v1：`schemas/extension-init-result-v1.json`。
+- init result schema v1：`schemas/extension-init-result-v1.json`；
+- runtime context schema v1：`schemas/extension-runtime-context-v1.json`；
+- runtime result schema v1：`schemas/extension-runtime-result-v1.json`。
 
 JSON Schema 规定文档结构，本文规定跨文档和生命周期语义。二者出现冲突时属于规范缺陷，Host 和扩展不得自行猜测兼容性。
 
@@ -91,6 +93,16 @@ Spec v1 manifest 使用 schema v3。manifest 是安装权限和最大输出范�
 ```
 
 `codeWorkspace` 产品版本范围不属于 Extension Spec，不得出现在 Spec v1 manifest 中。
+
+### 3.1 Runtime 声明
+
+manifest 可以额外声明一个与安装入口分离的 `runtime`。Runtime 使用独立的
+`runtimeProtocolVersion`、`entry`、`entrySha256`、`scope`（`workspace` 或 `global`）和
+`mode`（`oneshot` 或 `service`）。一次性运行时必须声明 `maxOutputBytes`；长驻服务必须
+声明 `service.id`、`service.compatibilityGroup` 和 `service.singleton: "user"`。Host 只执行
+自己支持的 runtime protocol 和 capability；未知 runtime 能力只阻断该 runtime，不影响
+扩展安装协议。Runtime 子进程不是安全沙箱，global 仅表示可服务多个 Workspace，不授予
+访问任意 Workspace 文件或凭证的权限。
 
 Host 在确认前冻结 manifest、入口及完整扩展版本目录摘要，在执行前重新验证。扩展不得通过动态 result 扩大 manifest 声明。
 

@@ -1,4 +1,0 @@
-schema: spec-driven
-created: 2026-09-10
-goal: Allow extensions to consume provider-neutral observation events without
-  receiving write decisions or sharing coordination state.

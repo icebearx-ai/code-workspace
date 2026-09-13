@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://icebearx.ai/code-workspace/extension-runtime-context-v1.json",
+  "title": "Code Workspace Extension Runtime Context v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runtimeProtocolVersion", "extension", "scope", "mode", "dataDirectory"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runtimeProtocolVersion": { "type": "integer", "minimum": 1 },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "extension-manifest-v3.json#/$defs/id" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "scope": { "enum": ["workspace", "global"] },
+    "mode": { "enum": ["oneshot", "service"] },
+    "dataDirectory": { "type": "string", "minLength": 1 },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "uuid": { "type": "string" },
+        "language": { "type": "string" }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "file"],
+      "properties": { "type": { "const": "file" }, "file": { "type": "string", "minLength": 1 } }
+    }
+  }
+}

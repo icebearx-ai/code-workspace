@@ -11,6 +11,19 @@ const { loadManagedManifest } = require("./managed-files");
 const { permissionTargets } = require("./permissions");
 const { createFileTransaction } = require("./transaction");
 const { directoryDigest } = require("./directory-digest");
+const { validateRuntimeDeclaration } = require("./extension-runtime-contract");
+const {
+  addPackageReference,
+  defaultExtensionStoreRoot,
+  ensureStoredExtensionPackage,
+  listPackageReferences,
+  loadStoreRegistry,
+  packageRecordFromDirectory,
+  packageRoot,
+  removePackageReference,
+  removeWorkspaceReference,
+  replaceWorkspaceReference,
+} = require("./extension-store");
 const {
   hooksCurrent,
   hookDeclarationKeys,
@@ -241,7 +254,7 @@ function validateManifest(value, options = {}) {
       supportedExtensionSpecVersions: [...supportedVersions],
     });
   }
-  assertOnlyKeys(manifest, new Set(["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs", "capabilities", "outputs", "hooks"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
+  assertOnlyKeys(manifest, new Set(["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs", "capabilities", "outputs", "hooks", "runtime"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
   if (manifest.schemaVersion !== 3 || manifest.experimental !== true) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", "Extension Spec v1 manifest must use schemaVersion 3 and experimental true");
   }
@@ -262,11 +275,12 @@ function validateManifest(value, options = {}) {
   assertOnlyKeys(capabilities, new Set(["networkHosts"]), "EXTENSION_MANIFEST_INVALID", `Extension ${id} capabilities`);
   const networkHosts = validateNetworkHosts(capabilities.networkHosts, id);
   const hooks = validateHookDeclarations(manifest.hooks, id);
+  const runtime = validateRuntimeDeclaration(manifest.runtime, id);
   if (manifest.outputs !== undefined && !Array.isArray(manifest.outputs)) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} outputs must be an array`, { extension: id });
   }
-  if ((!Array.isArray(manifest.outputs) || manifest.outputs.length === 0) && hooks.length === 0) {
-    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} must declare at least one output or Hook`, { extension: id });
+  if ((!Array.isArray(manifest.outputs) || manifest.outputs.length === 0) && hooks.length === 0 && !runtime) {
+    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} must declare at least one output, Hook or runtime`, { extension: id });
   }
   const ids = new Set();
   const declaredArtifacts = [];
@@ -334,6 +348,7 @@ function validateManifest(value, options = {}) {
     capabilities: Object.freeze({ networkHosts }),
     outputs: Object.freeze(outputs),
     hooks,
+    runtime,
   });
 }
 
@@ -443,6 +458,127 @@ function discoverExtensions(options = {}) {
   catalog.sort((left, right) => left.id.localeCompare(right.id));
   invalid.sort((left, right) => left.entry.localeCompare(right.entry));
   return options.tolerant ? { catalog, invalid } : catalog;
+}
+
+function resolvePlanFromStore(plan, options = {}) {
+  if (!options.extensionStoreRoot && options.useExtensionStore !== true) return plan;
+  const storeRoot = defaultExtensionStoreRoot({ storeRoot: options.extensionStoreRoot });
+  const target = packageRoot(storeRoot, plan.id, plan.version);
+  let stored;
+  if (fs.existsSync(target)) {
+    try {
+      stored = packageRecordFromDirectory(target, {
+        id: plan.id,
+        version: plan.version,
+        validate(manifest) {
+          validateManifest(manifest, { expectedId: plan.id, expectedVersion: plan.version });
+        },
+      });
+      const registry = loadStoreRegistry(storeRoot);
+      const record = registry.packages[`${plan.id}@${plan.version}`];
+      if (!record || record.packageSha256 !== stored.packageSha256 || record.manifestSha256 !== stored.manifestSha256 || record.entrySha256 !== stored.entrySha256) {
+        throw extensionError("EXTENSION_STORE_PACKAGE_INTEGRITY", `Store package registry does not match ${plan.id}@${plan.version}`, {
+          extension: plan.id,
+          version: plan.version,
+          packageSha256: stored.packageSha256,
+        });
+      }
+    } catch (error) {
+      if (error.code) throw error;
+      throw extensionError("EXTENSION_STORE_PACKAGE_INTEGRITY", `Cannot validate Store package ${plan.id}@${plan.version}: ${error.message}`, {
+        extension: plan.id,
+        version: plan.version,
+      });
+    }
+  } else {
+    const sourceAvailable = fs.existsSync(plan.sourceRoot);
+    const actualSha256 = sourceAvailable ? directoryDigest(plan.sourceRoot) : null;
+    if (!sourceAvailable || actualSha256 !== plan.packageSha256) {
+      throw extensionError("EXTENSION_PLAN_STALE", `Extension package changed after planning: ${plan.id}`, {
+        extension: plan.id,
+        expectedSha256: plan.packageSha256,
+        actualSha256,
+      });
+    }
+    stored = ensureStoredExtensionPackage({
+      storeRoot,
+      sourceRoot: plan.sourceRoot,
+      id: plan.id,
+      version: plan.version,
+      source: "builtin",
+      validate(manifest) {
+        validateManifest(manifest, { expectedId: plan.id, expectedVersion: plan.version });
+      },
+    });
+  }
+  if (stored.packageSha256 !== plan.packageSha256 || stored.manifestSha256 !== plan.manifestSha256 || stored.entrySha256 !== plan.entrySha256) {
+    throw extensionError("EXTENSION_STORE_PACKAGE_CONFLICT", `Stored extension package does not match the frozen plan: ${plan.id}@${plan.version}`, {
+      extension: plan.id,
+      version: plan.version,
+      expectedPackageSha256: plan.packageSha256,
+      actualPackageSha256: stored.packageSha256,
+    });
+  }
+  return Object.freeze({
+    ...plan,
+    providerSourceRoot: plan.sourceRoot,
+    sourceRoot: stored.root,
+    manifestFile: stored.manifestFile,
+    entryFile: stored.entryFile,
+    extensionStoreRoot: storeRoot,
+  });
+}
+
+function planExtensionStoreMigration(root, id, options = {}) {
+  const extensionId = validateExtensionName(id);
+  const state = loadExtensionState(root);
+  const installed = state.extensions[extensionId]?.installed || null;
+  if (!installed) return Object.freeze({ id: extensionId, status: "skip", reason: "not-installed" });
+  const storeRoot = defaultExtensionStoreRoot({ storeRoot: options.extensionStoreRoot });
+  const version = installed.version;
+  const storedRoot = path.join(storeRoot, extensionId, version);
+  if (fs.existsSync(storedRoot)) {
+    try {
+      const stored = packageRecordFromDirectory(storedRoot, { id: extensionId, version });
+      const registry = loadStoreRegistry(storeRoot);
+      const record = registry.packages[`${extensionId}@${version}`];
+      if (record && record.packageSha256 === stored.packageSha256 && record.manifestSha256 === stored.manifestSha256 && record.entrySha256 === stored.entrySha256 && (!installed.packageSha256 || installed.packageSha256 === stored.packageSha256)) {
+        return Object.freeze({ id: extensionId, version, status: "current", packageSha256: stored.packageSha256, storeRoot });
+      }
+    } catch {
+      // Fall through to the built-in provider check for a deterministic diagnostic.
+    }
+  }
+  const extensionsRoot = path.resolve(options.extensionsRoot || EXTENSIONS_ROOT);
+  const sourceRoot = path.join(extensionsRoot, extensionId, version);
+  if (!fs.existsSync(sourceRoot)) {
+    return Object.freeze({ id: extensionId, version, status: "blocked", code: "EXTENSION_STORE_PACKAGE_UNAVAILABLE", message: `Extension package ${extensionId}@${version} is unavailable for Store migration.`, storeRoot });
+  }
+  try {
+    const source = packageRecordFromDirectoryForMigration(sourceRoot, extensionId, version);
+    return Object.freeze({ id: extensionId, version, status: "ready", sourceRoot, packageSha256: source.packageSha256, storeRoot });
+  } catch (error) {
+    return Object.freeze({ id: extensionId, version, status: "blocked", code: error.code || "EXTENSION_STORE_PACKAGE_INVALID", message: error.message, storeRoot });
+  }
+}
+
+function packageRecordFromDirectoryForMigration(sourceRoot, id, version) {
+  try {
+    const packageRecord = packageRecordFromDirectory(sourceRoot, {
+      id,
+      version,
+      validate(manifest) {
+        validateManifest(manifest, { expectedId: id, expectedVersion: version });
+      },
+    });
+    return { packageSha256: packageRecord.packageSha256 };
+  } catch (error) {
+    throw extensionError(error.code || "EXTENSION_STORE_PACKAGE_INVALID", error.message, {
+      extension: id,
+      version,
+      ...(error.details || {}),
+    });
+  }
 }
 
 function extensionStatePath(root) {
@@ -1084,53 +1220,68 @@ function installVerifiedArtifacts(root, plan, verified, previousState, options =
 function executeExtension(root, plan, context, options = {}) {
   let temporaryRoot;
   let executionResult;
+  let executionPlan = plan;
+  let transactionReference = null;
   try {
-    const currentManifestSha = sha256(fs.readFileSync(plan.manifestFile));
-    if (currentManifestSha !== plan.manifestSha256) throw extensionError("EXTENSION_PLAN_STALE", `Extension manifest changed after planning: ${plan.id}`, { extension: plan.id });
-    const currentEntrySha = sha256(fs.readFileSync(plan.entryFile));
-    if (currentEntrySha !== plan.entrySha256 || currentEntrySha !== plan.manifest.entrySha256) {
-      throw extensionError("EXTENSION_PLAN_STALE", `Extension entry changed after planning: ${plan.id}`, { extension: plan.id, expectedSha256: plan.entrySha256, actualSha256: currentEntrySha });
+    executionPlan = resolvePlanFromStore(plan, options);
+    const currentManifestSha = sha256(fs.readFileSync(executionPlan.manifestFile));
+    if (currentManifestSha !== executionPlan.manifestSha256) throw extensionError("EXTENSION_PLAN_STALE", `Extension manifest changed after planning: ${executionPlan.id}`, { extension: executionPlan.id });
+    const currentEntrySha = sha256(fs.readFileSync(executionPlan.entryFile));
+    if (currentEntrySha !== executionPlan.entrySha256 || currentEntrySha !== executionPlan.manifest.entrySha256) {
+      throw extensionError("EXTENSION_PLAN_STALE", `Extension entry changed after planning: ${executionPlan.id}`, { extension: executionPlan.id, expectedSha256: executionPlan.entrySha256, actualSha256: currentEntrySha });
     }
-    const currentPackageSha = directoryDigest(plan.sourceRoot);
-    if (currentPackageSha !== plan.packageSha256) throw extensionError("EXTENSION_PLAN_STALE", `Extension package changed after planning: ${plan.id}`, { extension: plan.id, expectedSha256: plan.packageSha256, actualSha256: currentPackageSha });
-    const currentManifest = validateManifest(readJson(plan.manifestFile, "EXTENSION_MANIFEST_PARSE_FAILED"), {
-      expectedId: plan.id,
-      expectedVersion: plan.version,
+    const currentPackageSha = directoryDigest(executionPlan.sourceRoot);
+    if (currentPackageSha !== executionPlan.packageSha256) throw extensionError("EXTENSION_PLAN_STALE", `Extension package changed after planning: ${executionPlan.id}`, { extension: executionPlan.id, expectedSha256: executionPlan.packageSha256, actualSha256: currentPackageSha });
+    const currentManifest = validateManifest(readJson(executionPlan.manifestFile, "EXTENSION_MANIFEST_PARSE_FAILED"), {
+      expectedId: executionPlan.id,
+      expectedVersion: executionPlan.version,
     });
-    if (currentManifest.extensionSpecVersion !== plan.extensionSpecVersion) {
-      throw extensionError("EXTENSION_PLAN_STALE", `Extension Spec changed after planning: ${plan.id}`, { extension: plan.id, expectedExtensionSpecVersion: plan.extensionSpecVersion, actualExtensionSpecVersion: currentManifest.extensionSpecVersion });
+    if (currentManifest.extensionSpecVersion !== executionPlan.extensionSpecVersion) {
+      throw extensionError("EXTENSION_PLAN_STALE", `Extension Spec changed after planning: ${executionPlan.id}`, { extension: executionPlan.id, expectedExtensionSpecVersion: executionPlan.extensionSpecVersion, actualExtensionSpecVersion: currentManifest.extensionSpecVersion });
     }
     const state = loadExtensionState(root);
-    const installed = state.extensions[plan.id]?.installed || null;
-    if (installedIsCurrent(root, plan, installed, state)) {
-      executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "skipped", reason: "current", hooks: installed.hooks || [] };
+    const installed = state.extensions[executionPlan.id]?.installed || null;
+    if (installedIsCurrent(root, executionPlan, installed, state)) {
+      executionResult = { id: executionPlan.id, version: executionPlan.version, extensionSpecVersion: executionPlan.extensionSpecVersion, status: "skipped", reason: "current", hooks: installed.hooks || [] };
+      if (executionPlan.extensionStoreRoot) replaceWorkspaceReference(executionPlan.extensionStoreRoot, executionPlan.id, executionPlan.version, root);
       return executionResult;
     }
-    assertInstallOwnership(root, plan, state);
+    assertInstallOwnership(root, executionPlan, state);
     const beforeState = stateFingerprint(root);
-    temporaryRoot = fs.mkdtempSync(path.join(options.tempRoot || os.tmpdir(), `code-workspace-extension-${plan.id}-`));
+    if (executionPlan.extensionStoreRoot) {
+      transactionReference = `${path.resolve(root)}:${process.pid}:${Date.now()}`;
+      addPackageReference(executionPlan.extensionStoreRoot, executionPlan.id, executionPlan.version, "transactions", transactionReference);
+    }
+    temporaryRoot = fs.mkdtempSync(path.join(options.tempRoot || os.tmpdir(), `code-workspace-extension-${executionPlan.id}-`));
     const outputRoot = path.join(temporaryRoot, "output");
     const contextFile = path.join(temporaryRoot, "context.json");
     const resultFile = path.join(temporaryRoot, "result.json");
     fs.mkdirSync(outputRoot);
-    const runtimeContext = validateInitContext(context, plan);
+    const runtimeContext = validateInitContext(context, executionPlan);
     fs.writeFileSync(contextFile, `${JSON.stringify(runtimeContext, null, 2)}\n`, { mode: 0o600 });
-    runExtensionProcess(plan, contextFile, outputRoot, resultFile, options);
-    options.injectFailure?.("after-process", plan);
+    runExtensionProcess(executionPlan, contextFile, outputRoot, resultFile, options);
+    options.injectFailure?.("after-process", executionPlan);
     assertRegularFile(resultFile, "EXTENSION_RESULT_MISSING", "extension init result");
     const result = readJson(resultFile, "EXTENSION_RESULT_INVALID");
-    const verified = verifyExtensionOutput(outputRoot, result, plan);
-    options.injectFailure?.("after-output-verify", plan);
-    if (stateFingerprint(root) !== beforeState) throw extensionError("EXTENSION_STATE_CONFLICT", `Extension state changed while ${plan.id} was running`, { extension: plan.id });
-    const installedState = installVerifiedArtifacts(root, plan, verified, state, options);
-    executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "installed", artifacts: installedState.artifacts, hooks: installedState.hooks || [] };
+    const verified = verifyExtensionOutput(outputRoot, result, executionPlan);
+    options.injectFailure?.("after-output-verify", executionPlan);
+    if (stateFingerprint(root) !== beforeState) throw extensionError("EXTENSION_STATE_CONFLICT", `Extension state changed while ${executionPlan.id} was running`, { extension: executionPlan.id });
+    const installedState = installVerifiedArtifacts(root, executionPlan, verified, state, options);
+    if (executionPlan.extensionStoreRoot) replaceWorkspaceReference(executionPlan.extensionStoreRoot, executionPlan.id, executionPlan.version, root);
+    executionResult = { id: executionPlan.id, version: executionPlan.version, extensionSpecVersion: executionPlan.extensionSpecVersion, status: "installed", artifacts: installedState.artifacts, hooks: installedState.hooks || [] };
     return executionResult;
   } catch (error) {
-    const normalized = error.code ? error : extensionError("EXTENSION_INIT_FAILED", `Extension ${plan.id} failed: ${error.message}`, { extension: plan.id, cause: error.name });
-    const statePersisted = recordFailedAttempt(root, plan, normalized, options);
-    executionResult = { id: plan.id, version: plan.version, extensionSpecVersion: plan.extensionSpecVersion, status: "failed", code: normalized.code, message: normalized.message, statePersisted };
+    const normalized = error.code ? error : extensionError("EXTENSION_INIT_FAILED", `Extension ${executionPlan.id} failed: ${error.message}`, { extension: executionPlan.id, cause: error.name });
+    const statePersisted = recordFailedAttempt(root, executionPlan, normalized, options);
+    executionResult = { id: executionPlan.id, version: executionPlan.version, extensionSpecVersion: executionPlan.extensionSpecVersion, status: "failed", code: normalized.code, message: normalized.message, statePersisted };
     return executionResult;
   } finally {
+    if (transactionReference && executionPlan.extensionStoreRoot) {
+      try { removePackageReference(executionPlan.extensionStoreRoot, executionPlan.id, executionPlan.version, "transactions", transactionReference); } catch (error) {
+        executionResult ||= { id: executionPlan.id, version: executionPlan.version, status: "failed" };
+        executionResult.warnings = [...(executionResult.warnings || []), { code: error.code || "EXTENSION_STORE_REFERENCE_REMOVE_FAILED", message: error.message }];
+      }
+    }
     if (temporaryRoot) {
       try {
         (options.rmSync || fs.rmSync)(temporaryRoot, { recursive: true, force: true });
@@ -1138,7 +1289,7 @@ function executeExtension(root, plan, context, options = {}) {
         if (executionResult) {
           executionResult.warnings = [{
             code: "EXTENSION_STAGING_CLEANUP_FAILED",
-            message: `Could not remove extension staging directory for ${plan.id}: ${error.message}`,
+            message: `Could not remove extension staging directory for ${executionPlan.id}: ${error.message}`,
           }];
         }
       }
@@ -1186,6 +1337,7 @@ function planExtensionUninstall(root, id) {
     id: extensionId,
     action: "remove",
     version: installed.version,
+    packageSha256: installed.packageSha256 || null,
     stateFingerprint: stateFingerprint(root),
     state,
     next,
@@ -1223,7 +1375,18 @@ function applyExtensionUninstall(plan, options = {}) {
     for (const file of transition.removes) removeEmptyParents(plan.root, file);
     transaction.commit();
     directoryTransition.commit();
-    return { id: plan.id, version: plan.version, status: "uninstalled", removed: plan.targets };
+    const result = { id: plan.id, version: plan.version, status: "uninstalled", removed: plan.targets };
+    if (options.extensionStoreRoot && plan.packageSha256) {
+      try {
+        removeWorkspaceReference(options.extensionStoreRoot, plan.id, plan.version, plan.root);
+      } catch (error) {
+        result.warnings = [{
+          code: error.code || "EXTENSION_STORE_REFERENCE_REMOVE_FAILED",
+          message: error.message,
+        }];
+      }
+    }
+    return result;
   } catch (error) {
     transaction.rollback(error);
     directoryTransition.rollback(error);
@@ -1255,6 +1418,7 @@ module.exports = {
   parseExtensionSelection,
   parseSemver,
   planExtensionUninstall,
+  planExtensionStoreMigration,
   prepareExtensionPlans,
   resolveExtensionPlans,
   runExtensionBatch,
@@ -1263,4 +1427,6 @@ module.exports = {
   validateManifest,
   validateManifestEnvelope,
   verifyExtensionOutput,
+  listPackageReferences,
+  defaultExtensionStoreRoot,
 };

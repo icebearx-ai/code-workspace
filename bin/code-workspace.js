@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 const { main } = require("../src/cli");
+const { hostJsonRequested } = require("../src/cli/parser");
 const { renderResult } = require("../src/cli/renderer");
 const { failure } = require("../src/cli/result");
 
-const json = process.argv.some((arg) => arg === "--json" || arg.startsWith("--json="));
+const json = hostJsonRequested(process.argv);
 
 main(process.argv)
   .then((result) => renderResult(result, { json }))

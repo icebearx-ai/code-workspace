@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://icebearx.ai/code-workspace/extension-runtime-result-v1.json",
+  "title": "Code Workspace Extension Runtime Result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runtimeProtocolVersion", "extension"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "runtimeProtocolVersion": { "type": "integer", "minimum": 1 },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "extension-manifest-v3.json#/$defs/id" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "data": {},
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["info", "warning", "error"] },
+          "message": { "type": "string", "minLength": 1 },
+          "details": { "type": "object" }
+        }
+      }
+    },
+    "text": { "type": "string" }
+  }
+}

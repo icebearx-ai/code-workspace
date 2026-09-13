@@ -23,6 +23,7 @@ const COMMAND_SUMMARIES = {
   "permissions apply": "Apply registered project directory authorization",
   "extension install": "Install one or more built-in extensions into the Workspace",
   "extension uninstall": "Uninstall one built-in extension from the Workspace",
+  ext: "Run an extension runtime",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
 };
@@ -57,6 +58,7 @@ const COMMANDS = [
   } },
   { path: ["extension", "install"], args: [{ name: "name", required: false, variadic: true }], workspace: "required", config: ["identity", "language"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
   { path: ["extension", "uninstall"], args: [{ name: "name", required: true }], workspace: "required", config: [], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
+  { path: ["ext"], args: [{ name: "extension-id", required: true }, { name: "extension-argv", required: false, variadic: true }], workspace: "optional", config: [], interaction: "never", effects: "external", options: {} },
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
   { path: ["completion"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: { shell: { type: "string" } } },
   { path: ["help"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },

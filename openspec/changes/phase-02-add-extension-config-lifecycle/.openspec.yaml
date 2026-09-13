@@ -1,4 +1,0 @@
-schema: spec-driven
-created: 2026-09-10
-goal: Allow extensions to ship user-editable configuration outside core config
-  while preserving it across upgrades and uninstalls.
