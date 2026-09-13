@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
+  "experimental": true,
+  "id": "monitor",
+  "name": "Code Workspace Monitor",
+  "version": "1.0.0",
+  "entry": "init.js",
+  "entrySha256": "37c8b93fb3ef8185bc967c0d322595a4cdc5c4f54c0f20697ced74d4a271fdfe",
+  "timeoutMs": 120000,
+  "capabilities": {},
+  "outputs": [
+    {
+      "id": "reporting-config",
+      "kind": "file",
+      "ownership": "exclusive",
+      "target": ".code-workspace/monitor-reporting.json"
+    }
+  ],
+  "hooks": [
+    { "id": "monitor-task-started", "event": "task.started", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 },
+    { "id": "monitor-task-activity", "event": "task.activity", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 },
+    { "id": "monitor-write-before", "event": "write.before", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 },
+    { "id": "monitor-write-after", "event": "write.after", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 },
+    { "id": "monitor-turn-ended", "event": "task.turn-ended", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 },
+    { "id": "monitor-task-ended", "event": "task.ended", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 },
+    { "id": "monitor-subagent-started", "event": "task.subagent-started", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 },
+    { "id": "monitor-subagent-ended", "event": "task.subagent-ended", "command": "codew monitor report", "tools": ["codex", "claude"], "timeoutMs": 2 }
+  ],
+  "runtime": {
+    "runtimeProtocolVersion": 1,
+    "entry": "runtime.js",
+    "entrySha256": "0f475fcee72ce503aae9b7267c775937dd0e312d57ea4a2101c45d1466f346e3",
+    "scope": "global",
+    "mode": "service",
+    "timeoutMs": 3000,
+    "service": { "id": "monitor", "compatibilityGroup": "v1", "singleton": "user" }
+  }
+}

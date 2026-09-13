@@ -136,6 +136,7 @@ async function executeInitUnlocked(invocation, root) {
       language: result.language,
     },
     tools,
+    ...(extension.id === "monitor" ? { settings: { monitor: result.workspaceConfig.monitor } } : {}),
   }), {
     requested: requestedExtensions,
     preFailures: extensionPreparation.failures,

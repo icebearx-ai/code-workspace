@@ -31,6 +31,11 @@
       "type": "array",
       "uniqueItems": true,
       "items": { "enum": ["claude", "codex"] }
+    },
+    "settings": {
+      "type": "object",
+      "description": "Extension-specific non-secret activation settings supplied by the Host.",
+      "additionalProperties": true
     }
   },
   "$defs": {

@@ -1,4 +1,4 @@
-const { loadState } = require("../../core/config");
+const { loadState, loadConfigProjection } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const {
   applyExtensionUninstall,
@@ -131,12 +131,14 @@ async function executeExtensionInstall(invocation) {
     }
   }
   const workspace = invocation.config.workspace;
+  const monitorSettings = requested.includes("monitor") ? loadConfigProjection(invocation.root, ["monitor"]).monitor : undefined;
   const batch = runExtensionBatch(invocation.root, preparation.plans, (extension) => ({
     schemaVersion: 1,
     extensionSpecVersion: extension.extensionSpecVersion,
     extension: { id: extension.id, version: extension.version },
     workspace: { name: workspace.name, uuid: workspace.uuid, language: workspace.language },
     tools,
+    ...(monitorSettings ? { settings: { monitor: monitorSettings } } : {}),
   }), {
     requested,
     preFailures: preparation.failures,

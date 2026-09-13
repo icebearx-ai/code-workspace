@@ -122,7 +122,7 @@ Host 只传递运行所需的环境变量白名单。子进程隔离不是安全
 
 context 和 result 必须同时回显 `extensionSpecVersion: 1`。该值必须与冻结计划一致。
 
-context 只包含扩展身份、非敏感 Workspace 元数据和工具选择，不包含真实 Workspace 根目录或凭证。
+context 只包含扩展身份、非敏感 Workspace 元数据、工具选择以及可选的扩展专用非秘密设置，不包含真实 Workspace 根目录或凭证。
 
 result 只包含扩展身份和 `{id, source}` 列表。它不得声明 target、kind、ownership、selector、摘要或网络能力。
 

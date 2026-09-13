@@ -1,14 +1,21 @@
 const { commandResult, success } = require("../result");
 const { executeExtensionRuntime } = require("../../core/extension-runtime");
+const { ensureStoredExtensionPackage, defaultExtensionStoreRoot } = require("../../core/extension-store");
+const { discoverExtensions } = require("../../core/extensions");
 
 async function executeExt(invocation) {
   const id = invocation.args[0];
   const argv = invocation.args.slice(1);
+  const extensionStoreRoot = invocation.dependencies?.extensionStoreRoot || defaultExtensionStoreRoot();
+  const builtin = discoverExtensions({ tolerant: true }).catalog.find((entry) => entry.id === id)?.latestSupported;
+  if (builtin) {
+    ensureStoredExtensionPackage({ storeRoot: extensionStoreRoot, sourceRoot: builtin.sourceRoot, source: "builtin" });
+  }
   const runtime = await executeExtensionRuntime({
     id,
     argv,
     workspaceRoot: invocation.root,
-    extensionStoreRoot: invocation.dependencies?.extensionStoreRoot,
+    extensionStoreRoot,
     workspace: invocation.config?.identity || invocation.config?.workspace,
     json: invocation.options.json === true,
   });

@@ -928,7 +928,7 @@ function validateInitResult(value, plan) {
 
 function validateInitContext(value, plan) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context must be an object`, { extension: plan.id });
-  assertOnlyKeys(value, new Set(["schemaVersion", "extensionSpecVersion", "extension", "workspace", "tools"]), "EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context`);
+  assertOnlyKeys(value, new Set(["schemaVersion", "extensionSpecVersion", "extension", "workspace", "tools", "settings"]), "EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context`);
   if (value.schemaVersion !== 1 || value.extensionSpecVersion !== plan.extensionSpecVersion || !value.extension || typeof value.extension !== "object" || Array.isArray(value.extension)) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context must use schemaVersion 1 and Extension Spec ${plan.extensionSpecVersion}`, { extension: plan.id, extensionSpecVersion: plan.extensionSpecVersion });
   assertOnlyKeys(value.extension, new Set(["id", "version"]), "EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context identity`);
   if (value.extension.id !== plan.id || value.extension.version !== plan.version) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension context identity does not match ${plan.id}@${plan.version}`, { extension: plan.id, version: plan.version });
@@ -937,12 +937,14 @@ function validateInitContext(value, plan) {
   assertOnlyKeys(workspace, new Set(["name", "uuid", "language"]), "EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} workspace context`);
   for (const field of ["name", "uuid", "language"]) if (typeof workspace[field] !== "string" || !workspace[field]) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} workspace ${field} is invalid`, { extension: plan.id, field });
   if (!Array.isArray(value.tools) || new Set(value.tools).size !== value.tools.length || value.tools.some((tool) => !SUPPORTED_TOOLS.has(tool))) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context tools are invalid`, { extension: plan.id });
+  if (value.settings !== undefined && (!value.settings || typeof value.settings !== "object" || Array.isArray(value.settings))) throw extensionError("EXTENSION_CONTEXT_INVALID", `Extension ${plan.id} context settings are invalid`, { extension: plan.id });
   return Object.freeze({
     schemaVersion: 1,
     extensionSpecVersion: plan.extensionSpecVersion,
     extension: Object.freeze({ id: plan.id, version: plan.version }),
     workspace: Object.freeze({ name: workspace.name, uuid: workspace.uuid, language: workspace.language }),
     tools: Object.freeze(value.tools.slice()),
+    ...(value.settings ? { settings: structuredClone(value.settings) } : {}),
   });
 }
 

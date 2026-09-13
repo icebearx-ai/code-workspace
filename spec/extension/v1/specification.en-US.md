@@ -124,7 +124,7 @@ The entry MUST exit within the timeout declared by the manifest. A failure, time
 
 The context and result MUST both echo `extensionSpecVersion: 1`. The value MUST match the frozen plan.
 
-The context contains only extension identity, non-sensitive Workspace display metadata, and the selected tools. It MUST NOT contain the real Workspace root or credentials.
+The context contains only extension identity, non-sensitive Workspace display metadata, selected tools, and optional extension-specific non-secret settings. It MUST NOT contain the real Workspace root or credentials.
 
 The result contains only the extension identity and a list of `{id, source}` entries. It MUST NOT declare targets, kinds, ownership, selectors, digests, or network capabilities.
 
