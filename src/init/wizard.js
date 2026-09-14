@@ -54,7 +54,7 @@ async function collectInitPlan(root, manifest, options = {}) {
           value: entry.id,
           label: `${entry.name} · latest supported: ${entry.latestSupported.version} · Extension Spec ${entry.latestSupported.extensionSpecVersion}`,
         })),
-        options.initialExtensions || []
+        options.initialExtensions !== undefined ? options.initialExtensions : supportedExtensions.map((entry) => entry.id)
       )
       : [];
   const extensions = resolveExtensionPlans(extensionCatalog, extensionNames, {

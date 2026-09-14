@@ -55,7 +55,7 @@ async function collectExtensionInstallSelection(catalog, state, options = {}) {
     ui.close("No built-in extensions are available.");
     return [];
   }
-  const selected = await ui.multiselect("Extensions (select any)", choices, []);
+  const selected = await ui.multiselect("Extensions (select any)", choices, choices.filter((entry) => !entry.disabled).map((entry) => entry.value));
   ui.close(selected.length > 0 ? "Extension selection ready." : "No extensions selected.");
   return normalizeExtensionNames(selected);
 }

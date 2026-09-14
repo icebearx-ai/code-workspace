@@ -1019,6 +1019,7 @@ test("interactive init offers extension names and confirms frozen versions and m
   });
   assert.equal(offered.label, "Extensions (experimental, select any)");
   assert.deepEqual(offered.choices.map((entry) => entry.value), ["example-extension"]);
+  assert.deepEqual(offered.initialValues, ["example-extension"]);
   assert.match(offered.choices[0].label, /latest supported: 1\.2\.3 · Extension Spec 1/);
   assert.equal(plan.extensions[0].version, "1.2.3");
   assert.match(readyLines.find((line) => line.startsWith("Extensions")), /[a-f0-9]{64}/);
@@ -1044,7 +1045,7 @@ test("interactive extension install lists built-ins and disables unsupported Ext
   } });
   assert.equal(intro, "Code Workspace extensions");
   assert.equal(offered.label, "Extensions (select any)");
-  assert.deepEqual(offered.initialValues, []);
+  assert.deepEqual(offered.initialValues, ["alpha"]);
   assert.deepEqual(offered.choices.map((entry) => entry.value), ["alpha", "beta"]);
   assert.match(offered.choices[0].label, /installed/);
   assert.equal(offered.choices[1].disabled, true);

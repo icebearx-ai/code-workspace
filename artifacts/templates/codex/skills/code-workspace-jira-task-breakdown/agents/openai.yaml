@@ -1,0 +1,7 @@
+interface:
+  display_name: "Code Workspace Jira Task Breakdown"
+  short_description: "拆分 Jira 任务（被动触发）"
+  default_prompt: "使用 $code-workspace-jira-task-breakdown 拆分这个 Jira 需求。"
+
+policy:
+  allow_implicit_invocation: false

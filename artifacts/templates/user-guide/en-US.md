@@ -91,8 +91,14 @@ Add `--json` when a query result is consumed by Codex or a script.
 
 - `$code-workspace-add-projects` — inspect and register local Git projects with concise AI-generated navigation context.
 - `$code-workspace-resolve-branch` — safely resolve a selected project's branch mismatch and confirm branch alignment.
+- `$code-workspace-jira-prd-analysis` — confirm Jira scope, then analyze requirement clarity, consistency, and code feasibility.
+- `$code-workspace-jira-task-breakdown` — split a confirmed Jira requirement into executable frontend, backend, and test tasks.
+- `$code-workspace-issue-fix-summary` — summarize a completed fix and, after confirmation, publish it as a Jira comment.
 
 | Purpose | Codex | Claude Code |
 | --- | --- | --- |
 | Add workspace projects | `$code-workspace-add-projects` | `/code-workspace:add-projects` |
 | Resolve a project branch mismatch | `$code-workspace-resolve-branch` | `/code-workspace-resolve-branch` |
+| Analyze a Jira requirement | `$code-workspace-jira-prd-analysis` | `$code-workspace-jira-prd-analysis` |
+| Break down Jira tasks | `$code-workspace-jira-task-breakdown` | `$code-workspace-jira-task-breakdown` |
+| Summarize an issue fix | `$code-workspace-issue-fix-summary` | `$code-workspace-issue-fix-summary` |

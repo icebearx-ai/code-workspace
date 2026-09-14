@@ -94,7 +94,7 @@ async function executeInitUnlocked(invocation, root) {
         extensionCatalog,
         extensionState,
         extensions: interactiveExplicitExtensions,
-        initialExtensions: explicitExtensions === null ? defaultExtensions : interactiveExplicitExtensions,
+        initialExtensions: explicitExtensions === null ? undefined : interactiveExplicitExtensions,
       });
     } catch (error) {
       if (error.code === "INIT_CANCELLED") {

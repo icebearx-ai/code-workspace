@@ -22,7 +22,7 @@ test("init manifest describes only workspace-owned assets", () => {
   assert.equal(manifest.releaseVersion, packageJson.version);
   assert.deepEqual(manifest.tools, ["claude", "codex"]);
   assert.equal(manifest.sources.length, 2);
-  assert.equal(manifest.managedFiles.length, 10);
+  assert.equal(manifest.managedFiles.length, 19);
   assert(manifest.sources.every((entry) => entry.kind === "asset"));
   assert(manifest.managedFiles.every((entry) => entry.desired.sha256.length === 64));
   assert.equal(manifest.resources, undefined);
@@ -55,7 +55,13 @@ test("interactive init collects and confirms a complete workspace plan before wr
     note: (title) => calls.push(title),
     text: async () => answers.text.shift(),
     select: async () => answers.select.shift(),
-    multiselect: async () => answers.multiselect.shift(),
+    multiselect: async (label, choices, initialValues) => {
+      if (label.startsWith("Extensions")) {
+        assert.deepEqual(initialValues, ["monitor"]);
+        return [];
+      }
+      return answers.multiselect.shift();
+    },
     confirm: async () => answers.confirm.shift(),
     close: (message) => calls.push(message),
   };
