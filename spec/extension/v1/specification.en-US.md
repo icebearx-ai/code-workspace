@@ -58,6 +58,7 @@ Every manifest in every specification version MUST retain the following fields s
   "extensionSpecVersion": 1,
   "id": "example-extension",
   "name": "Example Extension",
+  "description": "A short explanation of the extension.",
   "version": "1.0.0"
 }
 ```
@@ -75,6 +76,7 @@ A Spec v1 manifest uses manifest schema v3. The manifest is the static declarati
   "experimental": true,
   "id": "example-extension",
   "name": "Example Extension",
+  "description": "A short explanation of the extension.",
   "version": "1.0.0",
   "entry": "init.js",
   "entrySha256": "<sha256>",
@@ -92,6 +94,8 @@ A Spec v1 manifest uses manifest schema v3. The manifest is the static declarati
   ]
 }
 ```
+
+`name` is the full user-facing name. `description` is the short explanation shown when a user selects extensions. It MUST be non-empty, single-line text no longer than 60 Unicode characters. It is presentation metadata and does not change installation, permission, or output semantics.
 
 The `codeWorkspace` product-version range is not part of Extension Spec and MUST NOT appear in a Spec v1 manifest.
 

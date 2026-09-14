@@ -57,6 +57,7 @@ Extension Spec 使用离散正整数版本。Host 必须明确列出自己实现
   "extensionSpecVersion": 1,
   "id": "example-extension",
   "name": "Example Extension",
+  "description": "简短说明扩展用途",
   "version": "1.0.0"
 }
 ```
@@ -74,6 +75,7 @@ Spec v1 manifest 使用 schema v3。manifest 是安装权限和最大输出范�
   "experimental": true,
   "id": "example-extension",
   "name": "Example Extension",
+  "description": "简短说明扩展用途",
   "version": "1.0.0",
   "entry": "init.js",
   "entrySha256": "<sha256>",
@@ -91,6 +93,8 @@ Spec v1 manifest 使用 schema v3。manifest 是安装权限和最大输出范�
   ]
 }
 ```
+
+`name` 是用户可见的完整名称。`description` 是用户选择扩展时展示的简短说明，必须是单行非空文本，最长 60 个 Unicode 字符。它只用于展示，不改变安装、权限或输出语义。
 
 `codeWorkspace` 产品版本范围不属于 Extension Spec，不得出现在 Spec v1 manifest 中。
 

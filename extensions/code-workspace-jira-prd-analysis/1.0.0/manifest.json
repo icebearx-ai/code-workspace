@@ -4,6 +4,7 @@
   "experimental": true,
   "id": "code-workspace-jira-prd-analysis",
   "name": "Code Workspace Jira PRD Analysis",
+  "description": "确认 Jira 范围并分析需求与代码可行性",
   "version": "1.0.0",
   "entry": "init.js",
   "entrySha256": "bd74e270440f0d58902f553596517d416c2eb03bbd38e2c8adaf0867b6b01838",

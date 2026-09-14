@@ -94,7 +94,7 @@ Installed by default during Workspace initialization:
 - `$code-workspace-add-projects` — inspect and register local Git projects with concise AI-generated navigation context.
 - `$code-workspace-resolve-branch` — safely resolve a selected project's branch mismatch and confirm branch alignment.
 
-The following skills are distributed as independent extensions. They are not installed by `init` or `update`; install or uninstall each one explicitly. The interactive extension picker starts with no extensions selected:
+The following skills are distributed as independent extensions. They are not installed by `init` or `update`; install or uninstall each one explicitly. The interactive extension picker starts with no extensions selected, and each choice shows the extension name and a short description:
 
 ```bash
 codew extension install code-workspace-jira-prd-analysis --yes

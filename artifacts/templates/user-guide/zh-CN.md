@@ -94,7 +94,7 @@ codew project verify <project-name>
 - `$code-workspace-add-projects` — 检查并注册本地 Git 项目，同时生成供 AI 导航使用的简洁 context。
 - `$code-workspace-resolve-branch` — 安全解决选中项目的分支不一致问题，并确认分支对齐。
 
-以下 Skill 以独立扩展提供，不会随 `init` 或 `update` 自动安装。需要时按名称安装，也可以单独卸载；交互式扩展选择默认不勾选任何扩展：
+以下 Skill 以独立扩展提供，不会随 `init` 或 `update` 自动安装。需要时按名称安装，也可以单独卸载；交互式扩展选择默认不勾选任何扩展，每个选项会显示扩展名称和简短描述：
 
 ```bash
 codew extension install code-workspace-jira-prd-analysis --yes

@@ -47,7 +47,7 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 
 ### Experimental built-in extensions
 
-`init` can install integrations from the versioned `extensions/` repository shipped inside this npm package. Select extension names interactively, or pass a comma-separated name list non-interactively. The dedicated install command accepts one or more names; without names it opens the built-in extension multiselect with no extensions selected, where ESC exits without changes:
+`init` can install integrations from the versioned `extensions/` repository shipped inside this npm package. Select extension names interactively, or pass a comma-separated name list non-interactively. The dedicated install command accepts one or more names; without names it opens the built-in extension multiselect with no extensions selected, where each choice shows its name and a short description. ESC exits without changes:
 
 ```bash
 codew init . --extensions zhuiyi-jira-mcp --yes

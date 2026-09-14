@@ -50,6 +50,7 @@ function writePackage(root, { id = "example", version = "1.0.0", content = `${id
     experimental: true,
     id,
     name: id,
+    description: "Store test extension.",
     version,
     entry: "init.js",
     entrySha256: sha256(Buffer.from(script)),

@@ -5,7 +5,7 @@ const { randomUUID } = require("node:crypto");
 const { DEFAULT_WORKSPACE_NAME, configPath, loadConfig } = require("../core/config");
 const { DEFAULT_WORKSPACE_LANGUAGE, SUPPORTED_LANGUAGES, resolveWorkspaceLanguage } = require("../core/language");
 const { createInitPlan } = require("./plan");
-const { createInteractiveUi } = require("./ui");
+const { createInteractiveUi, formatExtensionChoice } = require("./ui");
 const { formatPermissionPlan, planPermissionChanges } = require("../core/permissions");
 const { resolveExtensionPlans } = require("../core/extensions");
 
@@ -52,7 +52,7 @@ async function collectInitPlan(root, manifest, options = {}) {
         "Extensions (experimental, select any)",
         supportedExtensions.map((entry) => ({
           value: entry.id,
-          label: `${entry.name} · latest supported: ${entry.latestSupported.version} · Extension Spec ${entry.latestSupported.extensionSpecVersion}`,
+          label: formatExtensionChoice(entry),
         })),
         options.initialExtensions !== undefined ? options.initialExtensions : []
       )

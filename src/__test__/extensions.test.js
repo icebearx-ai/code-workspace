@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { stripVTControlCharacters } = require("node:util");
 const test = require("node:test");
 
 const { parse } = require("../cli/parser");
@@ -115,6 +116,7 @@ function writeExtension(repository, options = {}) {
     experimental: true,
     id,
     name: options.name || id,
+    description: options.description || "Example extension summary.",
     version,
     entry: "init.js",
     entrySha256: sha256(Buffer.from(script)),
@@ -165,6 +167,7 @@ test("discovery selects the highest version using a Host-supported Extension Spe
   const catalog = discoverExtensions({ extensionsRoot: repository });
   assert.equal(catalog[0].latestSupported.version, "1.2.0");
   assert.equal(catalog[0].latestSupported.extensionSpecVersion, 1);
+  assert.equal(catalog[0].description, "Example extension summary.");
   assert.equal(catalog[0].latestSupported.manifestSha256, sha256(fs.readFileSync(path.join(repository, "example-extension", "1.2.0", "manifest.json"))));
   assert.match(catalog[0].latestSupported.packageSha256, /^[a-f0-9]{64}$/);
   assert(Object.isFrozen(catalog[0].latestSupported.manifest));
@@ -187,6 +190,7 @@ test("Extension Spec v1 manifest validation rejects unsafe, duplicate, core-owne
     experimental: true,
     id: "example-extension",
     name: "Example",
+    description: "Example extension summary.",
     version: "1.0.0",
     entry: "init.js",
     entrySha256: "b".repeat(64),
@@ -219,6 +223,10 @@ test("Extension Spec v1 manifest validation rejects unsafe, duplicate, core-owne
     ...base,
     outputs: [{ id: "config", kind: "text-block", ownership: "shared", target: ".codex/config.toml", format: "toml" }],
   }));
+  assert.throws(() => validateManifest({ ...base, description: "" }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
+  assert.throws(() => validateManifest({ ...base, description: "line one\nline two" }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
+  assert.throws(() => validateManifest({ ...base, description: "x".repeat(61) }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
+  assert.equal(validateManifest({ ...base, description: "  Trimmed summary.  " }, { protectedTargets: new Set() }).description, "Trimmed summary.");
 });
 
 test("selection accepts names only and plans reject extension ownership conflicts", () => {
@@ -402,6 +410,7 @@ test("seeded ownership is only valid for file outputs", () => {
     experimental: true,
     id: "example-extension",
     name: "Example",
+    description: "Example extension summary.",
     version: "1.0.0",
     entry: "init.js",
     entrySha256: "b".repeat(64),
@@ -1001,7 +1010,7 @@ test("init parser accepts extension option ordering and CLI rejects version synt
 test("interactive init offers extension names and confirms frozen versions and manifest hashes", async () => {
   const root = temporaryRoot();
   const repository = temporaryRoot();
-  writeExtension(repository, { id: "example-extension", version: "1.2.3", name: "Example Extension" });
+  writeExtension(repository, { id: "example-extension", version: "1.2.3", name: "Example Extension", description: "Analyze requirements safely." });
   const catalog = discoverExtensions({ extensionsRoot: repository });
   let offered;
   let readyLines;
@@ -1028,15 +1037,15 @@ test("interactive init offers extension names and confirms frozen versions and m
   assert.equal(offered.label, "Extensions (experimental, select any)");
   assert.deepEqual(offered.choices.map((entry) => entry.value), ["example-extension"]);
   assert.deepEqual(offered.initialValues, []);
-  assert.match(offered.choices[0].label, /latest supported: 1\.2\.3 · Extension Spec 1/);
+  assert.equal(stripVTControlCharacters(offered.choices[0].label), "Example Extension\n  Analyze requirements safely.");
   assert.equal(plan.extensions[0].version, "1.2.3");
   assert.match(readyLines.find((line) => line.startsWith("Extensions")), /[a-f0-9]{64}/);
 });
 
 test("interactive extension install lists built-ins and disables unsupported Extension Specs", async () => {
   const repository = temporaryRoot();
-  writeExtension(repository, { id: "alpha", name: "Alpha", extensionSpecVersion: 1 });
-  writeExtension(repository, { id: "beta", name: "Beta", extensionSpecVersion: 2 });
+  writeExtension(repository, { id: "alpha", name: "Alpha", description: "Alpha summary.", extensionSpecVersion: 1 });
+  writeExtension(repository, { id: "beta", name: "Beta", description: "Beta summary.", extensionSpecVersion: 2 });
   const catalog = discoverExtensions({ extensionsRoot: repository });
   let intro;
   let offered;
@@ -1055,7 +1064,8 @@ test("interactive extension install lists built-ins and disables unsupported Ext
   assert.equal(offered.label, "Extensions (select any)");
   assert.deepEqual(offered.initialValues, []);
   assert.deepEqual(offered.choices.map((entry) => entry.value), ["alpha", "beta"]);
-  assert.match(offered.choices[0].label, /installed/);
+  assert.equal(stripVTControlCharacters(offered.choices[0].label), "alpha · Alpha\n  Alpha summary. · installed");
+  assert.equal(stripVTControlCharacters(offered.choices[1].label), "beta · Beta\n  Beta summary.");
   assert.equal(offered.choices[1].disabled, true);
   assert.deepEqual(selected, ["alpha"]);
   assert.equal(closed, "Extension selection ready.");
@@ -1124,7 +1134,7 @@ test("standalone extension install is idempotent without rewriting core assets",
     args: [definition.id],
     options: { yes: true, json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { extensionsRoot: repository, interactive: false },
+    dependencies: { extensionsRoot: repository, extensionStoreRoot: temporaryRoot(), interactive: false },
   };
   const installed = await executeExtensionInstall(invocation);
   assert.equal(installed.data.results[0].status, "installed");
@@ -1144,6 +1154,8 @@ test("built-in skill extensions expose only tool-applicable file outputs", () =>
     const entry = catalog.find((candidate) => candidate.id === id);
     assert(entry, id);
     assert.equal(entry.latestSupported.version, "1.0.0");
+    assert(entry.description);
+    assert([...entry.description].length <= 60);
 
     const targets = skillExtensionTargets(id);
     const codex = resolveExtensionPlans(catalog, [id], { tools: ["codex"], state: emptyExtensionState() })[0];
@@ -1220,7 +1232,7 @@ test("standalone extension install preserves ordered best-effort results and fai
     args: ["broken", "working"],
     options: { yes: true, json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { extensionsRoot: repository },
+    dependencies: { extensionsRoot: repository, extensionStoreRoot: temporaryRoot() },
   });
   assert.equal(result.ok, false);
   assert.deepEqual(result.data.requested, ["broken", "working"]);

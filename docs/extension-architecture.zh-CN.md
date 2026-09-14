@@ -242,7 +242,10 @@ Host 负责：
 {
   "schemaVersion": 3,
   "extensionSpecVersion": 1,
+  "experimental": true,
   "id": "zhuiyi-jira-mcp",
+  "name": "Zhuiyi Jira MCP",
+  "description": "为 Codex 和 Claude 配置 Jira MCP 服务",
   "version": "1.1.0",
   "entry": "init.js",
   "entrySha256": "<sha256>",

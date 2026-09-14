@@ -8,6 +8,7 @@
 
 - 三个 Skill 分别以同名内置扩展提供，支持 Codex 与 Claude Code 文件输出。
 - 使用 `codew extension install <name> --yes` 显式安装，使用 `codew extension uninstall <name> --yes` 独立卸载。
+- 内置扩展 manifest 新增不超过 60 字的单行 `description`，交互式 init 和 extension install 使用两行选项：加粗名称与弱化描述，且默认不选中任何扩展。
 - 扩展只安装 Skill 指令；需要实际访问 Jira 时，另行安装 `zhuiyi-jira-mcp`。
 - 这是 beta 阶段的破坏性调整，不提供旧 managed file 的自动迁移。已有测试 Workspace 应改用全新的 Workspace，或先手动删除旧的 `.codex/skills/<name>` 与 `.claude/skills/<name>` 目录，再安装对应扩展。
 

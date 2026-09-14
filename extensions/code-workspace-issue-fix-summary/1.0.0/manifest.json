@@ -4,6 +4,7 @@
   "experimental": true,
   "id": "code-workspace-issue-fix-summary",
   "name": "Code Workspace Issue Fix Summary",
+  "description": "总结已修复问题并确认后发布 Jira 评论",
   "version": "1.0.0",
   "entry": "init.js",
   "entrySha256": "8d7622828bc02af2990cff54235a091b5e2270830c400ae7a4de5828ccfe96ec",

@@ -4,6 +4,7 @@
   "experimental": true,
   "id": "code-workspace-jira-task-breakdown",
   "name": "Code Workspace Jira Task Breakdown",
+  "description": "将已确认需求拆分为前端、后端和测试任务",
   "version": "1.0.0",
   "entry": "init.js",
   "entrySha256": "c7048f1a33190294d463346769000665f6bd31be9e5b3b1e79bc8a8aefed975c",

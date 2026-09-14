@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "c5caf1fd89f6eaaf82cbe9e2224381517a6d9268dc24930af48db23bba3130a6"
+      "sha256": "28bcc968cac04ef2dabbb57114719ac66f7cb1fcc442b85d006c0a74116f6667"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "00338c10059257bcfa6a09fddef67138ecd9ee6dac67d64316b3f34c1c90f366"
+      "sha256": "5df5108602036397879948b13948a346003a41e26d3b4260f5c38166e2eb927f"
     }
   ],
   "managedFiles": [

@@ -4,6 +4,7 @@
   "experimental": true,
   "id": "zhuiyi-opensvn-mcp",
   "name": "Zhuiyi OpenSVN MCP",
+  "description": "为 Codex 和 Claude 配置 OpenSVN MCP 服务",
   "version": "0.1.0",
   "entry": "init.js",
   "entrySha256": "8ccd9af7c34f2431616c61693d68a9f0fea2f283348a0f921d0a75e7b043f4f4",

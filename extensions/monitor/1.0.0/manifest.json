@@ -4,6 +4,7 @@
   "experimental": true,
   "id": "monitor",
   "name": "Code Workspace Monitor",
+  "description": "监控 Agent 会话、执行状态与待授权请求",
   "version": "1.0.0",
   "entry": "init.js",
   "entrySha256": "37c8b93fb3ef8185bc967c0d322595a4cdc5c4f54c0f20697ced74d4a271fdfe",

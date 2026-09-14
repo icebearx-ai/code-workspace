@@ -4,6 +4,7 @@
   "experimental": true,
   "id": "zhuiyi-jira-mcp",
   "name": "Zhuiyi Jira MCP",
+  "description": "为 Codex 和 Claude 配置 Jira MCP 服务",
   "version": "1.1.0",
   "entry": "init.js",
   "entrySha256": "dd385601d83e9b2f64b100ac4c12229f626a4781d683e3f47f2120b2f29f334c",

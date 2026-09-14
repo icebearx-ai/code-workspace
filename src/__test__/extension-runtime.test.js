@@ -54,6 +54,7 @@ function writeRuntimePackage(root, options = {}) {
     experimental: true,
     id,
     name: id,
+    description: "Runtime test extension.",
     version,
     entry: "init.js",
     entrySha256: sha256(Buffer.from("// installation entry\n")),

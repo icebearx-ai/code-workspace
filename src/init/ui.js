@@ -1,3 +1,11 @@
+const { styleText } = require("node:util");
+
+function formatExtensionChoice(entry, options = {}) {
+  const title = options.includeId ? `${entry.id} · ${entry.name}` : entry.name;
+  const suffix = options.installed ? " · installed" : "";
+  return `${styleText("bold", title)}\n  ${styleText("dim", `${entry.description}${suffix}`)}`;
+}
+
 async function createInteractiveUi(options = {}) {
   const clack = await import("@clack/prompts");
   const input = options.input || process.stdin;
@@ -58,4 +66,4 @@ async function createInteractiveUi(options = {}) {
   };
 }
 
-module.exports = { createInteractiveUi };
+module.exports = { createInteractiveUi, formatExtensionChoice };

@@ -230,12 +230,17 @@ function validateManifestEnvelope(value, options = {}) {
   if (typeof manifest.name !== "string" || !manifest.name.trim() || [...manifest.name.trim()].length > 100) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} has an invalid display name`, { extension: id });
   }
+  const description = typeof manifest.description === "string" ? manifest.description.trim() : "";
+  if (!description || [...description].length > 60 || /[\r\n]/.test(description)) {
+    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} has an invalid short description`, { extension: id });
+  }
   const version = parseSemver(manifest.version).raw;
   if (options.expectedVersion && version !== options.expectedVersion) {
     throw extensionError("EXTENSION_MANIFEST_VERSION_MISMATCH", `Extension manifest version ${version} does not match directory ${options.expectedVersion}`, { extension: id, version, expected: options.expectedVersion });
   }
   return Object.freeze({
     extensionSpecVersion: manifest.extensionSpecVersion,
+    description,
     id,
     name: manifest.name.trim(),
     version,
@@ -254,7 +259,7 @@ function validateManifest(value, options = {}) {
       supportedExtensionSpecVersions: [...supportedVersions],
     });
   }
-  assertOnlyKeys(manifest, new Set(["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "version", "entry", "entrySha256", "timeoutMs", "capabilities", "outputs", "hooks", "runtime"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
+  assertOnlyKeys(manifest, new Set(["schemaVersion", "extensionSpecVersion", "experimental", "id", "name", "description", "version", "entry", "entrySha256", "timeoutMs", "capabilities", "outputs", "hooks", "runtime"]), "EXTENSION_MANIFEST_INVALID", "Extension manifest");
   if (manifest.schemaVersion !== 3 || manifest.experimental !== true) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", "Extension Spec v1 manifest must use schemaVersion 3 and experimental true");
   }
@@ -342,6 +347,7 @@ function validateManifest(value, options = {}) {
     experimental: true,
     id,
     name: envelope.name,
+    description: envelope.description,
     version,
     entry: manifest.entry,
     entrySha256: manifest.entrySha256,
@@ -436,6 +442,7 @@ function discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensi
     return Object.freeze({
       id,
       name: (latestSupported || versions[0]).manifest.name,
+      description: (latestSupported || versions[0]).manifest.description,
       versions: Object.freeze(versions),
       latestSupported,
     });

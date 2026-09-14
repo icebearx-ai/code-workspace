@@ -13,7 +13,7 @@ const { loadInitManifest } = require("../../core/init");
 const { acquireInitLock } = require("../../core/init-lock");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { resolveWorkspaceTools } = require("../../core/tools");
-const { createInteractiveUi } = require("../../init/ui");
+const { createInteractiveUi, formatExtensionChoice } = require("../../init/ui");
 const { confirm } = require("../confirmation");
 const { selectionResult, success } = require("../result");
 
@@ -47,7 +47,7 @@ async function collectExtensionInstallSelection(catalog, state, options = {}) {
   const installed = new Set(Object.entries(state.extensions || {}).filter(([, value]) => value.installed).map(([id]) => id));
   const choices = catalog.map((entry) => ({
     value: entry.id,
-    label: `${entry.id} · ${entry.name} · ${entry.latestSupported ? `latest supported: ${entry.latestSupported.version} · Extension Spec ${entry.latestSupported.extensionSpecVersion}` : "no supported Extension Spec"}${installed.has(entry.id) ? " · installed" : ""}`,
+    label: formatExtensionChoice(entry, { includeId: true, installed: installed.has(entry.id) }),
     ...(entry.latestSupported ? {} : { disabled: true }),
   }));
   ui.intro("Code Workspace extensions");
