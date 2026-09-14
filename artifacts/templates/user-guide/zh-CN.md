@@ -100,14 +100,16 @@ codew project verify <project-name>
 codew extension install code-workspace-jira-prd-analysis --yes
 codew extension install code-workspace-jira-task-breakdown --yes
 codew extension install code-workspace-issue-fix-summary --yes
+codew extension install code-workspace-guangda-coding-spec --yes
 codew extension uninstall code-workspace-jira-prd-analysis --yes
 ```
 
 - `$code-workspace-jira-prd-analysis` — 在确认 Jira 范围后分析需求清晰度、一致性和代码可行性。
 - `$code-workspace-jira-task-breakdown` — 将已确认的 Jira 需求按前端、后端、测试拆分为可执行任务。
 - `$code-workspace-issue-fix-summary` — 总结已完成的问题修复，并在确认后发布到 Jira 评论。
+- `$code-workspace-guangda-coding-spec` — 仅在项目属于中国光大银行客户项目时，按本次任务的风险域落实研发、安全、测试与投产规范。
 
-这些扩展只安装 Skill 指令。需要实际访问 Jira 时，还应安装 `zhuiyi-jira-mcp` 扩展。
+这些扩展只安装 Skill 指令。Jira 相关扩展需要实际访问 Jira 时，还应安装 `zhuiyi-jira-mcp` 扩展；光大规范扩展不依赖任何 MCP 服务。
 
 | 用途 | Codex | Claude Code |
 | --- | --- | --- |
@@ -116,3 +118,4 @@ codew extension uninstall code-workspace-jira-prd-analysis --yes
 | 分析 Jira 需求 | `$code-workspace-jira-prd-analysis` | `$code-workspace-jira-prd-analysis` |
 | 拆分 Jira 任务 | `$code-workspace-jira-task-breakdown` | `$code-workspace-jira-task-breakdown` |
 | 总结问题修复 | `$code-workspace-issue-fix-summary` | `$code-workspace-issue-fix-summary` |
+| 落实光大研发规范 | `$code-workspace-guangda-coding-spec` | `$code-workspace-guangda-coding-spec` |

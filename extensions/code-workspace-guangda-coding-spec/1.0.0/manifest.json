@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
+  "experimental": true,
+  "id": "code-workspace-guangda-coding-spec",
+  "name": "Code Workspace Guangda Coding Spec",
+  "description": "在光大客户项目中按风险域落实研发、安全、测试与投产规范",
+  "version": "1.0.0",
+  "entry": "init.js",
+  "entrySha256": "d044694fd13237ea47efad4947b6374b92e83c18a7185db7131fd764dc593033",
+  "timeoutMs": 30000,
+  "capabilities": {},
+  "outputs": [
+    {
+      "id": "codex-skill",
+      "kind": "directory",
+      "ownership": "exclusive",
+      "target": ".codex/skills/code-workspace-guangda-coding-spec",
+      "tools": ["codex"]
+    },
+    {
+      "id": "claude-skill",
+      "kind": "directory",
+      "ownership": "exclusive",
+      "target": ".claude/skills/code-workspace-guangda-coding-spec",
+      "tools": ["claude"]
+    }
+  ]
+}

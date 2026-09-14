@@ -92,9 +92,11 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-jira-prd-analysis")));
   assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-jira-task-breakdown")));
   assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-issue-fix-summary")));
+  assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-guangda-coding-spec")));
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "code-workspace-jira-prd-analysis")));
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "code-workspace-jira-task-breakdown")));
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "code-workspace-issue-fix-summary")));
+  assert(!fs.existsSync(path.join(root, ".claude", "skills", "code-workspace-guangda-coding-spec")));
   assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 10);
   assert.equal(output.workspace.language, "zh-CN");
   assert.match(fs.readFileSync(path.join(root, "USER_GUIDE.md"), "utf8"), /Code Workspace 用户指南/);

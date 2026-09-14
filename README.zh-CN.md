@@ -59,6 +59,7 @@ codew extension install zhuiyi-opensvn-mcp --yes
 codew extension install code-workspace-jira-prd-analysis --yes
 codew extension install code-workspace-jira-task-breakdown --yes
 codew extension install code-workspace-issue-fix-summary --yes
+codew extension install code-workspace-guangda-coding-spec --yes
 codew extension uninstall zhuiyi-jira-mcp --yes
 codew extension uninstall code-workspace-jira-prd-analysis --yes
 ```
@@ -72,6 +73,8 @@ codew extension uninstall code-workspace-jira-prd-analysis --yes
 当前随包提供的内置扩展包括 `zhuiyi-jira-mcp` 和 `zhuiyi-opensvn-mcp`，分别用于为选中的 Agent 工具配置 Jira MCP 与 OpenSVN MCP 服务；它们不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
 
 随包还提供 `code-workspace-jira-prd-analysis`、`code-workspace-jira-task-breakdown` 和 `code-workspace-issue-fix-summary` 三个 Skill 扩展，用于安装可选的 Codex 与 Claude Code Skill 文件。它们不随核心 `init` 或 `update` 安装，可以独立安装和卸载；需要 Jira 访问时另行安装 `zhuiyi-jira-mcp`。
+
+随包还提供 `code-workspace-guangda-coding-spec` Skill 扩展，用于在光大客户项目按风险域落实研发、安全、测试与投产规范。它同样不随核心 `init` 或 `update` 安装，可以独立安装和卸载，且不依赖任何 MCP 服务。
 
 两个 MCP 的运行包不会复制到 Workspace；Workspace 只保存 MCP 配置，运行包由用户级 Extension Store 中的 launcher 按需缓存。
 

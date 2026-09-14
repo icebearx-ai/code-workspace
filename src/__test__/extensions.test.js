@@ -150,6 +150,20 @@ function skillExtensionTargets(id) {
   };
 }
 
+const GUANGDA_SKILL_EXTENSION = "code-workspace-guangda-coding-spec";
+const GUANGDA_SKILL_REFERENCES = [
+  "critical-correctness.md",
+  "data-performance.md",
+  "process-checkpoints.md",
+  "release-and-change.md",
+  "security.md",
+];
+const GUANGDA_SKILL_ARCHIVE = [
+  "ARCHIVE-MANIFEST.md",
+  "双十红线规范_GLM-OCR.md",
+  "研发过程关键环节关注点_GLM-OCR.md",
+];
+
 test("strict SemVer comparison is used only for extension version ordering", () => {
   assert.equal(compareSemver("1.0.0-beta.3", "1.0.0-beta.11"), -1);
   assert.equal(compareSemver("1.0.0", "1.0.0-rc.1"), 1);
@@ -1219,6 +1233,68 @@ test("built-in skill extensions install and uninstall independently", async () =
     for (const target of Object.values(skillExtensionTargets(id))) assert.equal(fs.existsSync(path.join(root, target)), true, target);
   }
   assert.equal(loadExtensionState(root).extensions[uninstallId], undefined);
+});
+
+test("multi-file skill extension exposes one tool-applicable directory per Agent", () => {
+  const catalog = discoverExtensions();
+  const entry = catalog.find((candidate) => candidate.id === GUANGDA_SKILL_EXTENSION);
+  assert(entry, GUANGDA_SKILL_EXTENSION);
+  assert.equal(entry.latestSupported.version, "1.0.0");
+  assert([...entry.description].length <= 60);
+
+  const codex = resolveExtensionPlans(catalog, [GUANGDA_SKILL_EXTENSION], { tools: ["codex"], state: emptyExtensionState() })[0];
+  assert.deepEqual(codex.artifacts.map((artifact) => [artifact.kind, artifact.target]), [
+    ["directory", `.codex/skills/${GUANGDA_SKILL_EXTENSION}`],
+  ]);
+  assert.deepEqual(codex.capabilities.networkHosts, []);
+  assert.deepEqual(codex.hooks, []);
+
+  const claude = resolveExtensionPlans(catalog, [GUANGDA_SKILL_EXTENSION], { tools: ["claude"], state: emptyExtensionState() })[0];
+  assert.deepEqual(claude.artifacts.map((artifact) => [artifact.kind, artifact.target]), [
+    ["directory", `.claude/skills/${GUANGDA_SKILL_EXTENSION}`],
+  ]);
+});
+
+test("multi-file skill extension installs references and the source archive, then uninstalls each Agent directory", async () => {
+  const id = GUANGDA_SKILL_EXTENSION;
+  const root = temporaryRoot();
+  const initialized = runCli(root, ["init", ".", "--tools", "codex,claude", "--extensions", "none", "--yes", "--json"]);
+  assert.equal(initialized.status, 0, initialized.stderr);
+  assert.equal(fs.existsSync(path.join(root, `.codex/skills/${id}`)), false);
+  assert.equal(fs.existsSync(path.join(root, `.claude/skills/${id}`)), false);
+
+  const extensionStoreRoot = temporaryRoot("code-workspace-skill-extension-store-");
+  const invocation = {
+    root,
+    args: [id],
+    options: { yes: true, json: true },
+    config: loadConfigProjection(root, ["identity", "language"]),
+    dependencies: { extensionStoreRoot, interactive: false },
+  };
+  const installed = await executeExtensionInstall(invocation);
+  assert.equal(installed.ok, true);
+  assert.deepEqual(installed.data.summary, { total: 1, succeeded: 1, skipped: 0, failed: 0 });
+
+  const codexRoot = path.join(root, `.codex/skills/${id}`);
+  const claudeRoot = path.join(root, `.claude/skills/${id}`);
+  assert.match(fs.readFileSync(path.join(codexRoot, "SKILL.md"), "utf8"), /name: code-workspace-guangda-coding-spec/);
+  assert.match(fs.readFileSync(path.join(codexRoot, "agents", "openai.yaml"), "utf8"), /display_name: "光大研发规范"/);
+  assert.equal(fs.existsSync(path.join(claudeRoot, "agents")), false);
+  for (const reference of GUANGDA_SKILL_REFERENCES) {
+    assert.equal(fs.readFileSync(path.join(codexRoot, "references", reference), "utf8").length > 0, true, reference);
+    assert.equal(fs.readFileSync(path.join(claudeRoot, "references", reference), "utf8").length > 0, true, reference);
+  }
+  for (const archived of GUANGDA_SKILL_ARCHIVE) {
+    assert.equal(fs.readFileSync(path.join(codexRoot, "assets", "original-specs", archived), "utf8").length > 0, true, archived);
+    assert.equal(fs.readFileSync(path.join(claudeRoot, "assets", "original-specs", archived), "utf8").length > 0, true, archived);
+  }
+  assert.equal(loadExtensionState(root).extensions[id].installed.artifacts.length, 2);
+
+  const plan = planExtensionUninstall(root, id);
+  assert.deepEqual(plan.targets, [`.codex/skills/${id}`, `.claude/skills/${id}`]);
+  const uninstalled = applyExtensionUninstall(plan, { extensionStoreRoot });
+  assert.equal(uninstalled.status, "uninstalled");
+  for (const target of plan.targets) assert.equal(fs.existsSync(path.join(root, target)), false, target);
 });
 
 test("standalone extension install preserves ordered best-effort results and fails when one extension fails", async () => {

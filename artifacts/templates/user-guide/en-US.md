@@ -100,14 +100,16 @@ The following skills are distributed as independent extensions. They are not ins
 codew extension install code-workspace-jira-prd-analysis --yes
 codew extension install code-workspace-jira-task-breakdown --yes
 codew extension install code-workspace-issue-fix-summary --yes
+codew extension install code-workspace-guangda-coding-spec --yes
 codew extension uninstall code-workspace-jira-prd-analysis --yes
 ```
 
 - `$code-workspace-jira-prd-analysis` — confirm Jira scope, then analyze requirement clarity, consistency, and code feasibility.
 - `$code-workspace-jira-task-breakdown` — split a confirmed Jira requirement into executable frontend, backend, and test tasks.
 - `$code-workspace-issue-fix-summary` — summarize a completed fix and, after confirmation, publish it as a Jira comment.
+- `$code-workspace-guangda-coding-spec` — apply research, security, testing, and release rules by risk area, only for China Everbright Bank customer projects.
 
-These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` extension separately when Jira access is required.
+These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` extension separately when the Jira-related skills require Jira access; the Guangda coding spec requires no MCP service.
 
 | Purpose | Codex | Claude Code |
 | --- | --- | --- |
@@ -116,3 +118,4 @@ These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` 
 | Analyze a Jira requirement | `$code-workspace-jira-prd-analysis` | `$code-workspace-jira-prd-analysis` |
 | Break down Jira tasks | `$code-workspace-jira-task-breakdown` | `$code-workspace-jira-task-breakdown` |
 | Summarize an issue fix | `$code-workspace-issue-fix-summary` | `$code-workspace-issue-fix-summary` |
+| Apply the Guangda coding spec | `$code-workspace-guangda-coding-spec` | `$code-workspace-guangda-coding-spec` |

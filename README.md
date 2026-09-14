@@ -59,6 +59,7 @@ codew extension install zhuiyi-opensvn-mcp --yes
 codew extension install code-workspace-jira-prd-analysis --yes
 codew extension install code-workspace-jira-task-breakdown --yes
 codew extension install code-workspace-issue-fix-summary --yes
+codew extension install code-workspace-guangda-coding-spec --yes
 codew extension uninstall zhuiyi-jira-mcp --yes
 codew extension uninstall code-workspace-jira-prd-analysis --yes
 ```
@@ -72,6 +73,8 @@ Users select names, not versions; `zhuiyi-jira-mcp@0.1.0` is intentionally rejec
 The bundled `zhuiyi-jira-mcp` and `zhuiyi-opensvn-mcp` extensions configure the Jira and OpenSVN MCP services for the selected Agent tools. They do not create an `openspec/` directory or install native OpenSpec commands.
 
 The bundled `code-workspace-jira-prd-analysis`, `code-workspace-jira-task-breakdown`, and `code-workspace-issue-fix-summary` extensions install optional Codex and Claude Code skill files. They are independent extensions, are not installed by core `init` or `update`, and can be uninstalled separately. Install `zhuiyi-jira-mcp` separately when they need Jira access.
+
+The bundled `code-workspace-guangda-coding-spec` extension installs a Codex and Claude Code skill that applies the China Everbright Bank research, security, testing, and release rules to Guangda customer projects. It is independent of core `init` and `update`, can be uninstalled separately, and requires no MCP service.
 
 The MCP runtime packages are not copied into the Workspace. Only their configuration is stored there; a launcher prepares and caches each package on demand in the user-level Extension Store.
 
