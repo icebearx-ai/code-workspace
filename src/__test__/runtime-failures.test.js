@@ -34,6 +34,16 @@ function prepareBaseline(root) {
   return desired;
 }
 
+function writeStaleReleaseState(root, mutate = () => {}) {
+  const stateFile = path.join(root, ".code-workspace", "state.json");
+  const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+  state.appliedReleaseVersion = `${loadInitManifest().releaseVersion}-stale`;
+  state.appliedManifestSha256 = "stale-manifest";
+  mutate(state);
+  fs.writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
+  return stateFile;
+}
+
 test("init restores tracked workspace state after every stable stage", async () => {
   const root = temporaryRoot();
   const baseline = prepareBaseline(root);
@@ -69,11 +79,7 @@ test("update restores config, state, and managed files after each apply stage", 
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".code-workspace", "state.json");
-  const previousReleaseState = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-  previousReleaseState.appliedReleaseVersion = "0.1.0-beta.10";
-  previousReleaseState.appliedManifestSha256 = "beta.10-manifest";
-  fs.writeFileSync(stateFile, `${JSON.stringify(previousReleaseState, null, 2)}\n`);
+  const stateFile = writeStaleReleaseState(root);
   const files = [
     path.join(root, ".code-workspace", "config.yaml"),
     stateFile,
@@ -201,14 +207,13 @@ test("update commits release metadata while preserving initialized workspace sta
   }];
   saveConfig(root, { ...config, projects: expectedProjects });
 
-  const stateFile = path.join(root, ".code-workspace", "state.json");
-  const previous = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-  const expectedManagedFiles = structuredClone(previous.managedFiles);
-  previous.appliedReleaseVersion = "0.1.0-beta.10";
-  delete previous.appliedManifestSha256;
-  previous.workspaceLanguage = "zh-CN";
-  previous.customState = { preserve: true };
-  fs.writeFileSync(stateFile, `${JSON.stringify(previous, null, 2)}\n`);
+  let expectedManagedFiles;
+  const stateFile = writeStaleReleaseState(root, (previous) => {
+    expectedManagedFiles = structuredClone(previous.managedFiles);
+    delete previous.appliedManifestSha256;
+    previous.workspaceLanguage = "zh-CN";
+    previous.customState = { preserve: true };
+  });
 
   const manifest = loadInitManifest();
   const result = updateWorkspace(root, { run: forbiddenRun });
@@ -240,11 +245,7 @@ test("update clears the release mismatch reported by doctor", async () => {
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".code-workspace", "state.json");
-  const previous = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-  previous.appliedReleaseVersion = "0.1.0-beta.10";
-  previous.appliedManifestSha256 = "beta.10-manifest";
-  fs.writeFileSync(stateFile, `${JSON.stringify(previous, null, 2)}\n`);
+  const stateFile = writeStaleReleaseState(root);
 
   const manifest = loadInitManifest();
   const before = doctorWorkspace(root, manifest, { run: forbiddenRun });
@@ -266,11 +267,9 @@ test("update never manufactures a healthy state and rejects missing initializati
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".code-workspace", "state.json");
-  const unhealthy = JSON.parse(fs.readFileSync(stateFile, "utf8"));
-  unhealthy.status = "needs-repair";
-  unhealthy.appliedReleaseVersion = "0.1.0-beta.10";
-  fs.writeFileSync(stateFile, `${JSON.stringify(unhealthy, null, 2)}\n`);
+  const stateFile = writeStaleReleaseState(root, (state) => {
+    state.status = "needs-repair";
+  });
 
   updateWorkspace(root, { run: forbiddenRun });
   const updated = JSON.parse(fs.readFileSync(stateFile, "utf8"));
