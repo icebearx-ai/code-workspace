@@ -1278,7 +1278,7 @@ test("multi-file skill extension installs references and the source archive, the
   const codexRoot = path.join(root, `.codex/skills/${id}`);
   const claudeRoot = path.join(root, `.claude/skills/${id}`);
   assert.match(fs.readFileSync(path.join(codexRoot, "SKILL.md"), "utf8"), /name: code-workspace-guangda-coding-spec/);
-  assert.match(fs.readFileSync(path.join(codexRoot, "agents", "openai.yaml"), "utf8"), /display_name: "光大研发规范"/);
+  assert.match(fs.readFileSync(path.join(codexRoot, "agents", "openai.yaml"), "utf8"), /display_name: "Code Workspace Guangda Coding Spec"/);
   assert.equal(fs.existsSync(path.join(claudeRoot, "agents")), false);
   for (const reference of GUANGDA_SKILL_REFERENCES) {
     assert.equal(fs.readFileSync(path.join(codexRoot, "references", reference), "utf8").length > 0, true, reference);

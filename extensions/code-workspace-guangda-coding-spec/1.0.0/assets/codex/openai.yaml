@@ -1,4 +1,4 @@
 interface:
-  display_name: "光大研发规范"
+  display_name: "Code Workspace Guangda Coding Spec"
   short_description: "在光大客户项目中按风险域加载并落实研发、安全、测试与投产规范"
   default_prompt: "使用 $code-workspace-guangda-coding-spec 分析并落实本次光大项目开发涉及的规范。"
