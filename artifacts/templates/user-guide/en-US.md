@@ -89,11 +89,25 @@ Add `--json` when a query result is consumed by Codex or a script.
 
 ## Workspace skills
 
+Installed by default during Workspace initialization:
+
 - `$code-workspace-add-projects` — inspect and register local Git projects with concise AI-generated navigation context.
 - `$code-workspace-resolve-branch` — safely resolve a selected project's branch mismatch and confirm branch alignment.
+
+The following skills are distributed as independent extensions. They are not installed by `init` or `update`; install or uninstall each one explicitly. The interactive extension picker starts with no extensions selected:
+
+```bash
+codew extension install code-workspace-jira-prd-analysis --yes
+codew extension install code-workspace-jira-task-breakdown --yes
+codew extension install code-workspace-issue-fix-summary --yes
+codew extension uninstall code-workspace-jira-prd-analysis --yes
+```
+
 - `$code-workspace-jira-prd-analysis` — confirm Jira scope, then analyze requirement clarity, consistency, and code feasibility.
 - `$code-workspace-jira-task-breakdown` — split a confirmed Jira requirement into executable frontend, backend, and test tasks.
 - `$code-workspace-issue-fix-summary` — summarize a completed fix and, after confirmation, publish it as a Jira comment.
+
+These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` extension separately when Jira access is required.
 
 | Purpose | Codex | Claude Code |
 | --- | --- | --- |

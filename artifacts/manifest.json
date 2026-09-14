@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "432a93d060e36994234075ffd4ce486c8e61285af987295c6fe6f31ae32d04e2"
+      "sha256": "c5caf1fd89f6eaaf82cbe9e2224381517a6d9268dc24930af48db23bba3130a6"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "49e37ea495fb179a7653568c3eab7643ed1db1a8a9c44b18a218bf6376af124c"
+      "sha256": "00338c10059257bcfa6a09fddef67138ecd9ee6dac67d64316b3f34c1c90f366"
     }
   ],
   "managedFiles": [
@@ -141,141 +141,6 @@
       "desired": {
         "source": "templates/codex/skills/code-workspace-add-projects/agents/openai.yaml",
         "sha256": "5aab2f33feb64c6d9d2da4125afebbd484cbd2cbb522d4faf47821ec2ef4d85a"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-jira-prd-analysis-skill",
-      "target": ".codex/skills/code-workspace-jira-prd-analysis/SKILL.md",
-      "tools": [
-        "codex"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/codex/skills/code-workspace-jira-prd-analysis/SKILL.md",
-        "sha256": "181b78497b16a986f09f584893cff082f6458d3f13c9141d98951b419437070c"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-jira-prd-analysis-openai",
-      "target": ".codex/skills/code-workspace-jira-prd-analysis/agents/openai.yaml",
-      "tools": [
-        "codex"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/codex/skills/code-workspace-jira-prd-analysis/agents/openai.yaml",
-        "sha256": "3e78824e6e2579882d5f52658a368228a49679d3a7ef8dbffbd744e31a5c04c1"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-jira-task-breakdown-skill",
-      "target": ".codex/skills/code-workspace-jira-task-breakdown/SKILL.md",
-      "tools": [
-        "codex"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/codex/skills/code-workspace-jira-task-breakdown/SKILL.md",
-        "sha256": "2c26708990bceac30b492e284107267bdf604c6e955e1a01a48f76c40c7a1c05"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-jira-task-breakdown-openai",
-      "target": ".codex/skills/code-workspace-jira-task-breakdown/agents/openai.yaml",
-      "tools": [
-        "codex"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/codex/skills/code-workspace-jira-task-breakdown/agents/openai.yaml",
-        "sha256": "8c0d49c7abfc906455804e718e4facaaccdec0dec41c53858bb05abe7ec0c154"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-claude-jira-prd-analysis-skill",
-      "target": ".claude/skills/code-workspace-jira-prd-analysis/SKILL.md",
-      "tools": [
-        "claude"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/agents/skills/code-workspace-jira-prd-analysis/SKILL.md",
-        "sha256": "181b78497b16a986f09f584893cff082f6458d3f13c9141d98951b419437070c"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-claude-jira-task-breakdown-skill",
-      "target": ".claude/skills/code-workspace-jira-task-breakdown/SKILL.md",
-      "tools": [
-        "claude"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/agents/skills/code-workspace-jira-task-breakdown/SKILL.md",
-        "sha256": "2c26708990bceac30b492e284107267bdf604c6e955e1a01a48f76c40c7a1c05"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-issue-fix-summary-skill",
-      "target": ".codex/skills/code-workspace-issue-fix-summary/SKILL.md",
-      "tools": [
-        "codex"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/codex/skills/code-workspace-issue-fix-summary/SKILL.md",
-        "sha256": "ae9eaeb3fc0082fa267886b719cad749045e16a55611a69cbb825b5c5bfa3991"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-issue-fix-summary-openai",
-      "target": ".codex/skills/code-workspace-issue-fix-summary/agents/openai.yaml",
-      "tools": [
-        "codex"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/codex/skills/code-workspace-issue-fix-summary/agents/openai.yaml",
-        "sha256": "7ee88216b35fb36c05e2f2fcc0a039b178e11b308a7f7920a7785f721d10e002"
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-claude-issue-fix-summary-skill",
-      "target": ".claude/skills/code-workspace-issue-fix-summary/SKILL.md",
-      "tools": [
-        "claude"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/agents/skills/code-workspace-issue-fix-summary/SKILL.md",
-        "sha256": "ae9eaeb3fc0082fa267886b719cad749045e16a55611a69cbb825b5c5bfa3991"
       },
       "provenance": {
         "kind": "template"

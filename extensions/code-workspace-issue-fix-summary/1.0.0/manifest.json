@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
+  "experimental": true,
+  "id": "code-workspace-issue-fix-summary",
+  "name": "Code Workspace Issue Fix Summary",
+  "version": "1.0.0",
+  "entry": "init.js",
+  "entrySha256": "8d7622828bc02af2990cff54235a091b5e2270830c400ae7a4de5828ccfe96ec",
+  "timeoutMs": 30000,
+  "capabilities": {},
+  "outputs": [
+    {
+      "id": "codex-skill",
+      "kind": "file",
+      "ownership": "exclusive",
+      "target": ".codex/skills/code-workspace-issue-fix-summary/SKILL.md",
+      "tools": ["codex"]
+    },
+    {
+      "id": "codex-openai",
+      "kind": "file",
+      "ownership": "exclusive",
+      "target": ".codex/skills/code-workspace-issue-fix-summary/agents/openai.yaml",
+      "tools": ["codex"]
+    },
+    {
+      "id": "claude-skill",
+      "kind": "file",
+      "ownership": "exclusive",
+      "target": ".claude/skills/code-workspace-issue-fix-summary/SKILL.md",
+      "tools": ["claude"]
+    }
+  ]
+}

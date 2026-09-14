@@ -89,11 +89,25 @@ codew project verify <project-name>
 
 ## Workspace Skills
 
+默认随 Workspace 初始化安装：
+
 - `$code-workspace-add-projects` — 检查并注册本地 Git 项目，同时生成供 AI 导航使用的简洁 context。
 - `$code-workspace-resolve-branch` — 安全解决选中项目的分支不一致问题，并确认分支对齐。
+
+以下 Skill 以独立扩展提供，不会随 `init` 或 `update` 自动安装。需要时按名称安装，也可以单独卸载；交互式扩展选择默认不勾选任何扩展：
+
+```bash
+codew extension install code-workspace-jira-prd-analysis --yes
+codew extension install code-workspace-jira-task-breakdown --yes
+codew extension install code-workspace-issue-fix-summary --yes
+codew extension uninstall code-workspace-jira-prd-analysis --yes
+```
+
 - `$code-workspace-jira-prd-analysis` — 在确认 Jira 范围后分析需求清晰度、一致性和代码可行性。
 - `$code-workspace-jira-task-breakdown` — 将已确认的 Jira 需求按前端、后端、测试拆分为可执行任务。
 - `$code-workspace-issue-fix-summary` — 总结已完成的问题修复，并在确认后发布到 Jira 评论。
+
+这些扩展只安装 Skill 指令。需要实际访问 Jira 时，还应安装 `zhuiyi-jira-mcp` 扩展。
 
 | 用途 | Codex | Claude Code |
 | --- | --- | --- |

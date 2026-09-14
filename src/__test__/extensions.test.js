@@ -140,6 +140,14 @@ function runCli(root, args) {
   return spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8" });
 }
 
+function skillExtensionTargets(id) {
+  return {
+    codexSkill: `.codex/skills/${id}/SKILL.md`,
+    codexOpenai: `.codex/skills/${id}/agents/openai.yaml`,
+    claudeSkill: `.claude/skills/${id}/SKILL.md`,
+  };
+}
+
 test("strict SemVer comparison is used only for extension version ordering", () => {
   assert.equal(compareSemver("1.0.0-beta.3", "1.0.0-beta.11"), -1);
   assert.equal(compareSemver("1.0.0", "1.0.0-rc.1"), 1);
@@ -1019,7 +1027,7 @@ test("interactive init offers extension names and confirms frozen versions and m
   });
   assert.equal(offered.label, "Extensions (experimental, select any)");
   assert.deepEqual(offered.choices.map((entry) => entry.value), ["example-extension"]);
-  assert.deepEqual(offered.initialValues, ["example-extension"]);
+  assert.deepEqual(offered.initialValues, []);
   assert.match(offered.choices[0].label, /latest supported: 1\.2\.3 · Extension Spec 1/);
   assert.equal(plan.extensions[0].version, "1.2.3");
   assert.match(readyLines.find((line) => line.startsWith("Extensions")), /[a-f0-9]{64}/);
@@ -1045,7 +1053,7 @@ test("interactive extension install lists built-ins and disables unsupported Ext
   } });
   assert.equal(intro, "Code Workspace extensions");
   assert.equal(offered.label, "Extensions (select any)");
-  assert.deepEqual(offered.initialValues, ["alpha"]);
+  assert.deepEqual(offered.initialValues, []);
   assert.deepEqual(offered.choices.map((entry) => entry.value), ["alpha", "beta"]);
   assert.match(offered.choices[0].label, /installed/);
   assert.equal(offered.choices[1].disabled, true);
@@ -1123,6 +1131,82 @@ test("standalone extension install is idempotent without rewriting core assets",
   assert.equal(fs.readFileSync(coreFile, "utf8"), coreBefore);
   const repeated = await executeExtensionInstall(invocation);
   assert.deepEqual(repeated.data.summary, { total: 1, succeeded: 0, skipped: 1, failed: 0 });
+});
+
+test("built-in skill extensions expose only tool-applicable file outputs", () => {
+  const ids = [
+    "code-workspace-issue-fix-summary",
+    "code-workspace-jira-prd-analysis",
+    "code-workspace-jira-task-breakdown",
+  ];
+  const catalog = discoverExtensions();
+  for (const id of ids) {
+    const entry = catalog.find((candidate) => candidate.id === id);
+    assert(entry, id);
+    assert.equal(entry.latestSupported.version, "1.0.0");
+
+    const targets = skillExtensionTargets(id);
+    const codex = resolveExtensionPlans(catalog, [id], { tools: ["codex"], state: emptyExtensionState() })[0];
+    assert.deepEqual(codex.artifacts.map((artifact) => artifact.target), [targets.codexSkill, targets.codexOpenai]);
+    assert.deepEqual(codex.capabilities.networkHosts, []);
+    assert.deepEqual(codex.hooks, []);
+
+    const claude = resolveExtensionPlans(catalog, [id], { tools: ["claude"], state: emptyExtensionState() })[0];
+    assert.deepEqual(claude.artifacts.map((artifact) => artifact.target), [targets.claudeSkill]);
+  }
+});
+
+test("built-in skill extensions install and uninstall independently", async () => {
+  const ids = [
+    "code-workspace-issue-fix-summary",
+    "code-workspace-jira-prd-analysis",
+    "code-workspace-jira-task-breakdown",
+  ];
+  const root = temporaryRoot();
+  const initialized = runCli(root, ["init", ".", "--tools", "codex,claude", "--extensions", "none", "--yes", "--json"]);
+  assert.equal(initialized.status, 0, initialized.stderr);
+  for (const id of ids) {
+    assert.equal(fs.existsSync(path.join(root, `.codex/skills/${id}`)), false);
+    assert.equal(fs.existsSync(path.join(root, `.claude/skills/${id}`)), false);
+  }
+
+  const extensionStoreRoot = temporaryRoot("code-workspace-skill-extension-store-");
+  const invocation = {
+    root,
+    args: ids,
+    options: { yes: true, json: true },
+    config: loadConfigProjection(root, ["identity", "language"]),
+    dependencies: { extensionStoreRoot, interactive: false },
+  };
+  const installed = await executeExtensionInstall(invocation);
+  assert.equal(installed.ok, true);
+  assert.deepEqual(installed.data.summary, { total: 3, succeeded: 3, skipped: 0, failed: 0 });
+  for (const id of ids) {
+    const targets = skillExtensionTargets(id);
+    for (const target of Object.values(targets)) assert.equal(fs.existsSync(path.join(root, target)), true, target);
+    assert.equal(loadExtensionState(root).extensions[id].installed.artifacts.length, 3);
+  }
+  assert.match(fs.readFileSync(path.join(root, skillExtensionTargets(ids[0]).codexSkill), "utf8"), /name: code-workspace-issue-fix-summary/);
+  assert.match(fs.readFileSync(path.join(root, skillExtensionTargets(ids[1]).claudeSkill), "utf8"), /name: code-workspace-jira-prd-analysis/);
+
+  const repeated = await executeExtensionInstall(invocation);
+  assert.equal(repeated.ok, true);
+  assert.deepEqual(repeated.data.summary, { total: 3, succeeded: 0, skipped: 3, failed: 0 });
+
+  const uninstallId = ids[0];
+  const plan = planExtensionUninstall(root, uninstallId);
+  assert.deepEqual(plan.targets, [
+    skillExtensionTargets(uninstallId).codexSkill,
+    skillExtensionTargets(uninstallId).codexOpenai,
+    skillExtensionTargets(uninstallId).claudeSkill,
+  ]);
+  const uninstalled = applyExtensionUninstall(plan, { extensionStoreRoot });
+  assert.equal(uninstalled.status, "uninstalled");
+  for (const target of Object.values(skillExtensionTargets(uninstallId))) assert.equal(fs.existsSync(path.join(root, target)), false, target);
+  for (const id of ids.slice(1)) {
+    for (const target of Object.values(skillExtensionTargets(id))) assert.equal(fs.existsSync(path.join(root, target)), true, target);
+  }
+  assert.equal(loadExtensionState(root).extensions[uninstallId], undefined);
 });
 
 test("standalone extension install preserves ordered best-effort results and fails when one extension fails", async () => {

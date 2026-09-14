@@ -1,5 +1,16 @@
 # Release Notes
 
+## Unreleased
+
+### BREAKING: Jira 与修复总结 Skill 迁移为独立扩展
+
+`code-workspace-jira-prd-analysis`、`code-workspace-jira-task-breakdown` 和 `code-workspace-issue-fix-summary` 不再属于核心 managed files，不再由 `codew init` 或 `codew update` 自动安装。
+
+- 三个 Skill 分别以同名内置扩展提供，支持 Codex 与 Claude Code 文件输出。
+- 使用 `codew extension install <name> --yes` 显式安装，使用 `codew extension uninstall <name> --yes` 独立卸载。
+- 扩展只安装 Skill 指令；需要实际访问 Jira 时，另行安装 `zhuiyi-jira-mcp`。
+- 这是 beta 阶段的破坏性调整，不提供旧 managed file 的自动迁移。已有测试 Workspace 应改用全新的 Workspace，或先手动删除旧的 `.codex/skills/<name>` 与 `.claude/skills/<name>` 目录，再安装对应扩展。
+
 ## 0.1.0-beta.9 (unreleased)
 
 ### BREAKING: Monitor 完全收敛为扩展包

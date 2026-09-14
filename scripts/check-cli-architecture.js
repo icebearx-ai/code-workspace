@@ -212,6 +212,7 @@ function validateDocumentedCommands(root, validateCommandReference) {
     ...collectMarkdownFiles(path.join(root, "README.md")),
     ...collectMarkdownFiles(path.join(root, "README.zh-CN.md")),
     ...collectMarkdownFiles(path.join(root, "artifacts", "templates")),
+    ...collectMarkdownFiles(path.join(root, "extensions")),
   ];
   let checked = 0;
   for (const file of files) {

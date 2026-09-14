@@ -47,7 +47,7 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 
 ### Experimental built-in extensions
 
-`init` can install integrations from the versioned `extensions/` repository shipped inside this npm package. Select extension names interactively, or pass a comma-separated name list non-interactively. The dedicated install command accepts one or more names; without names it opens the built-in extension multiselect, where ESC exits without changes:
+`init` can install integrations from the versioned `extensions/` repository shipped inside this npm package. Select extension names interactively, or pass a comma-separated name list non-interactively. The dedicated install command accepts one or more names; without names it opens the built-in extension multiselect with no extensions selected, where ESC exits without changes:
 
 ```bash
 codew init . --extensions zhuiyi-jira-mcp --yes
@@ -56,7 +56,11 @@ codew init . --extensions none --yes
 codew extension install
 codew extension install zhuiyi-jira-mcp --yes
 codew extension install zhuiyi-opensvn-mcp --yes
+codew extension install code-workspace-jira-prd-analysis --yes
+codew extension install code-workspace-jira-task-breakdown --yes
+codew extension install code-workspace-issue-fix-summary --yes
 codew extension uninstall zhuiyi-jira-mcp --yes
+codew extension uninstall code-workspace-jira-prd-analysis --yes
 ```
 
 The Workspace operation lock shared by init, extension install, and extension uninstall is configured in the Code Workspace project's `.env` (not in the target Workspace). `CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` defaults to `5000`, and `CODE_WORKSPACE_INIT_LOCK_STALE_MS` defaults to `30000`; process environment variables take precedence. See `.env.example` for the project configuration names.
@@ -66,6 +70,8 @@ Users select names, not versions; `zhuiyi-jira-mcp@0.1.0` is intentionally rejec
 `extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run.
 
 The bundled `zhuiyi-jira-mcp` and `zhuiyi-opensvn-mcp` extensions configure the Jira and OpenSVN MCP services for the selected Agent tools. They do not create an `openspec/` directory or install native OpenSpec commands.
+
+The bundled `code-workspace-jira-prd-analysis`, `code-workspace-jira-task-breakdown`, and `code-workspace-issue-fix-summary` extensions install optional Codex and Claude Code skill files. They are independent extensions, are not installed by core `init` or `update`, and can be uninstalled separately. Install `zhuiyi-jira-mcp` separately when they need Jira access.
 
 The MCP runtime packages are not copied into the Workspace. Only their configuration is stored there; a launcher prepares and caches each package on demand in the user-level Extension Store.
 

@@ -47,7 +47,7 @@ code-workspace init . \
 
 ### 试验性内置扩展
 
-`init` 可以从 npm 包内随附的版本化 `extensions/` 仓库安装集成。交互模式按扩展名多选；非交互模式传入逗号分隔的扩展名。独立安装命令接受一个或多个扩展名；不传名称时打开内置扩展多选，按 ESC 可无修改退出：
+`init` 可以从 npm 包内随附的版本化 `extensions/` 仓库安装集成。交互模式按扩展名多选；非交互模式传入逗号分隔的扩展名。独立安装命令接受一个或多个扩展名；不传名称时打开内置扩展多选，默认不勾选任何扩展，按 ESC 可无修改退出：
 
 ```bash
 codew init . --extensions zhuiyi-jira-mcp --yes
@@ -56,7 +56,11 @@ codew init . --extensions none --yes
 codew extension install
 codew extension install zhuiyi-jira-mcp --yes
 codew extension install zhuiyi-opensvn-mcp --yes
+codew extension install code-workspace-jira-prd-analysis --yes
+codew extension install code-workspace-jira-task-breakdown --yes
+codew extension install code-workspace-issue-fix-summary --yes
 codew extension uninstall zhuiyi-jira-mcp --yes
+codew extension uninstall code-workspace-jira-prd-analysis --yes
 ```
 
 `init`、扩展安装和扩展卸载共享的 Workspace 操作锁配置在 Code Workspace 项目自身的 `.env` 中（不在目标 Workspace 中）。`CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` 默认值为 `5000`，`CODE_WORKSPACE_INIT_LOCK_STALE_MS` 默认值为 `30000`；进程环境变量优先于 `.env`。配置项名称见 `.env.example`。
@@ -66,6 +70,8 @@ codew extension uninstall zhuiyi-jira-mcp --yes
 `extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。
 
 当前随包提供的内置扩展包括 `zhuiyi-jira-mcp` 和 `zhuiyi-opensvn-mcp`，分别用于为选中的 Agent 工具配置 Jira MCP 与 OpenSVN MCP 服务；它们不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
+
+随包还提供 `code-workspace-jira-prd-analysis`、`code-workspace-jira-task-breakdown` 和 `code-workspace-issue-fix-summary` 三个 Skill 扩展，用于安装可选的 Codex 与 Claude Code Skill 文件。它们不随核心 `init` 或 `update` 安装，可以独立安装和卸载；需要 Jira 访问时另行安装 `zhuiyi-jira-mcp`。
 
 两个 MCP 的运行包不会复制到 Workspace；Workspace 只保存 MCP 配置，运行包由用户级 Extension Store 中的 launcher 按需缓存。
 

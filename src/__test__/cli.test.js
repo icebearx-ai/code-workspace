@@ -84,21 +84,18 @@ test("init installs only workspace-owned integrations and does not create opensp
     ".codex/skills/code-workspace-add-projects/agents/openai.yaml",
     ".codex/skills/code-workspace-resolve-branch/SKILL.md",
     ".codex/skills/code-workspace-resolve-branch/agents/openai.yaml",
-    ".codex/skills/code-workspace-jira-prd-analysis/SKILL.md",
-    ".codex/skills/code-workspace-jira-prd-analysis/agents/openai.yaml",
-    ".codex/skills/code-workspace-jira-task-breakdown/SKILL.md",
-    ".codex/skills/code-workspace-jira-task-breakdown/agents/openai.yaml",
-    ".claude/skills/code-workspace-jira-prd-analysis/SKILL.md",
-    ".claude/skills/code-workspace-jira-task-breakdown/SKILL.md",
-    ".codex/skills/code-workspace-issue-fix-summary/SKILL.md",
-    ".codex/skills/code-workspace-issue-fix-summary/agents/openai.yaml",
-    ".claude/skills/code-workspace-issue-fix-summary/SKILL.md",
     "CLAUDE.md",
     "AGENTS.md",
     "USER_GUIDE.md",
   ];
   for (const file of expected) assert(fs.existsSync(path.join(root, file)), file);
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 19);
+  assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-jira-prd-analysis")));
+  assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-jira-task-breakdown")));
+  assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-issue-fix-summary")));
+  assert(!fs.existsSync(path.join(root, ".claude", "skills", "code-workspace-jira-prd-analysis")));
+  assert(!fs.existsSync(path.join(root, ".claude", "skills", "code-workspace-jira-task-breakdown")));
+  assert(!fs.existsSync(path.join(root, ".claude", "skills", "code-workspace-issue-fix-summary")));
+  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 10);
   assert.equal(output.workspace.language, "zh-CN");
   assert.match(fs.readFileSync(path.join(root, "USER_GUIDE.md"), "utf8"), /Code Workspace 用户指南/);
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
@@ -133,9 +130,6 @@ test("init installs only workspace-owned integrations and does not create opensp
   }
   const addProjectsSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-add-projects", "SKILL.md"), "utf8");
   const resolveBranchSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-resolve-branch", "SKILL.md"), "utf8");
-  const jiraPrdSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-jira-prd-analysis", "SKILL.md"), "utf8");
-  const jiraBreakdownSkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-jira-task-breakdown", "SKILL.md"), "utf8");
-  const issueFixSummarySkill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-issue-fix-summary", "SKILL.md"), "utf8");
   const addProjectsCommand = fs.readFileSync(path.join(root, ".claude", "commands", "code-workspace", "add-projects.md"), "utf8");
   assert.match(addProjectsSkill, /project inspect "\$path" --json/);
   assert.match(addProjectsSkill, /project add --stdin --yes --json/);
@@ -150,15 +144,6 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(addProjectsSkill, /standard envelope fields `schemaVersion`, `ok`, `command`, `data`, and `diagnostics`/);
   assert.doesNotMatch(addProjectsSkill, /For `zh-CN`|For `en-US`/);
   assert.doesNotMatch(addProjectsSkill, /--projects-file|temporary JSON document/);
-  assert.match(jiraPrdSkill, /name: code-workspace-jira-prd-analysis/);
-  assert.match(jiraPrdSkill, /确认本次范围/);
-  assert.match(jiraPrdSkill, /结合代码分析可行性/);
-  assert.match(jiraBreakdownSkill, /name: code-workspace-jira-task-breakdown/);
-  assert.match(jiraBreakdownSkill, /只处理用户明确调用/);
-  assert.match(jiraBreakdownSkill, /工作量/);
-  assert.match(issueFixSummarySkill, /name: code-workspace-issue-fix-summary/);
-  assert.match(issueFixSummarySkill, /只有经过明确确认/);
-  assert.match(issueFixSummarySkill, /Jira 写入是外部副作用/);
   assert.match(resolveBranchSkill, /project branch inspect "<project-a>" "<project-b>" --json/);
   assert.match(resolveBranchSkill, /project branch use-registered "<project-a>" "<project-b>" --allow-remote --yes --json/);
   assert.match(resolveBranchSkill, /project branch accept-actual "<project-a>" "<project-b>" --yes --json/);
@@ -389,7 +374,7 @@ test("init installs Codex monitor hooks through the monitor extension", () => {
   assert.equal(output.extensions.requested.includes("monitor"), true);
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").status, "installed");
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").version, "1.1.0");
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 12);
+  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 6);
 
   const repeated = run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
