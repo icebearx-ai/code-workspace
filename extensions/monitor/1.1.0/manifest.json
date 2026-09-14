@@ -6,7 +6,7 @@
   "name": "Code Workspace Monitor",
   "version": "1.1.0",
   "entry": "init.js",
-  "entrySha256": "b80b9b88aa25b523433a63983e8c74883c18153a95e14302c4c0af3709770ab1",
+  "entrySha256": "7e318d7a7331859c0a49b9759aad9a221076cd2f69d8c2f6e4df0474afdfd7e4",
   "timeoutMs": 120000,
   "capabilities": {},
   "outputs": [
@@ -14,7 +14,7 @@
       "id": "reporting-config",
       "kind": "file",
       "ownership": "seeded",
-      "target": ".code-workspace/monitor-reporting.json"
+      "target": ".code-workspace/config-monitor.yaml"
     }
   ],
   "hooks": [

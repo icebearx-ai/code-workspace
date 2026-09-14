@@ -11,7 +11,7 @@
 - **`codew monitor` / `codew monitor report` 已删除**，无过渡别名。Hook 上报的唯一入口改为 `codew ext monitor report`，经通用 `ext` 命令路由；保持 failure-open——服务不可用、制品缺失或 POST 失败时退出码恒为 0，绝不阻塞 Agent 工具。
 - **workspace config 的 `monitor` 配置域已删除**（`monitor.enable` / `monitor.url`），以及 `--monitor` / `--no-monitor` / `--monitor-url` init 参数。存量配置中的 `monitor:` 键在读取时被剥离，下次保存时自然移除。
 - **init 的 "Enable Codex Agent monitor?" 交互步骤已取消**，Codex 工具的 Monitor 自动激活一并移除。监控只能通过 `--extensions monitor` 或交互式扩展多选显式安装。
-- **Monitor 配置改为扩展自有制品** `.code-workspace/monitor-reporting.json`（默认值，Host 按 exclusive output 管理），不再进入核心 config schema。
+- **Monitor 配置改为扩展自有制品** `.code-workspace/config-monitor.yaml`（默认值，Host 按 exclusive output 管理），不再进入核心 config schema。
 
 #### 升级前置条件
 

@@ -39,7 +39,7 @@ test("two Workspaces can activate Monitor against one Store package and uninstal
   assert.equal(listPackageReferences(store)[0].references.workspaces.length, 2);
   const uninstall = applyExtensionUninstall(planExtensionUninstall(a, "monitor"), { extensionStoreRoot: store });
   assert.equal(uninstall.status, "uninstalled");
-  assert.equal(fs.existsSync(path.join(b, ".code-workspace", "monitor-reporting.json")), true);
+  assert.equal(fs.existsSync(path.join(b, ".code-workspace", "config-monitor.yaml")), true);
   assert.equal(listPackageReferences(store)[0].references.workspaces.length, 1);
 });
 

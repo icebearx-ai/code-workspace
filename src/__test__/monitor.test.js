@@ -15,6 +15,7 @@ const {
 } = require("../../extensions/monitor/1.1.0/monitor");
 const { renderMonitorPage } = require("../../extensions/monitor/1.1.0/page");
 const { DEFAULT_MONITOR_LANGUAGE, MONITOR_LOCALES, MONITOR_MESSAGES } = require("../../extensions/monitor/1.1.0/i18n");
+const { dumpYaml, loadYaml, loadYamlFile } = require("../../extensions/monitor/1.1.0/config-yaml");
 
 function leafKeys(value, prefix = "") {
   return Object.entries(value).flatMap(([key, entry]) => {
@@ -327,8 +328,39 @@ test("reporting config is discovered from the extension-owned workspace artifact
   };
   const project = path.join(os.tmpdir(), `monitor-reporting-${process.pid}-${Date.now()}`);
   fs.mkdirSync(path.join(project, ".code-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(project, ".code-workspace", "monitor-reporting.json"), JSON.stringify(reporting));
-  assert(findReportingConfig(project).endsWith(path.join(".code-workspace", "monitor-reporting.json")));
+  fs.writeFileSync(path.join(project, ".code-workspace", "config-monitor.yaml"), dumpYaml(reporting));
+  assert(findReportingConfig(project).endsWith(path.join(".code-workspace", "config-monitor.yaml")));
   assert.deepEqual(loadReportingConfig(project), reporting);
   assert.equal(loadReportingConfig(os.tmpdir()), null);
+});
+
+test("monitor YAML codec round-trips the supported configuration shape", () => {
+  const value = {
+    schemaVersion: 1,
+    enable: false,
+    url: "http://127.0.0.1:3211/api#events",
+    workspace: { name: "支付\n服务", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "zh-CN" },
+    service: { id: "monitor", compatibilityGroup: "v1" },
+  };
+  const encoded = dumpYaml(value);
+  assert.match(encoded, /^schemaVersion: 1\nenable: false\n/);
+  assert.doesNotMatch(encoded, /^\{/);
+  assert.deepEqual(loadYaml(encoded), value);
+});
+
+test("monitor YAML codec preserves scalar types and reads files", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "monitor-yaml-"));
+  const file = path.join(directory, "config-monitor.yaml");
+  const encoded = "# monitor config\nnumber: -12.5\nempty: null\nquoted: 'true'\nflag: true\n\n";
+  fs.writeFileSync(file, encoded);
+  assert.deepEqual(loadYamlFile(file), { number: -12.5, empty: null, quoted: "true", flag: true });
+});
+
+test("monitor YAML codec rejects unsupported or ambiguous input", () => {
+  assert.throws(() => dumpYaml([]), /must be a mapping/);
+  assert.throws(() => loadYaml("root:\n    child: true\n"), /indentation/);
+  assert.throws(() => loadYaml("root: true\n  child: false\n"), /indentation/);
+  assert.throws(() => loadYaml("root: true\nroot: false\n"), /Duplicate YAML key/);
+  assert.throws(() => loadYaml("root:\n\tchild: true\n"), /indentation/);
+  assert.throws(() => loadYaml("- unsupported\n"), /mapping/);
 });

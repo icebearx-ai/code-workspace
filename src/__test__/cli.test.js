@@ -364,7 +364,7 @@ test("init installs Codex monitor hooks through the monitor extension", () => {
   assert.equal(output.workspace.name, "payments");
   assert(fs.existsSync(path.join(root, ".codex", "hooks.json")));
   assert.match(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"), /codew ext monitor report/);
-  assert(fs.existsSync(path.join(root, ".code-workspace", "monitor-reporting.json")));
+  assert(fs.existsSync(path.join(root, ".code-workspace", "config-monitor.yaml")));
   assert.equal(output.extensions.requested.includes("monitor"), true);
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").status, "installed");
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").version, "1.1.0");

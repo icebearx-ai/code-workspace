@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { dumpYaml } = require("./config-yaml");
 
 function option(name) {
   const index = process.argv.indexOf(name);
@@ -23,8 +24,8 @@ function main() {
     workspace: context.workspace,
     service: { id: "monitor", compatibilityGroup: "v1" },
   };
-  const source = "monitor-reporting.json";
-  fs.writeFileSync(path.join(outputRoot, source), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+  const source = "config-monitor.yaml";
+  fs.writeFileSync(path.join(outputRoot, source), dumpYaml(config), { mode: 0o600 });
   const outputs = [{ id: "reporting-config", source }];
   fs.writeFileSync(resultFile, `${JSON.stringify({
     schemaVersion: 1,

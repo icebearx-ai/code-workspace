@@ -3,6 +3,7 @@ const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { renderMonitorPage } = require("./page");
+const { loadYamlFile } = require("./config-yaml");
 
 const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 3211;
@@ -335,7 +336,7 @@ async function reportHookEvent(input, reporting, options = {}) {
 function findReportingConfig(startDirectory) {
   let directory = path.resolve(startDirectory);
   for (;;) {
-    const candidate = path.join(directory, ".code-workspace", "monitor-reporting.json");
+    const candidate = path.join(directory, ".code-workspace", "config-monitor.yaml");
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(directory);
     if (parent === directory) return null;
@@ -347,7 +348,7 @@ function loadReportingConfig(startDirectory) {
   const file = findReportingConfig(startDirectory);
   if (!file) return null;
   try {
-    const value = JSON.parse(fs.readFileSync(file, "utf8"));
+    const value = loadYamlFile(file);
     if (value?.schemaVersion !== 1 || !value?.workspace?.uuid || typeof value.url !== "string") return null;
     return value;
   } catch {
