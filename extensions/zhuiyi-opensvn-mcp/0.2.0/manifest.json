@@ -4,20 +4,14 @@
   "experimental": true,
   "id": "zhuiyi-opensvn-mcp",
   "name": "Zhuiyi OpenSVN MCP",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "entry": "init.js",
-  "entrySha256": "8ccd9af7c34f2431616c61693d68a9f0fea2f283348a0f921d0a75e7b043f4f4",
+  "entrySha256": "9c9de6629fbe61372a433ab7c1ccb7318c5e692a374741d24ae0d94495fe5f48",
   "timeoutMs": 120000,
   "capabilities": {
     "networkHosts": ["gitee.com", "raw.giteeusercontent.com"]
   },
   "outputs": [
-    {
-      "id": "runtime",
-      "kind": "directory",
-      "ownership": "exclusive",
-      "target": ".code-workspace/extensions/zhuiyi-opensvn-mcp/0.1.0"
-    },
     {
       "id": "gitignore",
       "kind": "text-block",

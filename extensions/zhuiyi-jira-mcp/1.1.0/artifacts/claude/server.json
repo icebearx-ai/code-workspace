@@ -1,0 +1,21 @@
+{
+  "command": "node",
+  "args": [
+    __CODE_WORKSPACE_MCP_LAUNCHER__
+  ],
+  "env": {
+    "JIRA_AUTH_TYPE": "cookie",
+    "JIRA_COOKIE": "",
+    "JIRA_API_VERSION": "latest",
+    "JIRA_ALLOWED_HOSTS": "jira.in.wezhuiyi.com",
+    "JIRA_CUSTOM_FIELD_MAPPING": "{\"acceptanceCriteria\":\"customfield_10042\",\"storyPoints\":\"customfield_10016\"}",
+    "JIRA_SUBTASK_ISSUE_TYPE_ID": "10202",
+    "JIRA_CACHE_DIR": ".mcp-cache-jira",
+    "JIRA_CACHE_TTL": "15m",
+    "JIRA_CACHE_MAX_SNAPSHOTS": "10",
+    "JIRA_CACHE_STALE_IF_ERROR": "true",
+    "JIRA_REQUEST_TIMEOUT": "30s",
+    "JIRA_ATTACHMENT_MAX_SIZE": "20MB",
+    "JIRA_ATTACHMENT_ALLOWED_TYPES": "pdf,png,jpg,jpeg,gif,webp,txt,md,csv,json,xml,doc,docx,xls,xlsx,ppt,pptx,html"
+  }
+}

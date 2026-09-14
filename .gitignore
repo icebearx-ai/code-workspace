@@ -9,6 +9,9 @@ coverage
 # Zhuiyi Jira MCP attachments
 /.jira-attachments/
 
+# Zhuiyi OpenSVN MCP cache
+/.mcp-cache-opensvn/
+
 # 本机 Codex 配置
 /.codex/config.toml
 

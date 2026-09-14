@@ -1,0 +1,6 @@
+interface:
+  display_name: "Code Workspace Resolve Branches"
+  short_description: "解决分支不匹配问题(被动触发)"
+  default_prompt: "Use $code-workspace-resolve-branch to reconcile the selected projects' branch mismatch."
+policy:
+  allow_implicit_invocation: false

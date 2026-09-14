@@ -2,22 +2,16 @@
   "schemaVersion": 3,
   "extensionSpecVersion": 1,
   "experimental": true,
-  "id": "zhuiyi-opensvn-mcp",
-  "name": "Zhuiyi OpenSVN MCP",
-  "version": "0.1.0",
+  "id": "zhuiyi-jira-mcp",
+  "name": "Zhuiyi Jira MCP",
+  "version": "1.1.0",
   "entry": "init.js",
-  "entrySha256": "8ccd9af7c34f2431616c61693d68a9f0fea2f283348a0f921d0a75e7b043f4f4",
+  "entrySha256": "dd385601d83e9b2f64b100ac4c12229f626a4781d683e3f47f2120b2f29f334c",
   "timeoutMs": 120000,
   "capabilities": {
     "networkHosts": ["gitee.com", "raw.giteeusercontent.com"]
   },
   "outputs": [
-    {
-      "id": "runtime",
-      "kind": "directory",
-      "ownership": "exclusive",
-      "target": ".code-workspace/extensions/zhuiyi-opensvn-mcp/0.1.0"
-    },
     {
       "id": "gitignore",
       "kind": "text-block",
@@ -38,7 +32,7 @@
       "kind": "json-member",
       "ownership": "shared",
       "target": ".mcp.json",
-      "selector": "/mcpServers/zhuiyi-opensvn",
+      "selector": "/mcpServers/zhuiyi-jira",
       "tools": ["claude"]
     }
   ]

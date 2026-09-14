@@ -193,7 +193,7 @@ installed manifest 是 Host 持久化的最终安装事实，保存在 Workspace
 
 ### 6.3 独占目录
 
-一个扩展独占一个 Workspace 相对目录目标。它用于安装包含多个文件的运行时，例如预构建的 Jira MCP 包。
+一个扩展可以独占一个 Workspace 相对目录目标。它适用于确实属于 Workspace 的多文件运行时；MCP 包不再使用此制品类型。
 
 Host 将目录视为一个制品，使用规范化目录摘要检测漂移，并通过 staging、备份和 rename 完成可恢复提交。目录摘要算法必须固定路径规则、排序、文件类型和文件内容计算方式。
 
@@ -243,7 +243,7 @@ Host 负责：
   "schemaVersion": 3,
   "extensionSpecVersion": 1,
   "id": "zhuiyi-jira-mcp",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "entry": "init.js",
   "entrySha256": "<sha256>",
   "timeoutMs": 120000,
@@ -251,12 +251,6 @@ Host 负责：
     "networkHosts": ["gitee.com", "raw.giteeusercontent.com"]
   },
   "outputs": [
-    {
-      "id": "runtime",
-      "kind": "directory",
-      "ownership": "exclusive",
-      "target": ".code-workspace/extensions/zhuiyi-jira-mcp/0.1.0"
-    },
     {
       "id": "codex-config",
       "kind": "text-block",
@@ -423,8 +417,8 @@ installed manifest、日志和诊断不得记录 Cookie、Token 或其他真实�
 
 当前基础实现已经移除 Host 中曾经草拟的下载归档和 Claude MCP 专用输出分支，按以下边界实现：
 
-- Jira 扩展的 `init.js` 自行完成下载、固定 SHA-256 校验、安全解压和包结构校验。
-- Host 只接收并提交初始化后产生的独占目录。
+- Jira 和 OpenSVN MCP 扩展的 `init.js` 只生成配置与忽略规则；MCP 包由扩展 Store 中的 launcher 按需准备，不写入 Workspace。
+- Host 只接收并提交共享配置制品；Workspace activation 不包含 MCP 源码目录。
 - Claude MCP 配置使用共享 JSON 成员能力，不在核心中保留 MCP server 专用类型。
 - Codex 配置使用共享文本块能力，不在协议中包含 Jira 字段。
 - 目录摘要、目录事务、状态回滚、共享内容重建和卸载验证等通用能力继续由 Host 管理并复用。
@@ -445,6 +439,6 @@ installed manifest、日志和诊断不得记录 Cookie、Token 或其他真实�
 9. 升级能同时处理保留、新增、替换和移除的输出，并在失败时恢复旧状态。
 10. 卸载不执行扩展代码，并保留用户、核心、其他扩展和运行期用户数据。
 11. 本地未知修改不会被静默覆盖或删除。
-12. Jira MCP 下载、解压和包校验逻辑全部位于 Jira 扩展内部，核心代码和公共 schema 不出现 Jira、MCP、npm、tar.gz 或下载 URL 等领域字段。
+12. MCP 下载、解压和包校验逻辑全部位于对应扩展内部，核心代码和公共 schema 不出现具体 MCP 业务字段。
 
 满足这些条件后，基础版才形成从声明、执行、验证、提交、状态到卸载的完整闭环。

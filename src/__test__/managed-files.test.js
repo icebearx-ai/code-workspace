@@ -23,13 +23,13 @@ test("workspace-owned templates use one idempotent managed-file mechanism", () =
   const root = baseline();
   const manifest = loadInitManifest();
   const first = installManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(first.length, 8);
-  assert.equal(first.filter((entry) => entry.action === "write").length, 8);
+  assert.equal(first.length, 10);
+  assert.equal(first.filter((entry) => entry.action === "write").length, 10);
 
   const second = installManagedFiles(root, manifest, ["claude", "codex"]);
   assert.equal(second.filter((entry) => entry.action === "write").length, 0);
   const inspected = inspectManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(inspected.current.length, 8);
+  assert.equal(inspected.current.length, 10);
   assert.deepEqual(inspected.managedOld, []);
   assert.deepEqual(inspected.replaceable, []);
   assert.deepEqual(inspected.unknown, []);
@@ -82,12 +82,14 @@ test("managed files respect selected tools while the user guide remains tool-neu
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const result = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(result.length, 4);
+  assert.equal(result.length, 6);
   assert(!result.some((entry) => entry.target.startsWith(".claude/")));
   assert(!result.some((entry) => entry.target === "CLAUDE.md"));
   assert(result.some((entry) => entry.target === "AGENTS.md"));
   assert(!result.some((entry) => entry.target === "AGENT.md"));
   assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-resolve-branch/SKILL.md"));
+  assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-add-projects/agents/openai.yaml"));
+  assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-resolve-branch/agents/openai.yaml"));
   assert(result.some((entry) => entry.target === "USER_GUIDE.md"));
   assert(!result.some((entry) => entry.target === "USER_GUIDE.zh-CN.md"));
   assert(!result.some((entry) => entry.target.startsWith("openspec/")));
@@ -156,9 +158,9 @@ test("core managed files no longer own Monitor hooks", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const disabled = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(disabled.length, 4);
+  assert.equal(disabled.length, 6);
   assert(!fs.existsSync(path.join(root, ".codex", "hooks.json")));
-  assert.equal(installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] }).length, 4);
+  assert.equal(installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] }).length, 6);
 });
 
 test("one canonical template renders both workspace instructions with platform-specific add commands", () => {

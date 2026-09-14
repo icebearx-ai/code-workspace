@@ -22,7 +22,7 @@ test("init manifest describes only workspace-owned assets", () => {
   assert.equal(manifest.releaseVersion, packageJson.version);
   assert.deepEqual(manifest.tools, ["claude", "codex"]);
   assert.equal(manifest.sources.length, 2);
-  assert.equal(manifest.managedFiles.length, 8);
+  assert.equal(manifest.managedFiles.length, 10);
   assert(manifest.sources.every((entry) => entry.kind === "asset"));
   assert(manifest.managedFiles.every((entry) => entry.desired.sha256.length === 64));
   assert.equal(manifest.resources, undefined);

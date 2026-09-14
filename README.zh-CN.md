@@ -67,6 +67,8 @@ codew extension uninstall zhuiyi-jira-mcp --yes
 
 当前随包提供的内置扩展包括 `zhuiyi-jira-mcp` 和 `zhuiyi-opensvn-mcp`，分别用于为选中的 Agent 工具配置 Jira MCP 与 OpenSVN MCP 服务；它们不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
 
+两个 MCP 的运行包不会复制到 Workspace；Workspace 只保存 MCP 配置，运行包由用户级 Extension Store 中的 launcher 按需缓存。
+
 `zhuiyi-opensvn-mcp` 使用 `opssvn.in.wezhuiyi.com` 访问 OpenSVN 静态资源。内置配置将 `SVN_OUTPUT_DIR` 设为 `.mcp-cache-opensvn`，运行时必须提供 `SVN_AUTHORIZATION`，`SVN_MAX_RESOURCES` 默认为 `200`；认证信息不会写入扩展包，应通过本地配置或运行环境注入。
 
 扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.code-workspace/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
