@@ -26,7 +26,7 @@ Supported classifications are:
 workspace: none | optional | required | target
 interaction: never | optional | required
 effects: read-only | planned-write | external
-config: identity | language | monitor | projects | complete
+config: identity | language | projects | complete
 ```
 
 Use `complete` only when a command genuinely requires every configuration domain.

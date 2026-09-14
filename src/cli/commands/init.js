@@ -90,8 +90,6 @@ async function executeInitUnlocked(invocation, root) {
         tools: options.tools !== undefined ? resolvedTools.tools : undefined,
         initialTools: resolvedTools.tools,
         workspaceName: options["workspace-name"],
-        monitor: options.monitor === true ? true : options["no-monitor"] === true ? false : undefined,
-        monitorUrl: options["monitor-url"],
         language: options.language,
         extensionCatalog,
         extensionState,
@@ -119,8 +117,6 @@ async function executeInitUnlocked(invocation, root) {
     yes: plan ? true : options.yes === true,
     workspaceName: plan?.workspace.name || options["workspace-name"],
     workspaceUuid: plan?.workspace.uuid,
-    monitor: plan?.monitor.enable ?? (options.monitor === true ? true : options["no-monitor"] === true ? false : undefined),
-    monitorUrl: plan?.monitor.url || options["monitor-url"],
     language: plan?.language || options.language,
     interactive: false,
     initPlan: plan,
@@ -136,7 +132,6 @@ async function executeInitUnlocked(invocation, root) {
       language: result.language,
     },
     tools,
-    ...(extension.id === "monitor" ? { settings: { monitor: result.workspaceConfig.monitor } } : {}),
   }), {
     requested: requestedExtensions,
     preFailures: extensionPreparation.failures,
@@ -176,7 +171,6 @@ async function executeInitUnlocked(invocation, root) {
     managedFiles: result.managedFiles,
     localConfig: result.localConfig,
     workspace: result.workspaceConfig.workspace,
-    monitor: result.workspaceConfig.monitor,
     language: result.language,
     tools: toolSelection,
     migration: migrationData(result.migration),
@@ -193,9 +187,6 @@ async function executeInitUnlocked(invocation, root) {
     `Tools: ${tools.length ? tools.join(", ") : "none"} (${toolSelection.source})`,
     `Extensions: ${extensionResult.summary.installed} installed, ${extensionResult.summary.skipped} skipped, ${extensionResult.summary.failed} failed`,
   ];
-  if (result.workspaceConfig.monitor.enable) {
-    lines.push(`Codex monitoring reports to ${result.workspaceConfig.monitor.url}. Review and trust the project hooks with \`/hooks\` in Codex.`);
-  }
   if (result.localConfig.action === "write" || result.permissions.action === "skip") {
     lines.push(tools.length > 0
       ? "Add local projects with the `code-workspace-add-projects` skill."

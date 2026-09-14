@@ -20,8 +20,8 @@ const { createFileTransaction } = require("../../core/transaction");
 const { success } = require("../result");
 const { migrationData } = require("./init");
 
-function verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables) {
-  const inspection = inspectManagedFiles(root, manifest, tools, capabilities, variables);
+function verifyUpdatedManagedFiles(root, manifest, tools, variables) {
+  const inspection = inspectManagedFiles(root, manifest, tools, variables);
   const incomplete = [
     ...inspection.managedOld.map((target) => ({ target, state: "managed-old" })),
     ...inspection.replaceable.map((target) => ({ target, state: "replaceable" })),
@@ -62,14 +62,12 @@ function updateWorkspace(root, options = {}) {
   const language = migration.language.value;
   const config = loadConfig(root, { defaultLanguage: language });
   const nextConfig = { ...config, workspace: { ...config.workspace, language } };
-  const capabilities = nextConfig.monitor.enable ? ["monitor"] : [];
   const variables = { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) };
   let managedPlan;
   let obsoletePlan;
   try {
     managedPlan = planManagedFiles(root, manifest, tools, {
       force: options.force === true,
-      capabilities,
       variables,
     });
     obsoletePlan = planObsoleteAssets(root, tools, { force: options.force === true });
@@ -93,13 +91,12 @@ function updateWorkspace(root, options = {}) {
     options.injectFailure?.("after-obsolete-cleanup", obsoleteFiles);
     const managedFiles = installManagedFiles(root, manifest, tools, {
       force: options.force === true,
-      capabilities,
       variables,
     });
     options.injectFailure?.("after-managed-install", managedFiles);
     saveConfig(root, nextConfig);
     options.injectFailure?.("after-config-save", nextConfig);
-    verifyUpdatedManagedFiles(root, manifest, tools, capabilities, variables);
+    verifyUpdatedManagedFiles(root, manifest, tools, variables);
     const result = {
       language,
       tools: toolSelection,

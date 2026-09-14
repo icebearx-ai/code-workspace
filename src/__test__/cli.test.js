@@ -15,11 +15,11 @@ function temporaryRoot() {
 }
 
 function run(cwd, args) {
-  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8" });
+  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", env: { ...process.env, CODE_WORKSPACE_EXTENSION_STORE: path.join(cwd, ".extension-store-test") } });
 }
 
 function runWithInput(cwd, args, input) {
-  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", input });
+  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", input, env: { ...process.env, CODE_WORKSPACE_EXTENSION_STORE: path.join(cwd, ".extension-store-test") } });
 }
 
 function jsonData(result) {
@@ -70,8 +70,8 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert(fs.existsSync(path.join(root, ".code-workspace", "config.yaml")));
   assert.equal(output.workspace.name, "code-workspace");
   assert.match(output.workspace.uuid, /^[0-9a-f-]{36}$/);
-  assert.deepEqual(output.monitor, { enable: true, url: "http://127.0.0.1:3211" });
-  assert(fs.existsSync(path.join(root, ".codex", "hooks.json")));
+  assert.equal(output.monitor, undefined);
+  assert.equal(fs.existsSync(path.join(root, ".codex", "hooks.json")), false);
   const mainConfig = loadWorkspaceYaml(root);
   assert.deepEqual(mainConfig.projects, { ref: "config-projects.yaml" });
   assert.deepEqual(loadProjectYaml(root), { schemaVersion: 1, projects: [] });
@@ -82,13 +82,12 @@ test("init installs only workspace-owned integrations and does not create opensp
     ".claude/skills/code-workspace-resolve-branch/SKILL.md",
     ".codex/skills/code-workspace-add-projects/SKILL.md",
     ".codex/skills/code-workspace-resolve-branch/SKILL.md",
-    ".codex/hooks.json",
     "CLAUDE.md",
     "AGENTS.md",
     "USER_GUIDE.md",
   ];
   for (const file of expected) assert(fs.existsSync(path.join(root, file)), file);
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 9);
+  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 8);
   assert.equal(output.workspace.language, "zh-CN");
   assert.match(fs.readFileSync(path.join(root, "USER_GUIDE.md"), "utf8"), /Code Workspace 用户指南/);
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
@@ -352,22 +351,24 @@ test("update and doctor preserve the workspace tool selection when --tools is om
   assert.deepEqual(jsonData(doctor).tools, { tools: ["codex"], source: "workspace-state" });
 });
 
-test("init optionally installs Codex monitor hooks with a named workspace", () => {
+test("init installs Codex monitor hooks through the monitor extension", () => {
   const root = temporaryRoot();
   const result = run(root, [
-    "init", ".", "--tools", "codex", "--monitor",
-    "--monitor-url", "http://127.0.0.1:8080",
+    "init", ".", "--tools", "codex", "--extensions", "monitor",
     "--workspace-name", "payments", "--yes", "--json",
   ]);
   assert.equal(result.status, 0, result.stderr);
   const output = jsonData(result);
   assert.equal(output.workspace.name, "payments");
-  assert.equal(output.monitor.enable, true);
-  assert.equal(output.monitor.url, "http://127.0.0.1:8080");
   assert(fs.existsSync(path.join(root, ".codex", "hooks.json")));
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 5);
+  assert.match(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"), /codew ext monitor report/);
+  assert(fs.existsSync(path.join(root, ".code-workspace", "monitor-reporting.json")));
+  assert.equal(output.extensions.requested.includes("monitor"), true);
+  assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").status, "installed");
+  assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").version, "1.1.0");
+  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 4);
 
-  const repeated = run(root, ["init", ".", "--tools", "codex", "--monitor", "--yes", "--json"]);
+  const repeated = run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
   const next = jsonData(repeated);
   assert.deepEqual(next.workspace, output.workspace);

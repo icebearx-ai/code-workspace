@@ -155,9 +155,6 @@ function loadManagedManifest(file = MANIFEST_FILE) {
     for (const tool of entry.tools || []) {
       if (!["claude", "codex"].includes(tool)) throw new Error(`Unsupported managed file tool: ${tool}`);
     }
-    for (const capability of entry.capabilities || []) {
-      if (capability !== "monitor") throw new Error(`Unsupported managed file capability: ${capability}`);
-    }
     if (entry.render) {
       if (!Array.isArray(entry.render.variables) || entry.render.variables.length === 0) {
         throw new Error(`Invalid managed file render definition: ${entry.id}`);
@@ -182,12 +179,10 @@ function loadManagedManifest(file = MANIFEST_FILE) {
   return manifest;
 }
 
-function selectedManagedFiles(manifest, tools, capabilities = []) {
+function selectedManagedFiles(manifest, tools) {
   const selected = new Set(tools || []);
-  const enabledCapabilities = new Set(capabilities || []);
   return manifest.managedFiles.filter((entry) =>
-    (!entry.tools?.length || entry.tools.some((tool) => selected.has(tool))) &&
-    (!entry.capabilities?.length || entry.capabilities.every((capability) => enabledCapabilities.has(capability)))
+    !entry.tools?.length || entry.tools.some((tool) => selected.has(tool))
   );
 }
 
@@ -209,10 +204,10 @@ function classifyManagedFile(root, entry, state, variables = {}, extensionState,
   return { state: "unknown", target, sha256: actualSha256, desiredSha256 };
 }
 
-function inspectManagedFiles(root, manifest, tools, capabilities = [], variables = {}, options = {}) {
+function inspectManagedFiles(root, manifest, tools, variables = {}, options = {}) {
   const state = loadState(root);
   const hooksState = extensionHookState(root, options.extensionState);
-  const coreSelected = new Set(selectedManagedFiles(manifest, tools, capabilities).map((entry) => entry.id));
+  const coreSelected = new Set(selectedManagedFiles(manifest, tools).map((entry) => entry.id));
   const selected = new Set(coreSelected);
   const hookEntry = manifest.managedFiles.find((entry) => entry.target === CODEX_HOOKS_TARGET);
   if (hookEntry && (hasExtensionHooks(hooksState) || (hooksState === null && fs.existsSync(path.join(root, CODEX_HOOKS_TARGET))))) selected.add(hookEntry.id);
@@ -237,7 +232,7 @@ function planManagedFiles(root, manifest, tools, options = {}) {
   const state = loadState(root) || { schemaVersion: 2, managedFiles: {} };
   const plans = [];
   const hooksState = extensionHookState(root, options.extensionState);
-  const coreSelected = new Set(selectedManagedFiles(manifest, tools, options.capabilities).map((entry) => entry.id));
+  const coreSelected = new Set(selectedManagedFiles(manifest, tools).map((entry) => entry.id));
   const selected = new Set(coreSelected);
   const hookEntry = manifest.managedFiles.find((entry) => entry.target === CODEX_HOOKS_TARGET);
   if (hookEntry && (hasExtensionHooks(hooksState) || (hooksState === null && fs.existsSync(path.join(root, CODEX_HOOKS_TARGET))))) selected.add(hookEntry.id);

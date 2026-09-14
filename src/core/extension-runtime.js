@@ -391,13 +391,63 @@ function runServiceRuntime(plan, argv = [], options = {}) {
   }
 }
 
+// Short-lived command surface for service runtimes: inherited stdio, caller cwd,
+// no service registry or readiness handshake. Convention: empty argv or "serve"
+// starts the service; any other argv runs as a command.
+function runCommandRuntime(plan, argv = [], options = {}) {
+  plan = verifyRuntimePlan(plan);
+  const tempRoot = fs.mkdtempSync(path.join(options.tempRoot || os.tmpdir(), `code-workspace-runtime-command-${plan.id}-`));
+  const reference = `command:${process.pid}:${Date.now()}`;
+  let settled = false;
+  return new Promise((resolve, reject) => {
+    try {
+      addPackageReference(plan.storeRoot, plan.id, plan.version, "processes", reference);
+      const { contextFile, context } = writeContext(tempRoot, plan, options);
+      const child = spawn(process.execPath, [plan.entryFile, ...argv], {
+        cwd: options.commandCwd || process.cwd(),
+        env: minimalEnvironment(contextFile, context.dataDirectory),
+        stdio: options.stdio || "inherit",
+      });
+      const timeout = setTimeout(() => killServiceProcess(child, "SIGKILL"), plan.runtime.timeoutMs);
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        try {
+          safeRemovePackageReference(plan.storeRoot, plan.id, plan.version, "processes", reference);
+          fs.rmSync(tempRoot, { recursive: true, force: true });
+        } catch { /* best-effort cleanup */ }
+        fn(value);
+      };
+      child.once("error", (error) => finish(reject, runtimeError("EXTENSION_RUNTIME_START_FAILED", `Runtime ${plan.id} failed to start: ${error.message}`, { extension: plan.id })));
+      child.once("exit", (code, signal) => {
+        if ((code !== 0 && code !== null) && !["SIGINT", "SIGTERM"].includes(signal)) {
+          finish(reject, runtimeError("EXTENSION_RUNTIME_EXIT_FAILED", `Runtime ${plan.id} exited with status ${code}`, { extension: plan.id, exitCode: code, signal: signal || null }));
+          return;
+        }
+        finish(resolve, { status: "completed", serviceId: plan.runtime.service?.id || null, exitCode: code, signal: signal || null });
+      });
+    } catch (error) {
+      settled = true;
+      try {
+        safeRemovePackageReference(plan.storeRoot, plan.id, plan.version, "processes", reference);
+        fs.rmSync(tempRoot, { recursive: true, force: true });
+      } catch { /* best-effort cleanup */ }
+      reject(error);
+    }
+  });
+}
+
 function executeExtensionRuntime(options = {}) {
   const plan = resolveExtensionRuntime(options);
+  const argv = options.argv || [];
   if (plan.runtime.mode === "service" && options.json === true) {
     throw runtimeError("CLI_JSON_UNSUPPORTED", "Long-running extension services use inherited stdio and do not support Host --json output.");
   }
-  if (plan.runtime.mode === "oneshot") return { plan, result: runOneshotRuntime(plan, options.argv || [], options) };
-  return { plan, result: runServiceRuntime(plan, options.argv || [], options) };
+  if (plan.runtime.mode === "oneshot") return { plan, result: runOneshotRuntime(plan, argv, options) };
+  const serviceStart = argv.length === 0 || argv[0] === "serve";
+  if (serviceStart) return { plan, result: runServiceRuntime(plan, argv, options) };
+  return { plan, result: runCommandRuntime(plan, argv, options) };
 }
 
 module.exports = {
@@ -414,6 +464,7 @@ module.exports = {
   loadRuntimeServiceRegistry,
   minimalEnvironment,
   resolveExtensionRuntime,
+  runCommandRuntime,
   runOneshotRuntime,
   runServiceRuntime,
   saveRuntimeServiceRegistry,

@@ -33,7 +33,7 @@ test("two Workspaces can activate Monitor against one Store package and uninstal
   workspace(b, "B", "123e4567-e89b-42d3-a456-426614174001");
   const catalog = discoverExtensions();
   const plan = (root) => resolveExtensionPlans(catalog, ["monitor"], { tools: ["codex"], state: emptyExtensionState() })[0];
-  const execute = (root) => executeExtension(root, plan(root), { schemaVersion: 1, extensionSpecVersion: 1, extension: { id: "monitor", version: "1.0.0" }, workspace: { name: path.basename(root), uuid: root === a ? "123e4567-e89b-42d3-a456-426614174000" : "123e4567-e89b-42d3-a456-426614174001", language: "en-US" }, tools: ["codex"] }, { extensionStoreRoot: store, useExtensionStore: true });
+  const execute = (root) => executeExtension(root, plan(root), { schemaVersion: 1, extensionSpecVersion: 1, extension: { id: "monitor", version: plan(root).version }, workspace: { name: path.basename(root), uuid: root === a ? "123e4567-e89b-42d3-a456-426614174000" : "123e4567-e89b-42d3-a456-426614174001", language: "en-US" }, tools: ["codex"] }, { extensionStoreRoot: store, useExtensionStore: true });
   const first = execute(a); const second = execute(b);
   assert.equal(first.status, "installed"); assert.equal(second.status, "installed");
   assert.equal(listPackageReferences(store)[0].references.workspaces.length, 2);
@@ -50,20 +50,6 @@ test("Monitor runtime resolves globally without a Workspace activation", () => {
   const runtime = resolveExtensionRuntime({ id: "monitor", storeRoot: store });
   assert.equal(runtime.runtime.service.id, "monitor");
   assert.equal(runtime.runtime.service.compatibilityGroup, "v1");
-});
-
-test("extension Monitor store matches legacy lifecycle projection for identical events", () => {
-  const legacy = require("../monitor").createMonitorStore({ now: () => new Date("2026-08-17T00:00:00.000Z") });
-  const extension = require(path.join(process.cwd(), "extensions/monitor/1.0.0/monitor.js")).createMonitorStore({ now: () => new Date("2026-08-17T00:00:00.000Z") });
-  const events = [
-    { schemaVersion: 1, eventId: "parity-1", eventType: "turn.started", status: "RUNNING", workspace: { uuid: "123e4567-e89b-42d3-a456-426614174000", name: "A" }, session: { id: "s" }, turn: { id: "t" } },
-    { schemaVersion: 1, eventId: "parity-2", eventType: "tool.completed", status: "RUNNING", workspace: { uuid: "123e4567-e89b-42d3-a456-426614174000", name: "A" }, session: { id: "s" }, turn: { id: "t" } },
-    { schemaVersion: 1, eventId: "parity-3", eventType: "session.ended", status: "SESSION_ENDED", workspace: { uuid: "123e4567-e89b-42d3-a456-426614174000", name: "A" }, session: { id: "s" }, turn: null },
-  ];
-  for (const event of events) { legacy.accept(event); extension.accept(event); }
-  assert.deepEqual(extension.snapshot().workspaces, legacy.snapshot().workspaces);
-  assert.deepEqual(extension.snapshot().summary, legacy.snapshot().summary);
-  assert.deepEqual(extension.removeSession("123e4567-e89b-42d3-a456-426614174000", "s"), legacy.removeSession("123e4567-e89b-42d3-a456-426614174000", "s"));
 });
 
 test("Monitor singleton rejects an incompatible running service group", () => {

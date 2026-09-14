@@ -8,10 +8,10 @@ const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 3211;
 const DEFAULT_SESSION_INACTIVITY_MS = 10 * 60 * 1000;
 const MONITOR_ASSETS = new Map([
-  ["/assets/request_tip.mp3", { file: path.join(__dirname, "..", "..", "assets", "request_tip.mp3"), type: "audio/mpeg" }],
-  ["/assets/session_finish.mp3", { file: path.join(__dirname, "..", "..", "assets", "session_finish.mp3"), type: "audio/mpeg" }],
-  ["/assets/logo-vector.svg", { file: path.join(__dirname, "..", "..", "assets", "logo-vector.svg"), type: "image/svg+xml; charset=utf-8" }],
-  ["/assets/i18n-icon.svg", { file: path.join(__dirname, "..", "..", "assets", "i18n-icon.svg"), type: "image/svg+xml; charset=utf-8" }],
+  ["/assets/request_tip.mp3", { file: path.join(__dirname, "assets", "request_tip.mp3"), type: "audio/mpeg" }],
+  ["/assets/session_finish.mp3", { file: path.join(__dirname, "assets", "session_finish.mp3"), type: "audio/mpeg" }],
+  ["/assets/logo-vector.svg", { file: path.join(__dirname, "assets", "logo-vector.svg"), type: "image/svg+xml; charset=utf-8" }],
+  ["/assets/i18n-icon.svg", { file: path.join(__dirname, "assets", "i18n-icon.svg"), type: "image/svg+xml; charset=utf-8" }],
 ]);
 
 const EVENT_DEFINITIONS = {
@@ -90,10 +90,10 @@ function createMonitorStore(options = {}) {
     for (const response of subscribers) response.write(payload);
   }
 
-  function accept(event) {
+  function accept(event, replay = false) {
     if (!validEvent(event)) throw new Error("invalid event payload");
     if (events.some((current) => current.eventId === event.eventId)) return { duplicate: true };
-    const receivedAt = nowIso();
+    const receivedAt = replay && event.timestamp ? event.timestamp : nowIso();
     const storedEvent = { ...event, timestamp: event.timestamp || receivedAt };
     const previous = workspaces.get(event.workspace.uuid) || {
       uuid: event.workspace.uuid,
@@ -130,6 +130,7 @@ function createMonitorStore(options = {}) {
     events.unshift(storedEvent);
     if (events.length > maxEvents) events.length = maxEvents;
     publish({ event: storedEvent, workspace: previous });
+    options.onChange?.();
     return { duplicate: false, workspaceUuid: previous.uuid };
   }
 
@@ -139,6 +140,7 @@ function createMonitorStore(options = {}) {
       if (events[index].workspace.uuid === uuid) events.splice(index, 1);
     }
     publish({ workspaceRemoved: uuid });
+    options.onChange?.();
     return { removed: true, workspaceUuid: uuid };
   }
 
@@ -163,6 +165,7 @@ function createMonitorStore(options = {}) {
       workspace.firstSeenAt
     );
     publish({ sessionRemoved: { workspaceUuid, sessionId } });
+    options.onChange?.();
     return { removed: true, workspaceUuid, sessionId, removedEvents };
   }
 
@@ -308,14 +311,14 @@ function startMonitor(options = {}) {
   });
 }
 
-async function reportHookEvent(input, config, options = {}) {
-  if (!config.monitor?.enable || !config.workspace) return { action: "skip", reason: "monitor disabled" };
-  const event = normalizeHookEvent(input, config);
+async function reportHookEvent(input, reporting, options = {}) {
+  if (!reporting?.enable || !reporting?.workspace) return { action: "skip", reason: "monitor disabled" };
+  const event = normalizeHookEvent(input, reporting);
   if (!event) return { action: "skip", reason: "unsupported event" };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs || 300);
   try {
-    const response = await (options.fetch || fetch)(`${config.monitor.url}/api/v1/events`, {
+    const response = await (options.fetch || fetch)(`${reporting.url}/api/v1/events`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(event),
@@ -329,6 +332,29 @@ async function reportHookEvent(input, config, options = {}) {
   }
 }
 
+function findReportingConfig(startDirectory) {
+  let directory = path.resolve(startDirectory);
+  for (;;) {
+    const candidate = path.join(directory, ".code-workspace", "monitor-reporting.json");
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
+
+function loadReportingConfig(startDirectory) {
+  const file = findReportingConfig(startDirectory);
+  if (!file) return null;
+  try {
+    const value = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (value?.schemaVersion !== 1 || !value?.workspace?.uuid || typeof value.url !== "string") return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 module.exports = {
   DEFAULT_MONITOR_HOST,
   DEFAULT_MONITOR_PORT,
@@ -336,6 +362,8 @@ module.exports = {
   EVENT_DEFINITIONS,
   createMonitorServer,
   createMonitorStore,
+  findReportingConfig,
+  loadReportingConfig,
   normalizeHookEvent,
   reportHookEvent,
   startMonitor,

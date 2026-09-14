@@ -13,7 +13,6 @@ const PROJECT_CONFIG_VERSION = 1;
 const STATE_FILE = "state.json";
 const RESERVED_PROJECT_CONFIG_REFERENCES = new Set([CONFIG_FILE, STATE_FILE].map((name) => name.toLowerCase()));
 const DEFAULT_WORKSPACE_NAME = "code-workspace";
-const DEFAULT_MONITOR_URL = "http://127.0.0.1:3211";
 const CURRENT_CONFIG_VERSION = 2;
 const MINIMUM_READABLE_CONFIG_VERSION = 0;
 const CONFIG_RENDER_OPTIONS = Object.freeze({
@@ -93,30 +92,6 @@ function normalizeWorkspace(value, options = {}) {
   const identity = normalizeWorkspaceIdentity(value);
   if (!identity) return null;
   return { ...identity, language: normalizeWorkspaceLanguage(value.language, options) };
-}
-
-function normalizeMonitor(value) {
-  const monitor = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  const enable = monitor.enable === true;
-  const rawUrl = String(monitor.url || DEFAULT_MONITOR_URL);
-  let parsed;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new WorkspaceError("MONITOR_CONFIG_INVALID", "monitor.url must be an absolute URL", { actual: rawUrl });
-  }
-  if (parsed.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname)) {
-    throw new WorkspaceError("MONITOR_CONFIG_INVALID", "monitor.url must use HTTP and a loopback host", { actual: rawUrl });
-  }
-  if (parsed.username || parsed.password || parsed.search || parsed.hash || !["", "/"].includes(parsed.pathname)) {
-    throw new WorkspaceError("MONITOR_CONFIG_INVALID", "monitor.url must not contain credentials, path, query, or fragment", { actual: rawUrl });
-  }
-  if (!parsed.port) parsed.port = "3211";
-  const port = Number(parsed.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new WorkspaceError("MONITOR_CONFIG_INVALID", "monitor.url port must be between 1 and 65535", { actual: rawUrl });
-  }
-  return { ...monitor, enable, url: parsed.toString().replace(/\/$/, "") };
 }
 
 function normalizeProjects(value) {
@@ -307,13 +282,12 @@ function readConfigDocument(root) {
 function normalizeConfig(value, options = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const migration = planConfigMigration(source);
-  const config = migration.value;
+  const { monitor: _legacyMonitor, ...config } = migration.value;
   const projects = options.projects !== undefined ? normalizeProjects(options.projects) : normalizeProjects(config.projects);
   return {
     ...config,
     schemaVersion: configVersion(config),
     workspace: normalizeWorkspace(config.workspace, options),
-    monitor: normalizeMonitor(config.monitor),
     projects,
   };
 }
@@ -355,13 +329,6 @@ function loadConfigProjection(root, domains, options = {}) {
       attachFile(error);
     }
   }
-  if (requested.has("monitor")) {
-    try {
-      projected.monitor = normalizeMonitor(document.value.monitor);
-    } catch (error) {
-      attachFile(error);
-    }
-  }
   if (requested.has("projects")) {
     try {
       const reference = normalizeProjectReference(document.value.projects, { file: document.file });
@@ -391,7 +358,6 @@ function inspectConfigDomains(root, options = {}) {
       document: { valid: false, value: null, diagnostics: [error] },
       identity: { valid: false, value: null, diagnostics: [] },
       language: { valid: false, value: null, diagnostics: [] },
-      monitor: { valid: false, value: null, diagnostics: [] },
       projects: { valid: false, value: null, diagnostics: [] },
     };
   }
@@ -409,7 +375,6 @@ function inspectConfigDomains(root, options = {}) {
     document: { valid: true, value: document.value, diagnostics: [] },
     identity: inspect(() => normalizeWorkspaceIdentity(document.value.workspace)),
     language: inspect(() => normalizeWorkspaceLanguage(document.value.workspace?.language, options)),
-    monitor: inspect(() => normalizeMonitor(document.value.monitor)),
     projects: inspect(() => {
       const reference = normalizeProjectReference(document.value.projects, { file: document.file });
       const projectDocument = readProjectConfigDocument(root, reference);
@@ -517,7 +482,6 @@ module.exports = {
   PROJECT_CONFIG_FILE,
   PROJECT_CONFIG_VERSION,
   CURRENT_CONFIG_VERSION,
-  DEFAULT_MONITOR_URL,
   DEFAULT_WORKSPACE_NAME,
   LOCAL_DIRECTORY,
   MINIMUM_READABLE_CONFIG_VERSION,
@@ -532,7 +496,6 @@ module.exports = {
   loadConfigProjection,
   loadState,
   normalizeConfig,
-  normalizeMonitor,
   normalizeProjects,
   normalizeProjectReference,
   normalizeWorkspace,

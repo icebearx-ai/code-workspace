@@ -295,13 +295,14 @@ function validateManifest(value, options = {}) {
     const kind = String(output.kind || "");
     if (!ARTIFACT_KINDS.has(kind)) throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} output ${outputId} has unsupported kind ${kind || "<missing>"}`, { extension: id, output: outputId, kind: kind || null });
     const ownership = String(output.ownership || "");
-    const expectedOwnership = ["file", "directory"].includes(kind) ? "exclusive" : "shared";
-    if (ownership !== expectedOwnership) {
-      throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} output ${outputId} must use ${expectedOwnership} ownership`, { extension: id, output: outputId, kind, ownership: ownership || null });
+    const wholeFile = ["file", "directory"].includes(kind);
+    const validOwnership = kind === "file" ? ["exclusive", "seeded"] : wholeFile ? ["exclusive"] : ["shared"];
+    if (!validOwnership.includes(ownership)) {
+      throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} output ${outputId} must use one of ${validOwnership.join(", ")} ownership`, { extension: id, output: outputId, kind, ownership: ownership || null });
     }
     const target = normalizeArtifactTarget(output.target);
-    const protectedTargets = expectedOwnership === "exclusive" ? exclusiveProtectedTargets : sharedProtectedTargets;
-    if (targetIsProtected(target, protectedTargets, expectedOwnership === "exclusive")) throw extensionError("EXTENSION_CORE_TARGET_FORBIDDEN", `Extension ${id} cannot target Code Workspace core path ${target}`, { extension: id, output: outputId, target });
+    const protectedTargets = wholeFile ? exclusiveProtectedTargets : sharedProtectedTargets;
+    if (targetIsProtected(target, protectedTargets, wholeFile)) throw extensionError("EXTENSION_CORE_TARGET_FORBIDDEN", `Extension ${id} cannot target Code Workspace core path ${target}`, { extension: id, output: outputId, target });
     if (ids.has(outputId)) throw extensionError("EXTENSION_ARTIFACT_DUPLICATE", `Extension ${id} repeats output id ${outputId}`, { extension: id, output: outputId });
     let selector;
     if (kind === "json-member") {
@@ -622,8 +623,9 @@ function validateInstalledState(id, installed) {
       throw extensionError("EXTENSION_STATE_INVALID", `Installed protocol v1 state for ${id} cannot contain ${kind}`, { extension: id, artifact: artifactId, kind });
     }
     if (protocolVersion >= 2) {
-      const expectedOwnership = ["file", "directory"].includes(kind) ? "exclusive" : "shared";
-      if (artifact.ownership !== expectedOwnership) throw extensionError("EXTENSION_STATE_INVALID", `Invalid installed ownership for ${id}/${artifactId}`, { extension: id, artifact: artifactId, kind, ownership: artifact.ownership });
+      const wholeFile = ["file", "directory"].includes(kind);
+      const validOwnership = kind === "file" ? ["exclusive", "seeded"] : wholeFile ? ["exclusive"] : ["shared"];
+      if (!validOwnership.includes(artifact.ownership)) throw extensionError("EXTENSION_STATE_INVALID", `Invalid installed ownership for ${id}/${artifactId}`, { extension: id, artifact: artifactId, kind, ownership: artifact.ownership });
     } else if (kind === "file" && artifact.ownership !== undefined && artifact.ownership !== "exclusive") {
       throw extensionError("EXTENSION_STATE_INVALID", `Invalid legacy file ownership for ${id}/${artifactId}`, { extension: id, artifact: artifactId, ownership: artifact.ownership });
     }
@@ -1055,6 +1057,7 @@ function assertInstallOwnership(root, plan, state) {
     const kind = artifact.kind || "file";
     const target = assertSafeWorkspaceTarget(root, targetForArtifact(artifact), { directory: kind === "directory" });
     if (!["file", "directory"].includes(kind)) continue;
+    if (artifact.ownership === "seeded") continue;
     if (!fs.existsSync(target)) continue;
     const own = ownArtifacts.get(artifact.target);
     if (!own) throw extensionError("EXTENSION_TARGET_OCCUPIED", `Extension target already exists and is not owned by ${plan.id}: ${artifact.target}`, { extension: plan.id, target: artifact.target });

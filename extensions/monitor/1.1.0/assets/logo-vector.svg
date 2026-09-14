@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1254" height="1254" viewBox="0 0 1254 1254"
+     role="img" aria-label="Geometric teal-blue logo">
+  <defs>
+    <linearGradient id="logoGradient" x1="320" y1="175" x2="860" y2="1080" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#19AEB8"/>
+      <stop offset="0.48" stop-color="#087DA5"/>
+      <stop offset="1" stop-color="#07528C"/>
+    </linearGradient>
+  </defs>
+
+  <g fill="none"
+     stroke="url(#logoGradient)"
+     stroke-width="118"
+     stroke-linecap="butt"
+     stroke-linejoin="round">
+    <path d="M 794 289
+             L 630 184
+             L 291 394
+             L 291 786
+             L 630 1020
+             L 973 786
+             L 973 393
+             L 914 354"/>
+    <path d="M 850 386
+             L 617 526
+             L 617 850"/>
+  </g>
+</svg>

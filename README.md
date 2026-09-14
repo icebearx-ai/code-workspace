@@ -33,7 +33,7 @@ code-workspace init . \
   --yes
 ```
 
-Use `--tools claude`, `--tools codex`, or `--tools none` to override the default tool selection. Codex monitoring is enabled by default when Codex is selected; use `--no-monitor` to disable it.
+Use `--tools claude`, `--tools codex`, or `--tools none` to override the default tool selection. Monitoring is not enabled implicitly; install the `monitor` extension with `--extensions monitor` or through the interactive extension picker.
 
 Initialization writes only Workspace-owned state and integrations:
 
@@ -41,7 +41,7 @@ Initialization writes only Workspace-owned state and integrations:
 - `USER_GUIDE.md`
 - `CLAUDE.md` and/or `AGENTS.md`
 - Workspace-specific commands and skills whose names start with `code-workspace-` or use the `/code-workspace` namespace
-- `.codex/hooks.json` when monitoring is enabled
+- `.codex/hooks.json` is written by the `monitor` extension when that extension is installed
 
 It does not create `openspec/`, install native `/opsx` commands, or install native `openspec-*` skills.
 
@@ -185,13 +185,14 @@ code-workspace language --json
 
 ## Monitor
 
+Monitor ships as the built-in `monitor` extension. Install it into a workspace and run its dashboard through the generic extension runtime:
+
 ```bash
-code-workspace monitor --port 3211
+code-workspace extension install monitor --yes
+code-workspace ext monitor serve --port 3211
 ```
 
-The monitor binds to loopback, combines events from multiple initialized workspaces, and keeps hook reporting failure-open. Review and trust project hooks in Codex before relying on reports.
-
-## Completion
+The monitor binds to loopback, combines events from multiple initialized workspaces, and keeps hook reporting (`codew ext monitor report`) failure-open. Review and trust project hooks in Codex before relying on reports.
 
 ```bash
 code-workspace completion --shell zsh

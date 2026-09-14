@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 
-const { DEFAULT_MONITOR_URL, DEFAULT_WORKSPACE_NAME, configPath, loadConfig } = require("../core/config");
+const { DEFAULT_WORKSPACE_NAME, configPath, loadConfig } = require("../core/config");
 const { DEFAULT_WORKSPACE_LANGUAGE, SUPPORTED_LANGUAGES, resolveWorkspaceLanguage } = require("../core/language");
 const { createInitPlan } = require("./plan");
 const { createInteractiveUi } = require("./ui");
@@ -61,19 +61,12 @@ async function collectInitPlan(root, manifest, options = {}) {
     tools,
     state: options.extensionState,
   });
-  let monitorEnabled = options.monitor !== undefined ? options.monitor : existing?.monitor?.enable;
-  if (tools.includes("codex") && monitorEnabled === undefined) monitorEnabled = await ui.confirm("Enable Codex Agent monitor?", true);
-  const monitor = {
-    enable: tools.includes("codex") && monitorEnabled === true,
-    url: options.monitorUrl || existing?.monitor?.url || DEFAULT_MONITOR_URL,
-  };
   const workspace = existing?.workspace || { name, uuid: randomUUID() };
-  const plan = createInitPlan({ root, workspace, tools, monitor, language, extensions });
+  const plan = createInitPlan({ root, workspace, tools, language, extensions });
   ui.note("Ready to initialize", [
     `Workspace  ${workspace.name}`,
     `Language   ${language}`,
     `Tools      ${tools.length ? tools.join(", ") : "none"}`,
-    `Monitor    ${monitor.enable ? monitor.url : "disabled"}`,
     `Extensions ${extensions.length ? extensions.map((entry) => `${entry.id}@${entry.version} [Spec ${entry.extensionSpecVersion}] (${entry.manifestSha256})`).join(", ") : "none"}`,
   ]);
   if (existing?.projects?.length) {

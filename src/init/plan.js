@@ -1,9 +1,8 @@
-function createInitPlan({ root, workspace, tools, monitor, language, extensions = [] }) {
+function createInitPlan({ root, workspace, tools, language, extensions = [] }) {
   return {
     root,
     workspace,
     tools: tools.slice(),
-    monitor: { ...monitor },
     language,
     extensions: extensions.slice(),
   };

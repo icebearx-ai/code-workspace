@@ -348,6 +348,68 @@ test("an occupied or locally modified target is never overwritten", () => {
   assert.equal(fs.readFileSync(path.join(root, definition.target), "utf8"), "local edit\n");
 });
 
+test("seeded file output seeds defaults once, preserves user edits, and removes on uninstall", () => {
+  const repository = temporaryRoot();
+  const target = ".code-workspace/monitor-reporting.json";
+  const outputs = [{ id: "reporting-config", kind: "file", ownership: "seeded", target, source: "config.json" }];
+  const seedContent = '{"enable":true,"url":"http://127.0.0.1:3211"}\n';
+  writeExtension(repository, {
+    version: "1.0.0",
+    outputs,
+    script: outputScript({ "config.json": seedContent }),
+  });
+  const root = temporaryRoot();
+  const file = path.join(root, ...target.split("/"));
+  const planV1 = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), ["example-extension"], { tools: ["codex"], state: emptyExtensionState() })[0];
+
+  assert.equal(executeExtension(root, planV1, context(planV1)).status, "installed");
+  assert.equal(fs.readFileSync(file, "utf8"), seedContent);
+
+  // Same version is current (no drift) and does not rewrite the seeded file.
+  assert.equal(executeExtension(root, planV1, context(planV1)).status, "skipped");
+  assert.equal(fs.readFileSync(file, "utf8"), seedContent);
+
+  // A user edit survives an upgrade that ships a new default value.
+  const edited = '{"enable":false,"url":"http://custom:9999"}\n';
+  fs.writeFileSync(file, edited);
+  writeExtension(repository, {
+    version: "1.1.0",
+    outputs,
+    script: outputScript({ "config.json": '{"enable":true,"url":"http://127.0.0.1:3211"}\n' }),
+  });
+  const planV2 = resolveExtensionPlans(discoverExtensions({ extensionsRoot: repository }), ["example-extension"], { tools: ["codex"], state: loadExtensionState(root) })[0];
+  assert.equal(executeExtension(root, planV2, context(planV2)).status, "installed");
+  assert.equal(fs.readFileSync(file, "utf8"), edited);
+
+  // Uninstall removes the user-owned seeded file without a drift error.
+  const uninstall = planExtensionUninstall(root, "example-extension");
+  assert.equal(applyExtensionUninstall(uninstall).status, "uninstalled");
+  assert.equal(fs.existsSync(file), false);
+});
+
+test("seeded ownership is only valid for file outputs", () => {
+  const base = {
+    schemaVersion: 3,
+    extensionSpecVersion: 1,
+    experimental: true,
+    id: "example-extension",
+    name: "Example",
+    version: "1.0.0",
+    entry: "init.js",
+    entrySha256: "b".repeat(64),
+    timeoutMs: 1000,
+    outputs: [{ id: "artifact-one", kind: "file", ownership: "seeded", target: ".code-workspace/reporting.json" }],
+  };
+  assert.doesNotThrow(() => validateManifest(base, { protectedTargets: new Set() }));
+  for (const kind of ["directory", "text-block", "json-member"]) {
+    assert.throws(
+      () => validateManifest({ ...base, outputs: [{ id: "artifact-one", kind, ownership: "seeded", target: ".example/target" }] }, { protectedTargets: new Set() }),
+      (error) => error.code === "EXTENSION_MANIFEST_INVALID",
+      kind
+    );
+  }
+});
+
 test("a directory target that appears while an extension is running is preserved", () => {
   const repository = temporaryRoot();
   const outputs = [{ id: "runtime", kind: "directory", ownership: "exclusive", target: ".example/runtime", source: "runtime" }];

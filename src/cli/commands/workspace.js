@@ -14,7 +14,6 @@ function executeDoctor(invocation) {
   return fromDiagnostics("doctor", output, {
     projects: output.config.projects.length,
     tools: output.toolSelection,
-    capabilities: output.capabilities,
   }, `Code Workspace is healthy (${output.config.projects.length} local projects).`);
 }
 

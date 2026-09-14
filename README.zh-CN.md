@@ -33,7 +33,7 @@ code-workspace init . \
   --yes
 ```
 
-可用 `--tools claude`、`--tools codex` 或 `--tools none` 覆盖默认工具选择。选择 Codex 时默认启用监控；可传 `--no-monitor` 关闭。
+可用 `--tools claude`、`--tools codex` 或 `--tools none` 覆盖默认工具选择。监控不会隐式启用；请通过 `--extensions monitor` 或交互式扩展选择安装 `monitor` 扩展。
 
 初始化只写入 Workspace 自有状态和集成：
 
@@ -41,7 +41,7 @@ code-workspace init . \
 - `USER_GUIDE.md`
 - `CLAUDE.md` 和/或 `AGENTS.md`
 - 名称以 `code-workspace-` 开头或使用 `/code-workspace` 命名空间的 Workspace 专用命令与 Skill
-- 启用监控时的 `.codex/hooks.json`
+- 安装 `monitor` 扩展时由扩展写入的 `.codex/hooks.json`
 
 它不会创建 `openspec/`，不会安装原生 `/opsx` 命令，也不会安装原生 `openspec-*` Skill。
 
@@ -183,11 +183,14 @@ code-workspace language --json
 
 ## 监控
 
+监控以内置 `monitor` 扩展的形式提供。先在 Workspace 中安装扩展，再通过通用扩展运行时启动面板：
+
 ```bash
-code-workspace monitor --port 3211
+code-workspace extension install monitor --yes
+code-workspace ext monitor serve --port 3211
 ```
 
-监控服务仅绑定 loopback，可汇总多个已初始化工作区的事件；hook 上报失败不会阻断 Agent。依赖监控前，请在 Codex 中检查并信任项目 hook。
+监控服务仅绑定 loopback，可汇总多个已初始化工作区的事件；hook 上报（`codew ext monitor report`）失败不会阻断 Agent。依赖监控前，请在 Codex 中检查并信任项目 hook。
 
 ## 命令补全
 

@@ -8,7 +8,6 @@ const { executeHelp, executeVersion } = require("./cli/commands/help");
 const { executeInit } = require("./cli/commands/init");
 const { executeExtension } = require("./cli/commands/extension");
 const { executeExt } = require("./cli/commands/ext");
-const { executeMonitor, readStdinJson } = require("./cli/commands/monitor");
 const { executePermissions } = require("./cli/commands/permissions");
 const { executeProject } = require("./cli/commands/project");
 const { executeProjectBranch } = require("./cli/commands/project-branch");
@@ -24,7 +23,6 @@ async function dispatch(invocation) {
   if (key === "init") return executeInit(invocation);
   if (key.startsWith("extension ")) return executeExtension(invocation);
   if (key === "ext") return executeExt(invocation);
-  if (key === "monitor" || key === "monitor report") return executeMonitor(invocation);
   if (key === "project branch update-latest") return executeProjectBranchUpdateLatest(invocation);
   if (key.startsWith("project branch ")) return executeProjectBranch(invocation);
   if (key.startsWith("project ")) return executeProject(invocation);
@@ -71,8 +69,4 @@ function toolsOption(value) {
   return value === undefined ? ["claude", "codex"] : normalizeTools(value, "cli");
 }
 
-async function monitorCommand(action, options = {}) {
-  return executeMonitor({ definition: { path: action ? ["monitor", action] : ["monitor"] }, options });
-}
-
-module.exports = { dispatch, main, monitorCommand, parse, readStdinJson, toolsOption, updateWorkspace };
+module.exports = { dispatch, main, parse, toolsOption, updateWorkspace };

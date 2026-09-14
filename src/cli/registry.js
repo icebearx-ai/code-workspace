@@ -6,7 +6,6 @@ const GLOBAL_OPTIONS = {
 
 const COMMAND_SUMMARIES = {
   init: "Initialize workspace (path defaults to current directory)",
-  monitor: "Run the global multi-workspace Agent monitor",
   update: "Update Workspace-owned managed assets",
   language: "Print the workspace language",
   "project inspect": "Inspect a Git project without writing files",
@@ -31,10 +30,8 @@ const COMMAND_SUMMARIES = {
 const COMMANDS = [
   { path: ["init"], args: [{ name: "path", required: false }], workspace: "target", config: [], interaction: "optional", effects: "planned-write", options: {
     tools: { type: "string" }, extensions: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" },
-    monitor: { type: "boolean" }, "no-monitor": { type: "boolean" }, "monitor-url": { type: "string" }, yes: { type: "boolean" }, force: { type: "boolean" },
+    yes: { type: "boolean" }, force: { type: "boolean" },
   } },
-  { path: ["monitor"], args: [], workspace: "none", config: [], interaction: "never", effects: "external", options: { port: { type: "string", aliases: ["p"] } } },
-  { path: ["monitor", "report"], args: [], workspace: "optional", config: ["identity", "monitor"], interaction: "never", effects: "external", options: {} },
   { path: ["update"], args: [], workspace: "required", config: [], interaction: "optional", effects: "planned-write", options: {
     tools: { type: "string" }, language: { type: "string" }, force: { type: "boolean" },
   } },

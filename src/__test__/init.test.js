@@ -22,7 +22,7 @@ test("init manifest describes only workspace-owned assets", () => {
   assert.equal(manifest.releaseVersion, packageJson.version);
   assert.deepEqual(manifest.tools, ["claude", "codex"]);
   assert.equal(manifest.sources.length, 2);
-  assert.equal(manifest.managedFiles.length, 9);
+  assert.equal(manifest.managedFiles.length, 8);
   assert(manifest.sources.every((entry) => entry.kind === "asset"));
   assert(manifest.managedFiles.every((entry) => entry.desired.sha256.length === 64));
   assert.equal(manifest.resources, undefined);
@@ -64,7 +64,7 @@ test("interactive init collects and confirms a complete workspace plan before wr
   assert.equal(plan.openspec, undefined);
   assert.equal(plan.language, "zh-CN");
   assert.deepEqual(plan.tools, ["codex"]);
-  assert.equal(plan.monitor.enable, true);
+  assert.equal(plan.monitor, undefined);
   assert(calls.includes("Ready to initialize"));
   assert(!fs.existsSync(path.join(root, ".code-workspace")));
 });
@@ -124,14 +124,10 @@ test("interactive init reads a v1 workspace through the legacy language compatib
   assert.deepEqual(plan.tools, ["codex"]);
 });
 
-test("new Codex workspaces enable monitoring by default and allow opt-out", async () => {
-  const enabled = await collectWorkspaceSetup(temporaryRoot(), { tools: ["codex"], interactive: false });
-  assert.equal(enabled.monitor.enable, true);
-  assert.equal(enabled.workspace.language, "zh-CN");
-  const disabled = await collectWorkspaceSetup(temporaryRoot(), { tools: ["codex"], monitor: false, interactive: false });
-  assert.equal(disabled.monitor.enable, false);
-  const withoutCodex = await collectWorkspaceSetup(temporaryRoot(), { tools: ["claude"], interactive: false });
-  assert.equal(withoutCodex.monitor.enable, false);
+test("workspace setup no longer collects a monitor configuration domain", async () => {
+  const config = await collectWorkspaceSetup(temporaryRoot(), { tools: ["codex"], interactive: false });
+  assert.equal(config.monitor, undefined);
+  assert.equal(config.workspace.language, "zh-CN");
 });
 
 test("workspace dependency installation only runs for a tool source checkout", () => {

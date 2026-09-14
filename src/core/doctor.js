@@ -20,10 +20,9 @@ function doctorWorkspace(root, manifest, options = {}) {
     workspace: inspection.identity.value
       ? { ...inspection.identity.value, ...(inspection.language.valid ? { language: inspection.language.value } : {}) }
       : null,
-    monitor: inspection.monitor.value,
     projects: inspection.projects.value || [],
   };
-  const domainErrors = [inspection.document, inspection.identity, inspection.language, inspection.monitor, inspection.projects]
+  const domainErrors = [inspection.document, inspection.identity, inspection.language, inspection.projects]
     .flatMap((domain) => domain.diagnostics || []);
   for (const error of domainErrors) {
     add(output, "error", error.code || "LOCAL_CONFIG_INVALID", error.message, error.details || {});
@@ -42,10 +41,6 @@ function doctorWorkspace(root, manifest, options = {}) {
     manifestTools: manifest.tools,
   });
   const tools = toolSelection.tools;
-  const capabilities = options.capabilities || (inspection.monitor.valid && config.monitor?.enable ? ["monitor"] : []);
-  if (inspection.monitor.valid && config.monitor?.enable && !tools.includes("codex")) {
-    add(output, "error", "MONITOR_CODEX_REQUIRED", "Agent monitoring is enabled, but Codex is not one of the selected tools.");
-  }
   const language = inspection.language.valid ? config.workspace?.language : null;
   try {
     if (!inspection.language.valid) {
@@ -53,7 +48,7 @@ function doctorWorkspace(root, manifest, options = {}) {
         prerequisite: "workspace.language",
       });
     } else {
-      const managed = inspectManagedFiles(root, manifest, tools, capabilities, {
+      const managed = inspectManagedFiles(root, manifest, tools, {
         WORKSPACE_LANGUAGE: language || DEFAULT_WORKSPACE_LANGUAGE,
         WORKSPACE_USER_GUIDE: workspaceGuide(language || DEFAULT_WORKSPACE_LANGUAGE),
       });
@@ -104,7 +99,6 @@ function doctorWorkspace(root, manifest, options = {}) {
     config,
     tools,
     toolSelection,
-    capabilities,
     language,
     configInspection: inspection,
     managedFiles: output.managedFileInspection?.files || [],

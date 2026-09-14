@@ -104,6 +104,11 @@ manifest 可以额外声明一个与安装入口分离的 `runtime`。Runtime �
 扩展安装协议。Runtime 子进程不是安全沙箱，global 仅表示可服务多个 Workspace，不授予
 访问任意 Workspace 文件或凭证的权限。
 
+对于通过 `codew ext <id>` 调用的 `service` runtime，Host 应用固定的 argv 约定：空 argv 或
+以 `serve` 开头时启动或接入 singleton 服务；其他首参数将 runtime 入口作为短命令执行，
+继承 stdio 与调用方工作目录，不经过 service 注册和 readiness 握手。命令调用以子进程
+退出状态结束，并受声明的 `timeoutMs` 约束。
+
 Host 在确认前冻结 manifest、入口及完整扩展版本目录摘要，在执行前重新验证。扩展不得通过动态 result 扩大 manifest 声明。
 
 ## 4. 执行入口
@@ -139,6 +144,7 @@ Spec v1 支持四种输出：
 | kind | ownership | 生命周期语义 |
 |---|---|---|
 | `file` | `exclusive` | Host 独占写入、摘要、漂移检查和删除单个普通文件 |
+| `file` | `seeded` | Host 仅当目标缺失时写入默认内容，永不覆盖用户编辑、不做漂移检查，卸载时删除 |
 | `directory` | `exclusive` | Host 独占替换、规范目录摘要、漂移检查和递归删除目录 |
 | `text-block` | `shared` | Host 以扩展 id/output id 标记并管理文本片段 |
 | `json-member` | `shared` | Host 以 JSON Pointer selector 管理单个成员并保留其他内容 |

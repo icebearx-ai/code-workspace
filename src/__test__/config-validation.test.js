@@ -30,7 +30,6 @@ test("local config preserves unrestricted multiline context", () => {
   const config = {
     schemaVersion: 2,
     workspace: { name: "example-workspace", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "zh-CN" },
-    monitor: { enable: false, url: "http://127.0.0.1:3211" },
     projects: [{
       name: "example",
       location: "/tmp/example",
@@ -173,19 +172,6 @@ test("missing project reference reports a remediation tied to the main config", 
     assert.match(error.details.remediation, /config-projects\.yaml/);
     return true;
   });
-});
-
-test("monitor configuration is loopback-only and canonical", () => {
-  const root = temporaryRoot();
-  saveConfig(root, {
-    workspace: { name: "team", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
-    monitor: { enable: true, url: "http://localhost:8080/" },
-  });
-  assert.deepEqual(loadConfig(root).monitor, { enable: true, url: "http://localhost:8080" });
-  assert.throws(() => saveConfig(root, {
-    workspace: { name: "team", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
-    monitor: { enable: true, url: "https://example.com" },
-  }), /loopback host/);
 });
 
 test("workspace language is required, validated, and preserved", () => {

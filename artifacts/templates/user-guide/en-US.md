@@ -49,10 +49,11 @@ This also switches this managed guide. Existing project context is not translate
 
 ## Use the Agent monitor
 
-Start one global monitor for all workspaces:
+Monitoring ships as the built-in `monitor` extension. Install it in a workspace and start one global monitor for all workspaces:
 
 ```bash
-codew monitor
+codew extension install monitor --yes
+codew ext monitor
 ```
 
 Open the printed local URL. The dashboard shows workspaces, execution state, pending approvals, completed turns, and live signals. Monitor language is selected on the page and is independent of `workspace.language`.
@@ -60,10 +61,10 @@ Open the printed local URL. The dashboard shows workspaces, execution state, pen
 Use another port when necessary:
 
 ```bash
-codew monitor --port 8080
+codew ext monitor serve --port 8080
 ```
 
-Each participating workspace must use the same URL in `.code-workspace/config.yaml`. After initialization, review and trust the project hooks with `/hooks` in Codex.
+The extension reports to the URL recorded in `.code-workspace/monitor-reporting.json`. After installation, review and trust the project hooks with `/hooks` in Codex.
 
 ## Practical commands
 

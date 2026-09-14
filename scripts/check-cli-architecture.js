@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ALLOWED_WORKSPACE = new Set(["none", "optional", "required", "target"]);
-const ALLOWED_CONFIG = new Set(["identity", "language", "monitor", "projects", "complete"]);
+const ALLOWED_CONFIG = new Set(["identity", "language", "projects", "complete"]);
 const ALLOWED_INTERACTION = new Set(["never", "optional", "required"]);
 const ALLOWED_EFFECTS = new Set(["read-only", "planned-write", "external"]);
 const ALLOWED_OPTION_TYPES = new Set(["boolean", "string"]);

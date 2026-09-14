@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "919217e7d7a1c59775f13803a1bf7645b48c01ba53bbb2cea9d666022c7ce7fc"
+      "sha256": "a91d45e4fc11b4f3eb3c651a4fcee6d981b0d076d93063e0480c5c3e377ea5d2"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "c41dd91cfeef475b48785f19253e1213fe14b3208b12c9dfd3e7aa7dad13a4a7"
+      "sha256": "43bfd67f0725c4834cf33bb7ab96cbe090db6f4373f0b58d01276db293cb9598"
     }
   ],
   "managedFiles": [
@@ -81,24 +81,6 @@
         "values": {
           "ADD_PROJECTS_INVOCATION": "$code-workspace-add-projects /absolute/path/to/project"
         }
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-monitor-hooks",
-      "target": ".codex/hooks.json",
-      "tools": [
-        "codex"
-      ],
-      "capabilities": [
-        "monitor"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/codex/hooks.json",
-        "sha256": "ecba346e0ce73d931802615dd798b952f1d0afabef3c67d7d1ee21f81b133b46"
       },
       "provenance": {
         "kind": "template"

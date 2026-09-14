@@ -5,8 +5,6 @@ const initializer = require("./core/initializer");
 const i18n = require("./i18n");
 const language = require("./core/language");
 const managedFiles = require("./core/managed-files");
-const monitor = require("./monitor");
-const monitorPage = require("./monitor/page");
 const project = require("./core/project");
 const validation = require("./core/validation");
 const extensionRuntime = require("./core/extension-runtime");
@@ -22,8 +20,6 @@ module.exports = {
   ...i18n,
   ...language,
   ...managedFiles,
-  ...monitor,
-  ...monitorPage,
   ...project,
   ...validation,
   ...extensionRuntime,

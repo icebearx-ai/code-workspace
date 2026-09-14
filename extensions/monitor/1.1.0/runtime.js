@@ -2,7 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { createMonitorServer, DEFAULT_MONITOR_HOST, DEFAULT_MONITOR_PORT } = require("./monitor");
+const { createMonitorServer, DEFAULT_MONITOR_HOST, DEFAULT_MONITOR_PORT, loadReportingConfig, reportHookEvent } = require("./monitor");
 
 function readContext() {
   const file = process.env.CODE_WORKSPACE_RUNTIME_CONTEXT;
@@ -17,8 +17,28 @@ function option(name, fallback) {
   return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
 }
 
-async function main() {
-  const context = readContext();
+async function readStdinJson() {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+// Hook entry: always exit 0 so an unavailable monitor never blocks Agent tools.
+async function report() {
+  try {
+    const input = await readStdinJson();
+    const reporting = loadReportingConfig(process.cwd());
+    await reportHookEvent(input, reporting || { enable: false });
+  } catch {
+    /* failure-open by contract */
+  }
+}
+
+async function serve(context) {
   const dataDirectory = context.dataDirectory;
   fs.mkdirSync(dataDirectory, { recursive: true });
   const dataFile = path.join(dataDirectory, "monitor-events.json");
@@ -69,8 +89,17 @@ async function main() {
   });
 }
 
+async function main() {
+  const command = process.argv[2];
+  const context = readContext();
+  if (command === "report") {
+    await report();
+    return;
+  }
+  await serve(context);
+}
+
 main().catch((error) => {
   process.stderr.write(`${error.message}\n`);
   process.exitCode = 1;
 });
-

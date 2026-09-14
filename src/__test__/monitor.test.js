@@ -1,15 +1,20 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 
 const {
   DEFAULT_SESSION_INACTIVITY_MS,
   createMonitorServer,
   createMonitorStore,
+  findReportingConfig,
+  loadReportingConfig,
   normalizeHookEvent,
   reportHookEvent,
-} = require("../monitor");
-const { renderMonitorPage } = require("../monitor/page");
-const { DEFAULT_MONITOR_LANGUAGE, MONITOR_LOCALES, MONITOR_MESSAGES } = require("../monitor/i18n");
+} = require("../../extensions/monitor/1.1.0/monitor");
+const { renderMonitorPage } = require("../../extensions/monitor/1.1.0/page");
+const { DEFAULT_MONITOR_LANGUAGE, MONITOR_LOCALES, MONITOR_MESSAGES } = require("../../extensions/monitor/1.1.0/i18n");
 
 function leafKeys(value, prefix = "") {
   return Object.entries(value).flatMap(([key, entry]) => {
@@ -300,14 +305,30 @@ test("global monitor accepts events without reading a workspace", async (t) => {
 });
 
 test("hook reporting is disabled and failure-open", async () => {
-  const disabled = await reportHookEvent({}, { ...config, monitor: { ...config.monitor, enable: false } }, {
+  const disabled = await reportHookEvent({}, { workspace, enable: false, url: config.monitor.url }, {
     fetch: () => { throw new Error("must not run"); },
   });
   assert.equal(disabled.action, "skip");
 
-  const unavailable = await reportHookEvent({ hook_event_name: "Stop", session_id: "session-1" }, config, {
+  const unavailable = await reportHookEvent({ hook_event_name: "Stop", session_id: "session-1" }, { workspace, enable: true, url: config.monitor.url }, {
     fetch: async () => { throw new Error("offline"); },
   });
   assert.equal(unavailable.action, "skip");
   assert.equal(unavailable.reason, "monitor unavailable");
+});
+
+test("reporting config is discovered from the extension-owned workspace artifact", () => {
+  const reporting = {
+    schemaVersion: 1,
+    enable: true,
+    url: "http://127.0.0.1:3211",
+    workspace,
+    service: { id: "monitor", compatibilityGroup: "v1" },
+  };
+  const project = path.join(os.tmpdir(), `monitor-reporting-${process.pid}-${Date.now()}`);
+  fs.mkdirSync(path.join(project, ".code-workspace"), { recursive: true });
+  fs.writeFileSync(path.join(project, ".code-workspace", "monitor-reporting.json"), JSON.stringify(reporting));
+  assert(findReportingConfig(project).endsWith(path.join(".code-workspace", "monitor-reporting.json")));
+  assert.deepEqual(loadReportingConfig(project), reporting);
+  assert.equal(loadReportingConfig(os.tmpdir()), null);
 });

@@ -152,18 +152,13 @@ test("branch Skill includes reusable model-behavior eval cases", () => {
   assert(evals.evals[2].expectations.some((entry) => /cannot be mixed/.test(entry)));
 });
 
-test("Codex monitor hooks are capability-gated and idempotent", () => {
+test("core managed files no longer own Monitor hooks", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const disabled = installManagedFiles(root, manifest, ["codex"]);
   assert.equal(disabled.length, 4);
   assert(!fs.existsSync(path.join(root, ".codex", "hooks.json")));
-
-  const enabled = installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] });
-  assert.equal(enabled.length, 5);
-  assert.equal(enabled.find((entry) => entry.target === ".codex/hooks.json").action, "write");
-  const repeated = installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] });
-  assert.equal(repeated.find((entry) => entry.target === ".codex/hooks.json").action, "skip");
+  assert.equal(installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] }).length, 4);
 });
 
 test("one canonical template renders both workspace instructions with platform-specific add commands", () => {

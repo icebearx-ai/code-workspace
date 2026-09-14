@@ -55,10 +55,9 @@ test("semantic parser keeps boolean options independent from positionals", () =>
   assert.deepEqual({ args: after.args, options: after.options }, { args: ["."], options: { yes: true } });
 });
 
-test("semantic parser accepts global JSON ordering and short port alias", () => {
+test("semantic parser accepts global JSON ordering", () => {
   assert.equal(parse(argv("--json", "project", "list")).options.json, true);
   assert.equal(parse(argv("project", "list", "--json")).options.json, true);
-  assert.equal(parse(argv("monitor", "-p", "8080")).options.port, "8080");
   assert.deepEqual(parse(argv("permissions", "apply", "--tools", "claude,codex", "--yes")).options, {
     tools: "claude,codex",
     yes: true,
@@ -145,7 +144,7 @@ test("semantic parser covers explicit boolean values, missing values, aliases, a
   assert.throws(() => parse(argv("project", "list", "--json=false")), (error) => error.code === "CLI_INVALID_OPTION_VALUE");
   assert.throws(() => parse(argv("project", "list", "--json", "false")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
   assert.throws(() => parse(argv("update", "--tools")), (error) => error.code === "CLI_OPTION_VALUE_REQUIRED");
-  assert.throws(() => parse(argv("monitor", "-p", "8080", "--port", "8081")), (error) => error.code === "CLI_DUPLICATE_OPTION");
+  assert.throws(() => parse(argv("permissions", "apply", "--yes", "--yes")), (error) => error.code === "CLI_DUPLICATE_OPTION");
   assert.deepEqual(parse(argv("project", "inspect", "--", "-repository")).args, ["-repository"]);
 });
 
@@ -178,8 +177,6 @@ test("completion scripts include subcommands and command-specific options", () =
     for (const subcommand of ["inspect", "add", "remove", "branch", "list", "show", "verify"]) {
       assert.match(script, new RegExp(`['\"]?${subcommand}['\"]?`));
     }
-    assert.match(script, /monitor/);
-    assert.match(script, /report/);
     assert.match(script, /--projects-file/);
     assert.match(script, /--shell/);
     assert.match(script, /permissions/);
@@ -313,7 +310,7 @@ test("configuration projections isolate unrelated invalid domains", () => {
   ].join("\n"));
   assert.equal(loadConfigProjection(root, ["identity"]).workspace.name, "isolated");
   assert.equal(loadConfigProjection(root, ["language"]).workspace.language, "en-US");
-  assert.throws(() => loadConfigProjection(root, ["monitor"]), /absolute URL/);
+  assert.equal(loadConfigProjection(root, ["monitor"]).monitor, undefined);
   assert.throws(() => loadConfigProjection(root, ["projects"]), (error) => error.code === "PROJECT_CONFIG_INLINE_UNSUPPORTED");
 });
 

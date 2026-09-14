@@ -5,7 +5,6 @@ const readline = require("node:readline/promises");
 
 const { cleanupObsoleteAssets, OBSOLETE_ASSETS } = require("./assets");
 const {
-  DEFAULT_MONITOR_URL,
   DEFAULT_WORKSPACE_NAME,
   configPath,
   projectConfigPath,
@@ -57,24 +56,15 @@ async function collectWorkspaceSetup(root, options = {}) {
         name: options.workspaceName || DEFAULT_WORKSPACE_NAME,
         uuid: randomUUID(),
       },
-      monitor: {
-        ...current.monitor,
-        ...(options.monitor !== undefined ? { enable: options.monitor === true } : {}),
-        ...(options.monitorUrl ? { url: options.monitorUrl } : {}),
-      },
     });
   }
 
   const interactive = options.interactive ?? (process.stdin.isTTY && process.stdout.isTTY);
   let name = options.workspaceName;
-  let monitorEnabled = options.monitor;
-  if (interactive && (!name || (monitorEnabled === undefined && options.tools.includes("codex")))) {
+  if (interactive && !name) {
     const prompt = readline.createInterface({ input: options.input || process.stdin, output: options.output || process.stdout });
     try {
-      if (!name) name = (await prompt.question(`Workspace name [${DEFAULT_WORKSPACE_NAME}]: `)).trim() || DEFAULT_WORKSPACE_NAME;
-      if (monitorEnabled === undefined && options.tools.includes("codex")) {
-        monitorEnabled = /^y(?:es)?$/i.test((await prompt.question("Enable Codex Agent monitoring hooks? [y/N] ")).trim());
-      }
+      name = (await prompt.question(`Workspace name [${DEFAULT_WORKSPACE_NAME}]: `)).trim() || DEFAULT_WORKSPACE_NAME;
     } finally {
       prompt.close();
     }
@@ -82,10 +72,6 @@ async function collectWorkspaceSetup(root, options = {}) {
   return normalizeConfig({
     schemaVersion: 2,
     workspace: { name: name || DEFAULT_WORKSPACE_NAME, uuid: options.workspaceUuid || randomUUID(), language },
-    monitor: {
-      enable: options.tools.includes("codex") && monitorEnabled !== false,
-      url: options.monitorUrl || DEFAULT_MONITOR_URL,
-    },
     projects: [],
   });
 }
@@ -111,7 +97,6 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   };
 
   const workspaceConfig = await stage("Configure workspace identity", () => collectWorkspaceSetup(root, options));
-  const capabilities = workspaceConfig.monitor.enable ? ["monitor"] : [];
 
   const manifest = await stage("Validate manifest", () => loadInitManifest(options.manifestFile || MANIFEST_FILE));
   const minimumNode = minimumFromRange(manifest.requirements.node);
@@ -139,7 +124,6 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   const managedFiles = await stage("Install managed files", () =>
     installManagedFiles(root, manifest, options.tools, {
       force: options.force === true,
-      capabilities,
       variables: { WORKSPACE_LANGUAGE: language, WORKSPACE_USER_GUIDE: workspaceGuide(language) },
     })
   );
@@ -170,7 +154,6 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
       allowIncompleteState: true,
       run,
       tools: options.tools,
-      capabilities,
     });
     if (result.errors.length > 0) throw new Error(`Workspace doctor failed: ${result.errors.join("; ")}`);
     return { warnings: result.warnings, projects: config.projects.length };
@@ -185,7 +168,7 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   );
 
   const verification = await stage("Verify local initialization state", () => {
-    const result = doctorWorkspace(root, manifest, { run, tools: options.tools, capabilities });
+    const result = doctorWorkspace(root, manifest, { run, tools: options.tools });
     if (result.errors.length > 0) throw new Error(`Final workspace verification failed: ${result.errors.join("; ")}`);
     return { warnings: result.warnings, projects: config.projects.length };
   });

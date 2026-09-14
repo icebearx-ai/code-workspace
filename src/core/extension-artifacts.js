@@ -175,13 +175,23 @@ function planFileTransition(root, extensionId, previousInstalled, nextInstalled,
   const next = new Map(artifactsOfKind(nextInstalled, "file").map((artifact) => [artifact.target, artifact]));
   for (const [target, artifact] of previous) {
     const file = path.join(root, ...target.split("/"));
-    if (!fs.existsSync(file) || sha256(fs.readFileSync(file)) !== artifact.installedSha256) {
-      throw artifactError("EXTENSION_ARTIFACT_MODIFIED", `Installed extension artifact contains local changes: ${target}`, { extension: extensionId, target });
+    if (artifact.ownership !== "seeded") {
+      if (!fs.existsSync(file) || sha256(fs.readFileSync(file)) !== artifact.installedSha256) {
+        throw artifactError("EXTENSION_ARTIFACT_MODIFIED", `Installed extension artifact contains local changes: ${target}`, { extension: extensionId, target });
+      }
     }
     if (!next.has(target)) removes.add(file);
   }
   for (const [target, artifact] of next) {
     const file = path.join(root, ...target.split("/"));
+    if (artifact.ownership === "seeded") {
+      if (!fs.existsSync(file)) {
+        const verified = verifiedById.get(artifact.id);
+        if (!verified?.content) throw artifactError("EXTENSION_ARTIFACT_MISSING", `Missing verified file artifact ${artifact.id}`, { extension: extensionId, artifact: artifact.id });
+        writes.set(file, verified.content);
+      }
+      continue;
+    }
     if (fs.existsSync(file) && !previous.has(target)) throw artifactError("EXTENSION_TARGET_OCCUPIED", `Extension target already exists and is not owned by ${extensionId}: ${target}`, { extension: extensionId, target });
     const verified = verifiedById.get(artifact.id);
     if (!verified?.content) throw artifactError("EXTENSION_ARTIFACT_MISSING", `Missing verified file artifact ${artifact.id}`, { extension: extensionId, artifact: artifact.id });
@@ -259,6 +269,7 @@ function verifyArtifactTransition(transition) {
 function installedArtifactsCurrent(root, extensionId, installed, state) {
   try {
     for (const artifact of artifactsOfKind(installed, "file")) {
+      if (artifact.ownership === "seeded") continue;
       const file = path.join(root, ...artifact.target.split("/"));
       if (!fs.existsSync(file) || sha256(fs.readFileSync(file)) !== artifact.installedSha256) return false;
     }

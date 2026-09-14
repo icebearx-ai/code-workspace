@@ -106,6 +106,12 @@ block only that runtime and do not change installation compatibility. Runtime su
 security sandbox. `global` means that a process may serve multiple Workspaces, not that it receives
 arbitrary Workspace paths, files, or credentials.
 
+For `service` runtimes invoked through `codew ext <id>`, the Host applies a fixed argv convention:
+an empty argv or a leading `serve` starts or attaches to the singleton service; any other leading
+argument runs the runtime entry as a short-lived command with inherited stdio, the caller's working
+directory, and no service-registry or readiness handshake. Command invocations resolve with the
+child's exit status and remain bounded by the declared `timeoutMs`.
+
 Before confirmation, the Host MUST freeze the manifest, entry, and complete extension-version directory digest. The Host MUST verify them again before execution. An extension MUST NOT use a dynamic result to expand the declarations in its manifest.
 
 ## 4. Execution Entry
@@ -141,6 +147,7 @@ Spec v1 supports four output kinds:
 | kind | ownership | Lifecycle semantics |
 |---|---|---|
 | `file` | `exclusive` | The Host exclusively writes, digests, drift-checks, and removes one regular file |
+| `file` | `seeded` | The Host writes defaults only when the target is absent, never overwrites user edits, skips drift checks, and removes the file on uninstall |
 | `directory` | `exclusive` | The Host exclusively replaces, canonically digests, drift-checks, and recursively removes a directory |
 | `text-block` | `shared` | The Host manages a marked text contribution using the extension id and output id |
 | `json-member` | `shared` | The Host manages one member selected by JSON Pointer while preserving other content |

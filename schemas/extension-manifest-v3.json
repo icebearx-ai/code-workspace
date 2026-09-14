@@ -37,7 +37,7 @@
         "properties": {
           "id": { "$ref": "#/$defs/id" },
           "kind": { "enum": ["file", "directory", "text-block", "json-member"] },
-          "ownership": { "enum": ["exclusive", "shared"] },
+          "ownership": { "enum": ["exclusive", "shared", "seeded"] },
           "target": { "$ref": "#/$defs/relativePath" },
           "selector": { "type": "string", "pattern": "^/(?:[^~/]|~[01])+(?:/(?:[^~/]|~[01])+)*$" },
           "format": { "enum": ["text", "toml"] },
@@ -50,7 +50,11 @@
         },
         "allOf": [
           {
-            "if": { "properties": { "kind": { "enum": ["file", "directory"] } } },
+            "if": { "properties": { "kind": { "const": "file" } } },
+            "then": { "properties": { "ownership": { "enum": ["exclusive", "seeded"] } } }
+          },
+          {
+            "if": { "properties": { "kind": { "const": "directory" } } },
             "then": { "properties": { "ownership": { "const": "exclusive" } } }
           },
           {

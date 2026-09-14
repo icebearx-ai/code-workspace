@@ -49,10 +49,11 @@ codew update --language zh-CN
 
 ## 使用 Agent Monitor
 
-为所有工作区启动一个全局 Monitor：
+监控以内置 `monitor` 扩展的形式提供。先在 Workspace 中安装扩展，再为所有工作区启动一个全局 Monitor：
 
 ```bash
-codew monitor
+codew extension install monitor --yes
+codew ext monitor
 ```
 
 打开命令输出的本地地址。面板会显示工作区、执行状态、待授权请求、已完成轮次和实时信号。Monitor 语言在页面中单独选择，与 `workspace.language` 相互独立。
@@ -60,10 +61,10 @@ codew monitor
 必要时可使用其他端口：
 
 ```bash
-codew monitor --port 8080
+codew ext monitor serve --port 8080
 ```
 
-所有参与监控的工作区都必须在 `.code-workspace/config.yaml` 中使用相同 URL。初始化后，请在 Codex 中使用 `/hooks` 检查并信任项目 Hook。
+扩展会向 `.code-workspace/monitor-reporting.json` 中记录的 URL 上报。安装后，请在 Codex 中使用 `/hooks` 检查并信任项目 Hook。
 
 ## 实用命令
 
