@@ -189,7 +189,7 @@ async function executeInitUnlocked(invocation, root) {
   ];
   if (result.localConfig.action === "write" || result.permissions.action === "skip") {
     lines.push(tools.length > 0
-      ? "Add local projects with the `code-workspace-add-projects` skill."
+      ? "Add local projects with the `codew-add-projects` skill."
       : "Add local projects with `code-workspace project inspect`, then register a complete project record.");
   }
   return success("init", data, lines.join("\n"), extensionDiagnostics);

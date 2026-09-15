@@ -13,13 +13,13 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "cefb5e43988e7feaae96f9b84b272dc924bf4545af1a08e86d0ca551622fb6c8"
+      "sha256": "7babab78319aa76329e159753d7110a8bbc8a5b5f349eef9a7779e6b4172a6af"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "681ece1e74b024778127f3caf4869db4555ed9d69496da1e23f73fcd05d182b4"
+      "sha256": "aca3fc5997adc41bc44a64e0c3d7aed9470e343087da40303dad1e39f6cdbffb"
     }
   ],
   "managedFiles": [
@@ -49,14 +49,14 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "40ee4a8ca7ca7c971a38f67d3900e996af736bf1d5512f91a7b67626328d38f0"
+        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
       },
       "render": {
         "variables": [
           "ADD_PROJECTS_INVOCATION"
         ],
         "values": {
-          "ADD_PROJECTS_INVOCATION": "/code-workspace:add-projects /absolute/path/to/project"
+          "ADD_PROJECTS_INVOCATION": "/codew:add-projects /absolute/path/to/project"
         }
       },
       "provenance": {
@@ -72,14 +72,14 @@
       "allowMissing": true,
       "desired": {
         "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "40ee4a8ca7ca7c971a38f67d3900e996af736bf1d5512f91a7b67626328d38f0"
+        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
       },
       "render": {
         "variables": [
           "ADD_PROJECTS_INVOCATION"
         ],
         "values": {
-          "ADD_PROJECTS_INVOCATION": "$code-workspace-add-projects /absolute/path/to/project"
+          "ADD_PROJECTS_INVOCATION": "$codew-add-projects /absolute/path/to/project"
         }
       },
       "provenance": {
@@ -88,14 +88,14 @@
     },
     {
       "id": "workspace-claude-add-projects-command",
-      "target": ".claude/commands/code-workspace/add-projects.md",
+      "target": ".claude/commands/codew/add-projects.md",
       "tools": [
         "claude"
       ],
       "allowMissing": true,
       "desired": {
-        "source": "templates/claude/commands/code-workspace/add-projects.md",
-        "sha256": "1cde9d04063230e8b5fb3c26a82935dc8dd7c51dfe6744c816e0fb21cce859e3"
+        "source": "templates/claude/commands/codew/add-projects.md",
+        "sha256": "c073df218714d42a809b66c8ec47ff4a242630a3b63446701cad2babe4454a38"
       },
       "provenance": {
         "kind": "template"
@@ -103,14 +103,14 @@
     },
     {
       "id": "workspace-claude-add-projects-skill",
-      "target": ".claude/skills/code-workspace-add-projects/SKILL.md",
+      "target": ".claude/skills/codew-add-projects/SKILL.md",
       "tools": [
         "claude"
       ],
       "allowMissing": true,
       "desired": {
-        "source": "templates/codex/skills/code-workspace-add-projects/SKILL.md",
-        "sha256": "14f2230b1c2196056f81933909f9b055b8f85dbdf947064909c6a50a07d1e4e3"
+        "source": "templates/codex/skills/codew-add-projects/SKILL.md",
+        "sha256": "866013dc43fd4b71c319ede739b31b97c5f65c44c6754f21a02552aa6118c32c"
       },
       "provenance": {
         "kind": "template"
@@ -118,14 +118,14 @@
     },
     {
       "id": "workspace-codex-add-projects-skill",
-      "target": ".codex/skills/code-workspace-add-projects/SKILL.md",
+      "target": ".codex/skills/codew-add-projects/SKILL.md",
       "tools": [
         "codex"
       ],
       "allowMissing": true,
       "desired": {
-        "source": "templates/codex/skills/code-workspace-add-projects/SKILL.md",
-        "sha256": "14f2230b1c2196056f81933909f9b055b8f85dbdf947064909c6a50a07d1e4e3"
+        "source": "templates/codex/skills/codew-add-projects/SKILL.md",
+        "sha256": "866013dc43fd4b71c319ede739b31b97c5f65c44c6754f21a02552aa6118c32c"
       },
       "provenance": {
         "kind": "template"
@@ -133,14 +133,14 @@
     },
     {
       "id": "workspace-codex-add-projects-openai",
-      "target": ".codex/skills/code-workspace-add-projects/agents/openai.yaml",
+      "target": ".codex/skills/codew-add-projects/agents/openai.yaml",
       "tools": [
         "codex"
       ],
       "allowMissing": true,
       "desired": {
-        "source": "templates/codex/skills/code-workspace-add-projects/agents/openai.yaml",
-        "sha256": "5aab2f33feb64c6d9d2da4125afebbd484cbd2cbb522d4faf47821ec2ef4d85a"
+        "source": "templates/codex/skills/codew-add-projects/agents/openai.yaml",
+        "sha256": "b09f6dc1d6d30f862ea3f8518a7f756f2a1c9e3c5a75c92dccd15f913c1bbe15"
       },
       "provenance": {
         "kind": "template"
@@ -148,14 +148,14 @@
     },
     {
       "id": "workspace-claude-resolve-branch-skill",
-      "target": ".claude/skills/code-workspace-resolve-branch/SKILL.md",
+      "target": ".claude/skills/codew-resolve-branch/SKILL.md",
       "tools": [
         "claude"
       ],
       "allowMissing": true,
       "desired": {
-        "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "df8c65fbadf917b7247bbd1f40144da8c904a95f2b3ee905a4d2d6176e0a5f1b"
+        "source": "templates/agents/skills/codew-resolve-branch/SKILL.md",
+        "sha256": "07ebc021c0fb587037f4e29efa81c9e8a5c955c804c46dc72053f7090c2b88f6"
       },
       "provenance": {
         "kind": "template"
@@ -163,14 +163,14 @@
     },
     {
       "id": "workspace-codex-resolve-branch-skill",
-      "target": ".codex/skills/code-workspace-resolve-branch/SKILL.md",
+      "target": ".codex/skills/codew-resolve-branch/SKILL.md",
       "tools": [
         "codex"
       ],
       "allowMissing": true,
       "desired": {
-        "source": "templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
-        "sha256": "df8c65fbadf917b7247bbd1f40144da8c904a95f2b3ee905a4d2d6176e0a5f1b"
+        "source": "templates/agents/skills/codew-resolve-branch/SKILL.md",
+        "sha256": "07ebc021c0fb587037f4e29efa81c9e8a5c955c804c46dc72053f7090c2b88f6"
       },
       "provenance": {
         "kind": "template"
@@ -178,14 +178,14 @@
     },
     {
       "id": "workspace-codex-resolve-branch-openai",
-      "target": ".codex/skills/code-workspace-resolve-branch/agents/openai.yaml",
+      "target": ".codex/skills/codew-resolve-branch/agents/openai.yaml",
       "tools": [
         "codex"
       ],
       "allowMissing": true,
       "desired": {
-        "source": "templates/agents/skills/code-workspace-resolve-branch/agents/openai.yaml",
-        "sha256": "66d111bbc40ac800cec568479ddd608eea9899ce53d1e660c30ef3c619c7c5a4"
+        "source": "templates/agents/skills/codew-resolve-branch/agents/openai.yaml",
+        "sha256": "e854ad71826040b985bbf698c5adf7bd67da8b42465934a80fdeb09669ff4b23"
       },
       "provenance": {
         "kind": "template"

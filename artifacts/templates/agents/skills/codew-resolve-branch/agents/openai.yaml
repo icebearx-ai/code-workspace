@@ -1,0 +1,6 @@
+interface:
+  display_name: "Codew Resolve Branch"
+  short_description: "解决分支不匹配问题(被动触发)"
+  default_prompt: "Use $codew-resolve-branch to reconcile the selected projects' branch mismatch."
+policy:
+  allow_implicit_invocation: false

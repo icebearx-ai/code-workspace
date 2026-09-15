@@ -6,12 +6,19 @@ const { sha256 } = require("./fs");
 
 const OBSOLETE_ASSETS = [
   "AGENT.md",
+  ".claude/commands/code-workspace/add-projects.md",
   ".claude/commands/opsxw/add-projects.md",
   ".claude/commands/opsxw/explore.md",
   ".claude/commands/opsxw/propose.md",
   ".claude/commands/opsxw/apply.md",
   ".claude/commands/opsxw/sync-specs.md",
   ".claude/commands/opsxw/archive.md",
+  ".claude/skills/code-workspace-add-projects/SKILL.md",
+  ".claude/skills/code-workspace-resolve-branch/SKILL.md",
+  ".codex/skills/code-workspace-add-projects/SKILL.md",
+  ".codex/skills/code-workspace-add-projects/agents/openai.yaml",
+  ".codex/skills/code-workspace-resolve-branch/SKILL.md",
+  ".codex/skills/code-workspace-resolve-branch/agents/openai.yaml",
   "USER_GUIDE.zh-CN.md",
 ];
 

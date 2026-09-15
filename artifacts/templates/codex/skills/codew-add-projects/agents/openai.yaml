@@ -1,0 +1,6 @@
+interface:
+  display_name: "Codew Add Projects"
+  short_description: "注册新的 Git 项目（被动触发）"
+  default_prompt: "Use $codew-add-projects to inspect and register these local project paths."
+policy:
+  allow_implicit_invocation: false

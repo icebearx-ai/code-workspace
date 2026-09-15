@@ -7,13 +7,13 @@
 Codex：
 
 ```text
-$code-workspace-add-projects /absolute/path/to/project-a /absolute/path/to/project-b
+$codew-add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
 Claude Code：
 
 ```text
-/code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
+/codew:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
 根据提示检查项目记录并只确认一次。add-projects skill 会用一次只读采集逐项检查路径；某个项目失败时会报告具体诊断并继续检查其他项目，不会静默忽略失败项。确认后，所有有效记录通过 stdin 一次交给 `project add`，不需要临时 JSON 文件，也不会默认追加第二次 verify。
@@ -91,8 +91,8 @@ codew project verify <project-name>
 
 默认随 Workspace 初始化安装：
 
-- `$code-workspace-add-projects` — 检查并注册本地 Git 项目，同时生成供 AI 导航使用的简洁 context。
-- `$code-workspace-resolve-branch` — 安全解决选中项目的分支不一致问题，并确认分支对齐。
+- `$codew-add-projects` — 检查并注册本地 Git 项目，同时生成供 AI 导航使用的简洁 context。
+- `$codew-resolve-branch` — 安全解决选中项目的分支不一致问题，并确认分支对齐。
 
 以下 Skill 以独立扩展提供，不会随 `init` 或 `update` 自动安装。需要时按名称安装，也可以单独卸载；交互式扩展选择默认不勾选任何扩展，每个选项会显示扩展名称和简短描述：
 
@@ -113,8 +113,8 @@ codew extension uninstall zhuiyi-jira-prd-analysis --yes
 
 | 用途 | Codex | Claude Code |
 | --- | --- | --- |
-| 添加工作区项目 | `$code-workspace-add-projects` | `/code-workspace:add-projects` |
-| 解决项目分支不一致 | `$code-workspace-resolve-branch` | `/code-workspace-resolve-branch` |
+| 添加工作区项目 | `$codew-add-projects` | `/codew:add-projects` |
+| 解决项目分支不一致 | `$codew-resolve-branch` | `/codew-resolve-branch` |
 | 分析 Jira 需求 | `$zhuiyi-jira-prd-analysis` | `$zhuiyi-jira-prd-analysis` |
 | 拆分 Jira 任务 | `$zhuiyi-jira-task-breakdown` | `$zhuiyi-jira-task-breakdown` |
 | 总结问题修复 | `$zhuiyi-jira-issue-fix-summary` | `$zhuiyi-jira-issue-fix-summary` |

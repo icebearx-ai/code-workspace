@@ -100,10 +100,10 @@ code-workspace project inspect /absolute/path/to/project --json
 Claude Code 用户可显式调用：
 
 ```text
-/code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
+/codew:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
-Codex 用户可对相同的显式路径调用 `$code-workspace-add-projects`。底层自动化可通过 stdin 一次传入完整项目记录：
+Codex 用户可对相同的显式路径调用 `$codew-add-projects`。底层自动化可通过 stdin 一次传入完整项目记录：
 
 ```bash
 cat projects.json | code-workspace project add --stdin --yes --json

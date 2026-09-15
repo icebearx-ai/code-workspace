@@ -102,10 +102,10 @@ code-workspace project inspect /absolute/path/to/project --json
 Claude Code users can invoke:
 
 ```text
-/code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
+/codew:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
-Codex users can invoke `$code-workspace-add-projects` with the same explicit paths. For low-level automation, pass complete project records through stdin:
+Codex users can invoke `$codew-add-projects` with the same explicit paths. For low-level automation, pass complete project records through stdin:
 
 ```bash
 cat projects.json | code-workspace project add --stdin --yes --json

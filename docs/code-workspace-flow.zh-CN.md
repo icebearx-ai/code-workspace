@@ -71,7 +71,7 @@ code-workspace project list --json
 code-workspace project verify "<project-name>" --json
 ```
 
-Claude Code 使用 `/code-workspace:add-projects`；Codex 使用 `$code-workspace-add-projects`。两者都要求用户给出显式路径，不得根据对话猜测。采集阶段逐项目报告失败并继续；写入阶段只接收用户确认的有效记录，并通过 `project add --stdin` 在现有全量校验和单事务内完成注册与授权。
+Claude Code 使用 `/codew:add-projects`；Codex 使用 `$codew-add-projects`。两者都要求用户给出显式路径，不得根据对话猜测。采集阶段逐项目报告失败并继续；写入阶段只接收用户确认的有效记录，并通过 `project add --stdin` 在现有全量校验和单事务内完成注册与授权。
 
 ## 分支不一致恢复
 

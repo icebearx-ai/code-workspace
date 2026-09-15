@@ -1082,7 +1082,7 @@ test("packaged skills and README files reference registered commands and options
   }
   assert(checked >= 20, `expected at least 20 command references, found ${checked}`);
   const addProjects = fs.readFileSync(
-    path.resolve(__dirname, "..", "..", "artifacts", "templates", "codex", "skills", "code-workspace-add-projects", "SKILL.md"),
+    path.resolve(__dirname, "..", "..", "artifacts", "templates", "codex", "skills", "codew-add-projects", "SKILL.md"),
     "utf8"
   );
   assert.match(addProjects, /data\.language/);
@@ -1103,7 +1103,7 @@ test("final branch migration leaves no legacy public contract in implementation 
     "README.zh-CN.md",
     "docs/code-workspace-flow.zh-CN.md",
     "artifacts/templates/agents/WORKSPACE_GUARD.md.template",
-    "artifacts/templates/agents/skills/code-workspace-resolve-branch/SKILL.md",
+    "artifacts/templates/agents/skills/codew-resolve-branch/SKILL.md",
     "artifacts/templates/user-guide/en-US.md",
     "artifacts/templates/user-guide/zh-CN.md",
   ];
@@ -1146,7 +1146,7 @@ test("final branch migration leaves no legacy public contract in implementation 
   ];
   for (const relative of userGuides) {
     const source = fs.readFileSync(path.join(repositoryRoot, relative), "utf8");
-    assert.match(source, /code-workspace-resolve-branch/, `${relative}: missing user-facing branch Skill`);
+    assert.match(source, /codew-resolve-branch/, `${relative}: missing user-facing branch Skill`);
     for (const pattern of forbiddenGuideDetails) {
       assert.doesNotMatch(source, pattern, `${relative}: ${pattern}`);
     }

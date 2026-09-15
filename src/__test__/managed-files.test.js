@@ -41,9 +41,9 @@ test("managed-file planning prevents partial writes when one target is unknown",
   const root = baseline();
   const manifest = loadInitManifest();
   installManagedFiles(root, manifest, ["claude", "codex"]);
-  const firstTarget = path.join(root, ".claude", "commands", "code-workspace", "add-projects.md");
+  const firstTarget = path.join(root, ".claude", "commands", "codew", "add-projects.md");
   fs.unlinkSync(firstTarget);
-  const unknownTarget = path.join(root, ".codex", "skills", "code-workspace-add-projects", "SKILL.md");
+  const unknownTarget = path.join(root, ".codex", "skills", "codew-add-projects", "SKILL.md");
   fs.appendFileSync(unknownTarget, "\nunknown local edit\n");
 
   assert.throws(
@@ -87,9 +87,9 @@ test("managed files respect selected tools while the user guide remains tool-neu
   assert(!result.some((entry) => entry.target === "CLAUDE.md"));
   assert(result.some((entry) => entry.target === "AGENTS.md"));
   assert(!result.some((entry) => entry.target === "AGENT.md"));
-  assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-resolve-branch/SKILL.md"));
-  assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-add-projects/agents/openai.yaml"));
-  assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-resolve-branch/agents/openai.yaml"));
+  assert(result.some((entry) => entry.target === ".codex/skills/codew-resolve-branch/SKILL.md"));
+  assert(result.some((entry) => entry.target === ".codex/skills/codew-add-projects/agents/openai.yaml"));
+  assert(result.some((entry) => entry.target === ".codex/skills/codew-resolve-branch/agents/openai.yaml"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
   assert(result.some((entry) => entry.target === "USER_GUIDE.md"));
@@ -105,8 +105,8 @@ test("changing the selected tools removes previously managed tool assets", () =>
   const changed = installManagedFiles(root, manifest, []);
   assert(changed.some((entry) => entry.target === "AGENTS.md" && entry.action === "remove"));
   assert(!fs.existsSync(path.join(root, "AGENTS.md")));
-  assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-add-projects", "SKILL.md")));
-  assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-resolve-branch", "SKILL.md")));
+  assert(!fs.existsSync(path.join(root, ".codex", "skills", "codew-add-projects", "SKILL.md")));
+  assert(!fs.existsSync(path.join(root, ".codex", "skills", "codew-resolve-branch", "SKILL.md")));
   assert(fs.existsSync(path.join(root, "USER_GUIDE.md")));
 });
 
@@ -128,7 +128,7 @@ test("branch Skill stays static across artifact languages and keeps one ASK stru
     installManagedFiles(root, manifest, ["codex"], {
       variables: { WORKSPACE_LANGUAGE: language },
     });
-    const skill = fs.readFileSync(path.join(root, ".codex", "skills", "code-workspace-resolve-branch", "SKILL.md"), "utf8");
+    const skill = fs.readFileSync(path.join(root, ".codex", "skills", "codew-resolve-branch", "SKILL.md"), "utf8");
     installed.push(skill);
     assert.doesNotMatch(skill, /\{\{WORKSPACE_LANGUAGE\}\}|branchAsk|Workspace ASK language|Requirement:|Scenario:|zh-CN|en-US/);
     assert.match(skill, /\[mismatch introduction and request for a decision\]/);
@@ -145,9 +145,9 @@ test("branch Skill stays static across artifact languages and keeps one ASK stru
 });
 
 test("branch Skill includes reusable model-behavior eval cases", () => {
-  const file = path.join(__dirname, "..", "..", "artifacts", "templates", "agents", "skills", "code-workspace-resolve-branch", "evals", "evals.json");
+  const file = path.join(__dirname, "..", "..", "artifacts", "templates", "agents", "skills", "codew-resolve-branch", "evals", "evals.json");
   const evals = JSON.parse(fs.readFileSync(file, "utf8"));
-  assert.equal(evals.skill_name, "code-workspace-resolve-branch");
+  assert.equal(evals.skill_name, "codew-resolve-branch");
   assert.deepEqual(evals.evals.map((entry) => entry.id), [1, 2, 3]);
   assert(evals.evals.every((entry) => entry.prompt && entry.expected_output && Array.isArray(entry.files) && entry.expectations.length >= 5));
   assert.match(evals.evals[0].expected_output, /single-project ASK/);
@@ -173,8 +173,8 @@ test("one canonical template renders both workspace instructions with platform-s
   const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
   const codex = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
   const normalize = (content) => content
-    .replace("/code-workspace:add-projects /absolute/path/to/project", "<add-projects>")
-    .replace("$code-workspace-add-projects /absolute/path/to/project", "<add-projects>");
+    .replace("/codew:add-projects /absolute/path/to/project", "<add-projects>")
+    .replace("$codew-add-projects /absolute/path/to/project", "<add-projects>");
   assert.equal(normalize(claude), normalize(codex));
   assert.match(source, /\{\{ADD_PROJECTS_INVOCATION\}\}/);
   assert.equal(source.trimEnd().split("\n").length <= 80, true);
@@ -183,7 +183,7 @@ test("one canonical template renders both workspace instructions with platform-s
     assert.match(content, /codew project list --json/);
     assert.match(content, /codew project show "<project\.name>" --json/);
     assert.match(content, /codew project verify "<project\.name>" --json/);
-    assert.match(content, /code-workspace-resolve-branch/);
+    assert.match(content, /codew-resolve-branch/);
     assert.match(content, /PROJECT_BRANCH_MISMATCH/);
     assert.match(content, /MUST NOT guess a project path/);
     assert.match(content, /MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root/);
@@ -199,10 +199,10 @@ test("one canonical template renders both workspace instructions with platform-s
     assert.doesNotMatch(content, /discard pre-update context and rerun targeted `project verify`/);
     assert.doesNotMatch(content, /OpenSpec owns|Cross-project|Every capability|proposal|archive workflow/);
   }
-  assert.match(claude, /\/code-workspace:add-projects \/absolute\/path\/to\/project/);
-  assert.doesNotMatch(claude, /\$code-workspace-add-projects/);
-  assert.match(codex, /\$code-workspace-add-projects \/absolute\/path\/to\/project/);
-  assert.doesNotMatch(codex, /\/code-workspace:add-projects/);
+  assert.match(claude, /\/codew:add-projects \/absolute\/path\/to\/project/);
+  assert.doesNotMatch(claude, /\$codew-add-projects/);
+  assert.match(codex, /\$codew-add-projects \/absolute\/path\/to\/project/);
+  assert.doesNotMatch(codex, /\/codew:add-projects/);
 });
 
 test("Claude selection installs only the Claude root instruction template", () => {
@@ -211,7 +211,7 @@ test("Claude selection installs only the Claude root instruction template", () =
   const result = installManagedFiles(root, manifest, ["claude"]);
   assert(result.some((entry) => entry.target === "CLAUDE.md"));
   assert(!result.some((entry) => entry.target === "AGENTS.md"));
-  assert(result.some((entry) => entry.target === ".claude/skills/code-workspace-resolve-branch/SKILL.md"));
+  assert(result.some((entry) => entry.target === ".claude/skills/codew-resolve-branch/SKILL.md"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
   assert(fs.existsSync(path.join(root, "CLAUDE.md")));

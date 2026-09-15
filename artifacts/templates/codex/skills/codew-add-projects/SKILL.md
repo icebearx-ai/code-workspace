@@ -1,11 +1,13 @@
 ---
+name: codew-add-projects
 description: When explicitly invoked with one or more project paths, inspect Git worktrees read-only, generate concise AI project context, register the completed records in one stdin transaction, and apply Agent directory authorization.
-argument-hint: "<project path> [additional project paths]"
 ---
 
-Run this workflow only when the user explicitly invokes `/code-workspace:add-projects` and provides one or more project paths. Do not infer this invocation from a general request to inspect, update, or add a project. The values in `$ARGUMENTS` are the project paths; preserve quoted paths as single arguments. If no path is provided, ask the user for one or more paths and do not inspect or modify anything.
+# Add local projects
 
-Expected invocation: `/code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b`
+Run this workflow only when the user explicitly invokes `$codew-add-projects` and provides one or more project paths. Do not infer this invocation from a general request to inspect, update, or add a project. The arguments after the skill name are the project paths; preserve quoted paths as single arguments. If no path is provided, ask the user for one or more paths and do not inspect or modify anything.
+
+Expected invocation: `$codew-add-projects /absolute/path/to/project-a /absolute/path/to/project-b`
 
 ## Collect evidence once
 
@@ -61,5 +63,3 @@ Use the runtime's native stdin channel when available. Do not create a temporary
 Completion requires `ok: true`, the expected registered projects, and every applicable permission result to report `verified: true`. `project add` performs the existing configuration and authorization postcondition verification inside its transaction. Do not run `code-workspace project verify --json` by default; run it only when the user explicitly asks for an independent final check.
 
 Do not hand-edit `.codew/config.yaml` or permission files.
-
-$ARGUMENTS

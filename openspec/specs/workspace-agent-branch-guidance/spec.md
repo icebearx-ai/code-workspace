@@ -144,7 +144,7 @@ Workspace Guard SHALL 在目标项目开始读取或修改代码前，先运行�
 
 #### Scenario: 分支存在不一致
 - **WHEN** 定向 `project verify` 报告 `PROJECT_BRANCH_MISMATCH`
-- **THEN** Guard 调用 `code-workspace-resolve-branch` Skill；Skill 完成 `project branch verify` 后由 Guard 直接调用 `project branch update-latest`
+- **THEN** Guard 调用 `codew-resolve-branch` Skill；Skill 完成 `project branch verify` 后由 Guard 直接调用 `project branch update-latest`
 
 #### Scenario: 入口存在非分支项目问题
 - **WHEN** 入口定向 `project verify` 因非分支问题失败

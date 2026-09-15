@@ -1,5 +1,5 @@
 ---
-name: code-workspace-resolve-branch
+name: codew-resolve-branch
 description: Resolve `PROJECT_BRANCH_MISMATCH` for one or more already selected Code Workspace projects before project work. Use this Skill whenever targeted verification reports registered/actual branch mismatches; it gathers canonical facts, presents a deterministic structured choice, delegates every automatic direction to the branch CLI, and verifies branch alignment.
 ---
 

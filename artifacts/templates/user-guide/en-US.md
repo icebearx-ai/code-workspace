@@ -7,13 +7,13 @@ A short reminder for using Code Workspace after initialization.
 Codex:
 
 ```text
-$code-workspace-add-projects /absolute/path/to/project-a /absolute/path/to/project-b
+$codew-add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
 Claude Code:
 
 ```text
-/code-workspace:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
+/codew:add-projects /absolute/path/to/project-a /absolute/path/to/project-b
 ```
 
 Review the project records and confirm once. The add-projects skill uses one read-only collection to inspect every path independently; a failed project reports its diagnostic without stopping the remaining paths or being silently ignored. After confirmation, all valid records are sent to `project add` through stdin in one operation, with no temporary JSON file and no default second verify.
@@ -91,8 +91,8 @@ Add `--json` when a query result is consumed by Codex or a script.
 
 Installed by default during Workspace initialization:
 
-- `$code-workspace-add-projects` — inspect and register local Git projects with concise AI-generated navigation context.
-- `$code-workspace-resolve-branch` — safely resolve a selected project's branch mismatch and confirm branch alignment.
+- `$codew-add-projects` — inspect and register local Git projects with concise AI-generated navigation context.
+- `$codew-resolve-branch` — safely resolve a selected project's branch mismatch and confirm branch alignment.
 
 The following skills are distributed as independent extensions. They are not installed by `init` or `update`; install or uninstall each one explicitly. The interactive extension picker starts with no extensions selected, and each choice shows the extension name and a short description:
 
@@ -113,8 +113,8 @@ These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` 
 
 | Purpose | Codex | Claude Code |
 | --- | --- | --- |
-| Add workspace projects | `$code-workspace-add-projects` | `/code-workspace:add-projects` |
-| Resolve a project branch mismatch | `$code-workspace-resolve-branch` | `/code-workspace-resolve-branch` |
+| Add workspace projects | `$codew-add-projects` | `/codew:add-projects` |
+| Resolve a project branch mismatch | `$codew-resolve-branch` | `/codew-resolve-branch` |
 | Analyze a Jira requirement | `$zhuiyi-jira-prd-analysis` | `$zhuiyi-jira-prd-analysis` |
 | Break down Jira tasks | `$zhuiyi-jira-task-breakdown` | `$zhuiyi-jira-task-breakdown` |
 | Summarize an issue fix | `$zhuiyi-jira-issue-fix-summary` | `$zhuiyi-jira-issue-fix-summary` |
