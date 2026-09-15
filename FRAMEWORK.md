@@ -88,7 +88,7 @@ Session → Workspace → Foundation
 会话层不得：
 
 - 从当前目录、对话内容或事件内容猜测项目作用域；
-- 直接编辑 `.code-workspace/config.yaml`、权限文件或项目注册表；
+- 直接编辑 `.codew/config.yaml`、权限文件或项目注册表；
 - 绕过 Workspace 层执行项目授权、分支协调或项目校验；
 - 将只能被观测的 provider 会话伪装为可控制会话。
 

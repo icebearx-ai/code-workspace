@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const packageJson = require("../../package.json");
-const { loadState, saveState } = require("./config");
+const { LOCAL_DIRECTORY, loadState, saveState } = require("./config");
 const { WorkspaceError } = require("./errors");
 const { atomicWrite, sha256 } = require("./fs");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
@@ -48,7 +48,7 @@ function renderManagedContent(entry, variables = {}) {
 
 function extensionHookState(root, provided) {
   if (provided !== undefined) return provided;
-  const file = path.join(root, ".code-workspace", "ext-manifest.json");
+  const file = path.join(root, LOCAL_DIRECTORY, "ext-manifest.json");
   if (!fs.existsSync(file)) return { schemaVersion: 1, experimental: true, extensions: {} };
   try {
     const state = JSON.parse(fs.readFileSync(file, "utf8"));

@@ -58,11 +58,11 @@ codew project branch update-latest "<project-a>" "<project-b>" --json
 
 The AI/Agent MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root, including:
 
-- `.code-workspace/config.yaml` or `.code-workspace/state.json`
+- `.codew/config.yaml` or `.codew/state.json`
 - `.codex/config.toml`
 - `CLAUDE.md`, `AGENTS.md`, or other managed workspace files
 
-AI/Agent registry changes must use an approved `codew` command. Users may manually edit `.code-workspace/config.yaml` and are responsible for the resulting configuration; AI/Agent must not imitate that edit with a script or direct file write. The CLI owns confirmation, concurrency checks, persistence or safe external effects, postconditions, rollback/compensation, and structured output. This boundary does not prevent user-requested production-code changes inside the selected external `project.location`.
+AI/Agent registry changes must use an approved `codew` command. Users may manually edit `.codew/config.yaml` and are responsible for the resulting configuration; AI/Agent must not imitate that edit with a script or direct file write. The CLI owns confirmation, concurrency checks, persistence or safe external effects, postconditions, rollback/compensation, and structured output. This boundary does not prevent user-requested production-code changes inside the selected external `project.location`.
 
 ## Responsibilities
 

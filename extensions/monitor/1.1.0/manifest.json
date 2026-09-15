@@ -15,7 +15,7 @@
       "id": "reporting-config",
       "kind": "file",
       "ownership": "seeded",
-      "target": ".code-workspace/config-monitor.yaml"
+      "target": ".codew/config-monitor.yaml"
     }
   ],
   "hooks": [

@@ -4,7 +4,7 @@ coverage
 *.tgz
 
 # Code Workspace local project registry and managed state
-/.code-workspace/
+/.codew/
 
 # Zhuiyi Jira MCP attachments
 /.jira-attachments/

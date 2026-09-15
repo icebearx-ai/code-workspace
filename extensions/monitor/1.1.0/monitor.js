@@ -336,7 +336,7 @@ async function reportHookEvent(input, reporting, options = {}) {
 function findReportingConfig(startDirectory) {
   let directory = path.resolve(startDirectory);
   for (;;) {
-    const candidate = path.join(directory, ".code-workspace", "config-monitor.yaml");
+    const candidate = path.join(directory, ".codew", "config-monitor.yaml");
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(directory);
     if (parent === directory) return null;

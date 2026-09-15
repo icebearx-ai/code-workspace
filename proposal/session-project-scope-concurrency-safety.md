@@ -108,7 +108,7 @@ Scope Broker 是可信控制面，负责：
 - 记录 revision、fencing token 和审计事件；
 - 通知启动器暂停或终止失效会话。
 
-Broker 状态必须位于 Agent 不可写的用户状态目录、受控本地 daemon 内存或其他可信存储中。仅仅把文件放在 `.code-workspace/` 下不能形成可信边界。
+Broker 状态必须位于 Agent 不可写的用户状态目录、受控本地 daemon 内存或其他可信存储中。仅仅把文件放在 `.codew/` 下不能形成可信边界。
 
 Agent 可访问的查询/请求接口与用户批准接口必须分离。`code-w scope request` 只能创建请求，不能通过 `--yes`、环境变量或可伪造的标准输入把请求升级为批准。批准端点应只对沙箱外的 Launcher/UI 管理能力开放。
 
@@ -344,7 +344,7 @@ DENY(code, reason, remediation)
 | 修改 `read-only` 项目 | 拒绝 |
 | 修改未选注册项目 | 拒绝 |
 | 修改未注册路径 | 拒绝 |
-| 修改 `.code-workspace/*` | 拒绝，必须经 Broker/CLI 受控流程 |
+| 修改 `.codew/*` | 拒绝，必须经 Broker/CLI 受控流程 |
 | 修改 `.codex/config.toml` | 拒绝 |
 | 通过符号链接写出真实授权根 | 拒绝 |
 | 未建立有效作用域时写文件 | 拒绝 |

@@ -8,17 +8,17 @@
 
 ### Requirement: 主配置必须引用独立项目配置
 
-Code Workspace SHALL require `.code-workspace/config.yaml` to contain `projects.ref` naming one safe regular file in the same `.code-workspace` directory and SHALL use that file as the only project registry source. Initialization SHALL use `config-projects.yaml` as the default reference filename.
+Code Workspace SHALL require `.codew/config.yaml` to contain `projects.ref` naming one safe regular file in the same `.codew` directory and SHALL use that file as the only project registry source. Initialization SHALL use `config-projects.yaml` as the default reference filename.
 
 #### Scenario: 初始化生成拆分配置
 
 - **WHEN** a workspace is initialized successfully
-- **THEN** `.code-workspace/config.yaml` contains the `projects.ref` object and `.code-workspace/config-projects.yaml` exists with `schemaVersion: 1` and an empty `projects` array
+- **THEN** `.codew/config.yaml` contains the `projects.ref` object and `.codew/config-projects.yaml` exists with `schemaVersion: 1` and an empty `projects` array
 
 #### Scenario: 自定义安全引用文件
 
-- **WHEN** `projects.ref` is set to a safe filename such as `team-projects.yaml` and that file exists in `.code-workspace`
-- **THEN** project loading and all project mutations use `.code-workspace/team-projects.yaml`, while initialization continues to default to `config-projects.yaml`
+- **WHEN** `projects.ref` is set to a safe filename such as `team-projects.yaml` and that file exists in `.codew`
+- **THEN** project loading and all project mutations use `.codew/team-projects.yaml`, while initialization continues to default to `config-projects.yaml`
 
 #### Scenario: 内联项目配置被拒绝
 

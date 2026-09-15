@@ -5,7 +5,18 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
-const { configPath, loadConfig, loadConfigProjection, projectConfigPath, readProjectConfigDocument, saveConfig, updateProjectBranch } = require("../core/config");
+const {
+  LOCAL_DIRECTORY,
+  configPath,
+  findWorkspaceRoot,
+  loadConfig,
+  loadConfigProjection,
+  projectConfigPath,
+  readProjectConfigDocument,
+  requireWorkspaceRoot,
+  saveConfig,
+  updateProjectBranch,
+} = require("../core/config");
 const { inspectProject } = require("../core/project");
 const { validateProject, validateProjects } = require("../core/validation");
 
@@ -90,7 +101,7 @@ test("project configuration reference accepts a custom safe filename and rejects
     "  ref: team-projects.yaml",
     "",
   ].join("\n"));
-  const customProjectFile = path.join(root, ".code-workspace", "team-projects.yaml");
+  const customProjectFile = path.join(root, ".codew", "team-projects.yaml");
   fs.writeFileSync(customProjectFile, "schemaVersion: 1\nprojects: []\n");
   assert.deepEqual(loadConfigProjection(root, ["projects"]).projects, []);
 
@@ -149,14 +160,14 @@ test("configuration writes preserve the referenced custom project filename", () 
     monitor: { enable: false, url: "http://127.0.0.1:3211" },
     projects: [project],
   }, { ref: customRef });
-  assert.equal(readProjectConfigDocument(root).file, path.join(root, ".code-workspace", customRef));
+  assert.equal(readProjectConfigDocument(root).file, path.join(root, ".codew", customRef));
   const loaded = loadConfig(root);
   loaded.projects[0].branch = "feature/custom";
   saveConfig(root, loaded);
   assert.deepEqual(loadConfig(root).projects, [{ ...project, branch: "feature/custom" }]);
   assert.deepEqual(loadConfigProjection(root, ["projects"]).projects, [{ ...project, branch: "feature/custom" }]);
-  assert.equal(fs.existsSync(path.join(root, ".code-workspace", "config-projects.yaml")), false);
-  assert.equal(fs.existsSync(path.join(root, ".code-workspace", customRef)), true);
+  assert.equal(fs.existsSync(path.join(root, ".codew", "config-projects.yaml")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codew", customRef)), true);
   assert.match(fs.readFileSync(configPath(root), "utf8"), new RegExp(`ref: ${customRef}`));
   assert.throws(() => saveConfig(root, loaded, { ref: "../outside.yaml" }), (error) => error.code === "PROJECT_CONFIG_REFERENCE_INVALID");
 });
@@ -403,4 +414,22 @@ test("targeted validation never inspects unselected worktrees", () => {
   }, "service", { inspectGitWorktree });
   assert(conflict.diagnostics.some((entry) => entry.code === "NESTED_PROJECT_PATH" && entry.projects.includes("unreachable")));
   assert.deepEqual(inspected, [service.location]);
+});
+
+test("workspace discovery locates the .codew directory and reports a missing workspace", () => {
+  const root = temporaryRoot();
+  saveConfig(root, {
+    schemaVersion: 2,
+    workspace: { name: "discovery", uuid: "123e4567-e89b-42d3-a456-426614174000", language: "en-US" },
+    projects: [],
+  });
+  assert.equal(LOCAL_DIRECTORY, ".codew");
+  assert(fs.existsSync(path.join(root, ".codew", "config.yaml")));
+  assert.equal(findWorkspaceRoot(root), root);
+  assert.equal(findWorkspaceRoot(path.join(root, "nested", "deeper")), root);
+  assert.equal(requireWorkspaceRoot(path.join(root, "nested")), root);
+
+  const empty = temporaryRoot();
+  assert.equal(findWorkspaceRoot(empty), null);
+  assert.throws(() => requireWorkspaceRoot(empty), (error) => error.code === "WORKSPACE_NOT_FOUND");
 });

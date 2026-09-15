@@ -1,7 +1,7 @@
 {
   "command": "node",
   "args": [
-    ".code-workspace/extensions/zhuiyi-jira-mcp/1.0.0/dist/index.js"
+    ".codew/extensions/zhuiyi-jira-mcp/1.0.0/dist/index.js"
   ],
   "env": {
     "JIRA_AUTH_TYPE": "cookie",

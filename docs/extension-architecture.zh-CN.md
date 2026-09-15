@@ -161,7 +161,7 @@ installed manifest 是 Host 持久化的最终安装事实，保存在 Workspace
 以下职责不得下沉到扩展：
 
 - 获取或释放 Workspace 操作锁；
-- 直接修改 `.code-workspace/ext-manifest.json`；
+- 直接修改 `.codew/ext-manifest.json`；
 - 决定冲突时覆盖其他扩展或用户内容；
 - 绕过 Host 直接提交真实 Workspace；
 - 在卸载时执行任意脚本；

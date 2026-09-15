@@ -37,7 +37,7 @@ Use `--tools claude`, `--tools codex`, or `--tools none` to override the default
 
 Initialization writes only Workspace-owned state and integrations:
 
-- `.code-workspace/config.yaml`, its referenced project configuration file (default: `.code-workspace/config-projects.yaml`), and `.code-workspace/state.json`
+- `.codew/config.yaml`, its referenced project configuration file (default: `.codew/config-projects.yaml`), and `.codew/state.json`
 - `USER_GUIDE.md`
 - `CLAUDE.md` and/or `AGENTS.md`
 - Workspace-specific commands and skills whose names start with `code-workspace-` or use the `/code-workspace` namespace
@@ -80,7 +80,7 @@ The MCP runtime packages are not copied into the Workspace. Only their configura
 
 `zhuiyi-opensvn-mcp` accesses OpenSVN static resources through `opssvn.in.wezhuiyi.com`. Its bundled configuration sets `SVN_OUTPUT_DIR` to `.mcp-cache-opensvn`, requires `SVN_AUTHORIZATION`, and defaults `SVN_MAX_RESOURCES` to `200`; credentials are not stored in the extension package and should be supplied through local configuration or the runtime environment.
 
-Extension entries run in separate Node processes and generate files in temporary staging directories. The host rejects undeclared, missing, symbolic-link, non-file, path-escaping, conflicting, and checksum-mismatched artifacts before transactionally installing them. Per-Workspace state is stored in `.code-workspace/ext-manifest.json`. A failed extension is reported as a warning and does not roll back successful core initialization or stop later extensions; a failed upgrade restores and retains the previous installed version.
+Extension entries run in separate Node processes and generate files in temporary staging directories. The host rejects undeclared, missing, symbolic-link, non-file, path-escaping, conflicting, and checksum-mismatched artifacts before transactionally installing them. Per-Workspace state is stored in `.codew/ext-manifest.json`. A failed extension is reported as a warning and does not roll back successful core initialization or stop later extensions; a failed upgrade restores and retains the previous installed version.
 
 Extensions may own complete files or declare Host-managed abstract Hooks. Codex and Claude
 adaptors render those declarations into each provider's native configuration and dynamically plug
@@ -115,10 +115,10 @@ cat projects.json | code-workspace project add --stdin --yes --json
 
 The registry stores each project's name, real location, registered branch, type, and context. The registered branch is the Code Workspace expected state; the actual branch is observed from the selected Git worktree. Workspace never guesses a path from a conversation or automatically decides which branch is authoritative.
 
-Project registration is always stored in a separate file in the `.code-workspace` directory. Initialization uses `config-projects.yaml` by default, while `projects.ref` may name any safe regular filename in that directory:
+Project registration is always stored in a separate file in the `.codew` directory. Initialization uses `config-projects.yaml` by default, while `projects.ref` may name any safe regular filename in that directory:
 
 ```yaml
-# .code-workspace/config.yaml
+# .codew/config.yaml
 projects:
   ref: config-projects.yaml
 ```
@@ -126,7 +126,7 @@ projects:
 The referenced file uses this format:
 
 ```yaml
-# .code-workspace/config-projects.yaml
+# .codew/config-projects.yaml
 schemaVersion: 1
 projects:
   - name: payments
@@ -137,9 +137,9 @@ projects:
       Service ownership and navigation context.
 ```
 
-`projects.ref` is resolved relative to `config.yaml`. It must be one safe regular filename in the same `.code-workspace` directory; URLs, globs, absolute paths, path traversal, and inline `projects` arrays are not supported. Existing project command arguments and behavior remain compatible, `project add` additionally supports `--stdin`, and project data is still read from and written to the referenced file. The `.code-workspace/` directory is ignored by default, so Git history for this local registry requires an explicit repository policy.
+`projects.ref` is resolved relative to `config.yaml`. It must be one safe regular filename in the same `.codew` directory; URLs, globs, absolute paths, path traversal, and inline `projects` arrays are not supported. Existing project command arguments and behavior remain compatible, `project add` additionally supports `--stdin`, and project data is still read from and written to the referenced file. The `.codew/` directory is ignored by default, so Git history for this local registry requires an explicit repository policy.
 
-For example, `ref: team-projects.yaml` makes the project registry `.code-workspace/team-projects.yaml`; the default remains `config-projects.yaml`.
+For example, `ref: team-projects.yaml` makes the project registry `.codew/team-projects.yaml`; the default remains `config-projects.yaml`.
 
 ## Daily commands
 
@@ -165,10 +165,10 @@ The two reconciliation directions are deliberately separate:
 
 Both commands detect plan drift and verify postconditions. `project branch update-latest` is the separate, opt-in path for projects with `updateLatest: true`; it only fetches the configured upstream and fast-forwards a clean matching branch. Code Workspace never creates or downloads a branch and never performs stash, reset, rebase, non-fast-forward merge, production-code edits, or conflict resolution.
 
-Users may manually set the optional project policy in the file named by `projects.ref` (default: `.code-workspace/config-projects.yaml`):
+Users may manually set the optional project policy in the file named by `projects.ref` (default: `.codew/config-projects.yaml`):
 
 ```yaml
-# .code-workspace/config-projects.yaml
+# .codew/config-projects.yaml
 schemaVersion: 1
 projects:
   - name: payments

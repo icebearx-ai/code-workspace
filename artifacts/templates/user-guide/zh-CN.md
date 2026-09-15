@@ -39,7 +39,7 @@ codew init --language zh-CN
 codew language
 ```
 
-所选偏好保存在 `.code-workspace/config.yaml` 的 `workspace.language`。已有工作区可通过以下命令切换语言：
+所选偏好保存在 `.codew/config.yaml` 的 `workspace.language`。已有工作区可通过以下命令切换语言：
 
 ```bash
 codew update --language zh-CN
@@ -64,7 +64,7 @@ codew ext monitor
 codew ext monitor serve --port 8080
 ```
 
-扩展会向 `.code-workspace/monitor-reporting.json` 中记录的 URL 上报。安装后，请在 Codex 中使用 `/hooks` 检查并信任项目 Hook。
+扩展会向 `.codew/monitor-reporting.json` 中记录的 URL 上报。安装后，请在 Codex 中使用 `/hooks` 检查并信任项目 Hook。
 
 ## 实用命令
 

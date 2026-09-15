@@ -17,7 +17,7 @@
       "id": "runtime",
       "kind": "directory",
       "ownership": "exclusive",
-      "target": ".code-workspace/extensions/zhuiyi-opensvn-mcp/0.1.0"
+      "target": ".codew/extensions/zhuiyi-opensvn-mcp/0.1.0"
     },
     {
       "id": "gitignore",

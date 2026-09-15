@@ -1,7 +1,8 @@
-const { loadState } = require("../../core/config");
+const { LOCAL_DIRECTORY, loadState } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const {
   applyExtensionUninstall,
+  EXTENSION_STATE_FILE,
   discoverExtensions,
   inspectExtensionState,
   normalizeExtensionNames,
@@ -22,7 +23,7 @@ function formatUninstallPlan(plan) {
   return [
     `Uninstall extension ${plan.id}@${plan.version}:`,
     ...plan.targets.map((target) => `  REMOVE ${target}`),
-    "  REMOVE .code-workspace/ext-manifest.json entry",
+    `  REMOVE ${LOCAL_DIRECTORY}/${EXTENSION_STATE_FILE} entry`,
   ].join("\n");
 }
 

@@ -6,7 +6,7 @@ const { atomicWrite } = require("./fs");
 const { WorkspaceError } = require("./errors");
 const { LANGUAGE_CODES } = require("../i18n");
 
-const LOCAL_DIRECTORY = ".code-workspace";
+const LOCAL_DIRECTORY = ".codew";
 const CONFIG_FILE = "config.yaml";
 const PROJECT_CONFIG_FILE = "config-projects.yaml";
 const PROJECT_CONFIG_VERSION = 1;
@@ -109,13 +109,13 @@ function normalizeProjectReference(value, options = {}) {
   if (value == null || (typeof value === "object" && !Array.isArray(value) && !Object.prototype.hasOwnProperty.call(value, "ref"))) {
     throw new WorkspaceError("PROJECT_CONFIG_REFERENCE_MISSING", "projects.ref must reference a project configuration filename; no project configuration reference was provided", {
       file,
-      remediation: "Set projects.ref to config-projects.yaml and move project records into .code-workspace/config-projects.yaml.",
+      remediation: "Set projects.ref to config-projects.yaml and move project records into .codew/config-projects.yaml.",
     });
   }
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new WorkspaceError("PROJECT_CONFIG_INLINE_UNSUPPORTED", "projects must reference a project configuration filename; inline project arrays are not supported", {
       file,
-      remediation: "Set projects.ref to config-projects.yaml and move project records into .code-workspace/config-projects.yaml.",
+      remediation: "Set projects.ref to config-projects.yaml and move project records into .codew/config-projects.yaml.",
     });
   }
   const ref = typeof value.ref === "string" ? value.ref.trim() : "";
@@ -134,8 +134,8 @@ function normalizeProjectReference(value, options = {}) {
     throw new WorkspaceError("PROJECT_CONFIG_REFERENCE_INVALID", "projects.ref must be a safe local project configuration filename", {
       file,
       ref: ref || null,
-      constraints: "Use one regular filename in the .code-workspace directory; path traversal, absolute paths, URLs, and glob patterns are not supported.",
-      remediation: "Set projects.ref to a regular filename in .code-workspace, such as config-projects.yaml.",
+      constraints: "Use one regular filename in the .codew directory; path traversal, absolute paths, URLs, and glob patterns are not supported.",
+      remediation: "Set projects.ref to a regular filename in .codew, such as config-projects.yaml.",
     });
   }
   return { ref };

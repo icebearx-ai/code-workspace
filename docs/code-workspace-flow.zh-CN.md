@@ -6,7 +6,7 @@
 
 - Workspace 不安装、检测或调用其他 OpenSpec CLI。
 - Workspace 不读取、创建、更新或归档 `openspec/` 下的记录。
-- Workspace 的写入范围是 `.code-workspace/`、Workspace 自有 Agent 集成、Codex hook 与权限配置。
+- Workspace 的写入范围是 `.codew/`、Workspace 自有 Agent 集成、Codex hook 与权限配置。
 - 项目生产代码只允许在已注册项目的 `location` 中修改；Workspace CLI 自身不执行生产代码修改。
 
 ## 初始化和维护流程
@@ -49,18 +49,18 @@ flowchart TD
 项目注册配置格式：
 
 ```yaml
-# .code-workspace/config.yaml
+# .codew/config.yaml
 projects:
   ref: config-projects.yaml
 ```
 
 ```yaml
-# .code-workspace/config-projects.yaml
+# .codew/config-projects.yaml
 schemaVersion: 1
 projects: []
 ```
 
-初始化默认生成 `config-projects.yaml`，但 `projects.ref` 可以引用同一 `.code-workspace` 目录下任意安全的普通文件名；内联项目数组、路径逃逸、绝对路径、URL 和 glob 等引用形式不受支持。
+初始化默认生成 `config-projects.yaml`，但 `projects.ref` 可以引用同一 `.codew` 目录下任意安全的普通文件名；内联项目数组、路径逃逸、绝对路径、URL 和 glob 等引用形式不受支持。
 
 关键命令：
 
@@ -116,7 +116,7 @@ code-workspace project branch update-latest "<project-name>" --json
 ## 不变量
 
 - 不得猜测项目路径、项目归属或分支。
-- AI/Agent 不得直接编辑 `.code-workspace/config.yaml`、`projects.ref` 所引用的项目文件或权限文件；用户可以手动编辑并对结果负责。AI/Agent 的配置写入必须通过受支持的 CLI。
+- AI/Agent 不得直接编辑 `.codew/config.yaml`、`projects.ref` 所引用的项目文件或权限文件；用户可以手动编辑并对结果负责。AI/Agent 的配置写入必须通过受支持的 CLI。
 - 不得把独立的 `openspec/` 存储隐式绑定到 Workspace。
 - Workspace 初始化、更新和 Doctor 不依赖其他 OpenSpec 包或可执行文件。
 - Workspace 不读取或写入 `openspec/`。

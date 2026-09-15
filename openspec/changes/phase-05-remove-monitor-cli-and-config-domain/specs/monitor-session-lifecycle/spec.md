@@ -5,7 +5,7 @@ Monitor 的 Hook 事件上报与 failure-open 语义的唯一实现和验证来�
 
 #### Scenario: report 命令读取扩展自有制品配置
 - **WHEN** 通过 `codew ext monitor report` 触发上报
-- **THEN** runtime 从调用方 cwd 向上查找扩展自有制品 `.code-workspace/monitor-reporting.json`，读取 `enable`、`url` 与 workspace 元数据，不依赖核心 workspace config 的 monitor 域
+- **THEN** runtime 从调用方 cwd 向上查找扩展自有制品 `.codew/monitor-reporting.json`，读取 `enable`、`url` 与 workspace 元数据，不依赖核心 workspace config 的 monitor 域
 
 #### Scenario: 上报服务不可用仍失败开放
 - **WHEN** 上报制品缺失、POST 失败或服务不可达

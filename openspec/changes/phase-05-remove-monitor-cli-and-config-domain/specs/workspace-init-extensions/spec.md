@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: init 不管理 Monitor 配置域
-交互式与非交互式 init 必须（SHALL）不再写入、校验或投影 workspace config 的 `monitor` 配置域，也不接受 `--monitor` / `--no-monitor` / `--monitor-url` 参数。Monitor 配置由扩展自有制品 `.code-workspace/monitor-reporting.json` 提供，Host 按 exclusive output 管理。
+交互式与非交互式 init 必须（SHALL）不再写入、校验或投影 workspace config 的 `monitor` 配置域，也不接受 `--monitor` / `--no-monitor` / `--monitor-url` 参数。Monitor 配置由扩展自有制品 `.codew/monitor-reporting.json` 提供，Host 按 exclusive output 管理。
 
 #### Scenario: init 不自动激活 Monitor
 - **WHEN** 用户运行 init 且未显式选择 monitor 扩展
@@ -13,7 +13,7 @@
 
 #### Scenario: Monitor 配置为扩展自有制品
 - **WHEN** monitor 扩展安装或升级
-- **THEN** `.code-workspace/monitor-reporting.json` 作为扩展 exclusive output 由 Host 管理，其内容不进入核心 config schema
+- **THEN** `.codew/monitor-reporting.json` 作为扩展 exclusive output 由 Host 管理，其内容不进入核心 config schema
 
 #### Scenario: Monitor Hook 完全由扩展声明生成
 - **WHEN** monitor 扩展经 Hook 声明生成 `.codex/hooks.json` 与 `.claude` Hook 条目

@@ -85,7 +85,7 @@ test("CLI reports INIT_ALREADY_RUNNING before writing the Workspace", async () =
     const envelope = JSON.parse(result.stdout);
     assert.equal(envelope.ok, false);
     assert.equal(envelope.diagnostics[0].code, "INIT_ALREADY_RUNNING");
-    assert.equal(fs.existsSync(path.join(root, ".code-workspace")), false);
+    assert.equal(fs.existsSync(path.join(root, ".codew")), false);
   } finally {
     await release();
   }

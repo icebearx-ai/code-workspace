@@ -96,8 +96,8 @@ test("workspace runtime requires activation and service runtime releases referen
   const packageDir = writeRuntimePackage(source, { id: "workspace-runtime", scope: "workspace" });
   const stored = ensureStoredExtensionPackage({ sourceRoot: packageDir, storeRoot: store });
   assert.throws(() => resolveExtensionRuntime({ id: "workspace-runtime", workspaceRoot: workspace, storeRoot: store }), (error) => error.code === "EXTENSION_RUNTIME_ACTIVATION_REQUIRED");
-  fs.mkdirSync(path.join(workspace, ".code-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, ".code-workspace", "ext-manifest.json"), `${JSON.stringify({ schemaVersion: 1, experimental: true, extensions: { "workspace-runtime": { installed: { protocolVersion: 3, extensionSpecVersion: 1, version: "1.0.0", manifestSha256: stored.manifestSha256, packageSha256: stored.packageSha256, artifacts: [] } } } }, null, 2)}\n`);
+  fs.mkdirSync(path.join(workspace, ".codew"), { recursive: true });
+  fs.writeFileSync(path.join(workspace, ".codew", "ext-manifest.json"), `${JSON.stringify({ schemaVersion: 1, experimental: true, extensions: { "workspace-runtime": { installed: { protocolVersion: 3, extensionSpecVersion: 1, version: "1.0.0", manifestSha256: stored.manifestSha256, packageSha256: stored.packageSha256, artifacts: [] } } } }, null, 2)}\n`);
   const plan = resolveExtensionRuntime({ id: "workspace-runtime", workspaceRoot: workspace, storeRoot: store });
   assert.equal(plan.runtime.scope, "workspace");
 

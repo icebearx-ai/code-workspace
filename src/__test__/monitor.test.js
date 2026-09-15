@@ -327,9 +327,9 @@ test("reporting config is discovered from the extension-owned workspace artifact
     service: { id: "monitor", compatibilityGroup: "v1" },
   };
   const project = path.join(os.tmpdir(), `monitor-reporting-${process.pid}-${Date.now()}`);
-  fs.mkdirSync(path.join(project, ".code-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(project, ".code-workspace", "config-monitor.yaml"), dumpYaml(reporting));
-  assert(findReportingConfig(project).endsWith(path.join(".code-workspace", "config-monitor.yaml")));
+  fs.mkdirSync(path.join(project, ".codew"), { recursive: true });
+  fs.writeFileSync(path.join(project, ".codew", "config-monitor.yaml"), dumpYaml(reporting));
+  assert(findReportingConfig(project).endsWith(path.join(".codew", "config-monitor.yaml")));
   assert.deepEqual(loadReportingConfig(project), reporting);
   assert.equal(loadReportingConfig(os.tmpdir()), null);
 });

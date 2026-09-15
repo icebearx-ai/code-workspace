@@ -7,7 +7,7 @@ phase-04 删除了 `src/monitor` 的业务实现，但核心仍保留 monitor �
 - **BREAKING** 删除 `codew monitor` / `codew monitor report` 命令。`extensions/monitor/1.1.0` 的 Hook 命令改为 `codew ext monitor report`，通过通用 `ext` 命令路由。
 - **BREAKING** 删除 workspace config 的 `monitor` 配置域（`monitor.enable` / `monitor.url`）及 `--monitor` / `--no-monitor` / `--monitor-url` init 参数。存量配置中的 `monitor:` 键在读取时被剥离，下次保存时自然移除。
 - **BREAKING** 取消 init 的 "Enable Codex Agent monitor?" 交互步骤和 Codex 工具的 monitor 自动激活。监控只能通过 `--extensions monitor` 或交互式扩展多选显式安装。
-- Monitor 配置改由扩展自有制品 `.code-workspace/monitor-reporting.json` 提供（默认值，Host 按 exclusive output 管理）。
+- Monitor 配置改由扩展自有制品 `.codew/monitor-reporting.json` 提供（默认值，Host 按 exclusive output 管理）。
 - 通用 Runtime Host 新增 service runtime 的短命令执行能力：`codew ext <id> <command>` 以继承 stdio、调用方 cwd 执行 runtime 入口，不经过 service 注册和 readiness；空 argv 或 `serve` 仍走 singleton 服务机制。
 - 删除 CLI 层 `normalizeHookEvent` / `reportHookEvent` 业务拷贝、`MONITOR_CODEX_REQUIRED` doctor 校验和 managed-file capabilities 死代码。
 - `reportHookEvent` 签名从核心 config 形态改为扩展制品形态（`{ enable, url, workspace }`），由扩展 runtime 的 `report` 模式从 cwd 向上查找制品后调用。

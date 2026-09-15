@@ -218,7 +218,7 @@ test("Extension Spec v1 manifest validation rejects unsafe, duplicate, core-owne
   assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], target: "AGENTS.md" }] }, { protectedTargets: new Set(["AGENTS.md"]) }), (error) => error.code === "EXTENSION_CORE_TARGET_FORBIDDEN");
   assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], tools: ["unknown"] }] }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
   assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], kind: "remote-archive" }] }, { protectedTargets: new Set() }), (error) => error.code === "EXTENSION_MANIFEST_INVALID");
-  assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], kind: "directory", target: ".code-workspace" }] }), (error) => error.code === "EXTENSION_CORE_TARGET_FORBIDDEN");
+  assert.throws(() => validateManifest({ ...base, outputs: [{ ...base.outputs[0], kind: "directory", target: ".codew" }] }), (error) => error.code === "EXTENSION_CORE_TARGET_FORBIDDEN");
   assert.throws(() => validateManifest({
     ...base,
     outputs: [
@@ -380,7 +380,7 @@ test("an occupied or locally modified target is never overwritten", () => {
 
 test("seeded file output seeds defaults once, preserves user edits, and removes on uninstall", () => {
   const repository = temporaryRoot();
-  const target = ".code-workspace/monitor-reporting.json";
+  const target = ".codew/monitor-reporting.json";
   const outputs = [{ id: "reporting-config", kind: "file", ownership: "seeded", target, source: "config.json" }];
   const seedContent = '{"enable":true,"url":"http://127.0.0.1:3211"}\n';
   writeExtension(repository, {
@@ -429,7 +429,7 @@ test("seeded ownership is only valid for file outputs", () => {
     entry: "init.js",
     entrySha256: "b".repeat(64),
     timeoutMs: 1000,
-    outputs: [{ id: "artifact-one", kind: "file", ownership: "seeded", target: ".code-workspace/reporting.json" }],
+    outputs: [{ id: "artifact-one", kind: "file", ownership: "seeded", target: ".codew/reporting.json" }],
   };
   assert.doesNotThrow(() => validateManifest(base, { protectedTargets: new Set() }));
   for (const kind of ["directory", "text-block", "json-member"]) {
@@ -1018,7 +1018,7 @@ test("init parser accepts extension option ordering and CLI rejects version synt
   const result = runCli(root, ["init", ".", "--extensions", "example-extension@1.0.0", "--yes", "--json"]);
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).diagnostics[0].code, "EXTENSION_VERSION_SELECTION_UNSUPPORTED");
-  assert.equal(fs.existsSync(path.join(root, ".code-workspace")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codew")), false);
 });
 
 test("interactive init offers extension names and confirms frozen versions and manifest hashes", async () => {

@@ -1,6 +1,6 @@
 ## 1. 扩展 1.1.0 先行合入
 
-- [x] 1.1 复制 `extensions/monitor/1.0.0` 为 `extensions/monitor/1.1.0`，runtime 入口识别 `report` argv：读 stdin、从 cwd 向上查找 `.code-workspace/monitor-reporting.json`、POST、任何失败 exit 0。
+- [x] 1.1 复制 `extensions/monitor/1.0.0` 为 `extensions/monitor/1.1.0`，runtime 入口识别 `report` argv：读 stdin、从 cwd 向上查找 `.codew/monitor-reporting.json`、POST、任何失败 exit 0。
 - [x] 1.2 `reportHookEvent` 签名从核心 config 形态改为扩展制品形态（`{ enable, url, workspace }`），新增 `findReportingConfig` / `loadReportingConfig`。
 - [x] 1.3 manifest 版本升至 1.1.0，Hook `command` 改为 `codew ext monitor report`，重算 entrySha256。
 

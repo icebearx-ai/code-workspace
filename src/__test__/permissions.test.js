@@ -93,7 +93,7 @@ test("Claude adapter rejects invalid settings without changing the file or recor
     (error) => error.code === "CLAUDE_PERMISSION_CONFIG_INVALID" && error.details.field === "permissions.additionalDirectories"
   );
   assert.equal(fs.readFileSync(file, "utf8"), before);
-  assert.equal(fs.existsSync(path.join(root, ".code-workspace", "state.json")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codew", "state.json")), false);
 });
 
 test("permission adapter registry rejects tools without directory authorization capability", () => {

@@ -1,7 +1,7 @@
 {
   "command": "node",
   "args": [
-    ".code-workspace/extensions/zhuiyi-opensvn-mcp/0.1.0/dist/index.js"
+    ".codew/extensions/zhuiyi-opensvn-mcp/0.1.0/dist/index.js"
   ],
   "env": {
     "SVN_AUTHORIZATION": "",

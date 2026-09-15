@@ -17,7 +17,7 @@
       "id": "runtime",
       "kind": "directory",
       "ownership": "exclusive",
-      "target": ".code-workspace/extensions/zhuiyi-jira-mcp/1.0.0"
+      "target": ".codew/extensions/zhuiyi-jira-mcp/1.0.0"
     },
     {
       "id": "gitignore",

@@ -89,7 +89,7 @@ A Spec v1 manifest uses manifest schema v3. The manifest is the static declarati
       "id": "runtime",
       "kind": "directory",
       "ownership": "exclusive",
-      "target": ".code-workspace/extensions/example-extension/1.0.0"
+      "target": ".codew/extensions/example-extension/1.0.0"
     }
   ]
 }

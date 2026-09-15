@@ -35,7 +35,7 @@ function prepareBaseline(root) {
 }
 
 function writeStaleReleaseState(root, mutate = () => {}) {
-  const stateFile = path.join(root, ".code-workspace", "state.json");
+  const stateFile = path.join(root, ".codew", "state.json");
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   state.appliedReleaseVersion = `${loadInitManifest().releaseVersion}-stale`;
   state.appliedManifestSha256 = "stale-manifest";
@@ -63,7 +63,7 @@ test("init restores tracked workspace state after every stable stage", async () 
     });
     assert.equal(failure.details.workspaceRolledBack, true, stageId);
     assert.equal(fs.readFileSync(path.join(root, "openspec", "config.yaml"), "utf8"), baseline, stageId);
-    assert.equal(fs.existsSync(path.join(root, ".code-workspace")), false, stageId);
+    assert.equal(fs.existsSync(path.join(root, ".codew")), false, stageId);
     assert.equal(fs.existsSync(path.join(root, "USER_GUIDE.md")), false, stageId);
     assert.equal(fs.existsSync(path.join(root, "openspec", "schemas")), false, stageId);
   }
@@ -81,7 +81,7 @@ test("update restores config, state, and managed files after each apply stage", 
   });
   const stateFile = writeStaleReleaseState(root);
   const files = [
-    path.join(root, ".code-workspace", "config.yaml"),
+    path.join(root, ".codew", "config.yaml"),
     stateFile,
     path.join(root, "USER_GUIDE.md"),
     path.join(root, "openspec", "config.yaml"),
@@ -122,7 +122,7 @@ test("update rolls back the AGENT.md to AGENTS.md migration as one transaction",
     run: forbiddenRun,
     language: "zh-CN",
   });
-  const stateFile = path.join(root, ".code-workspace", "state.json");
+  const stateFile = path.join(root, ".codew", "state.json");
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   const legacyContent = Buffer.from("legacy managed Codex instructions\n");
   delete state.managedFiles["AGENTS.md"];
@@ -163,8 +163,8 @@ test("update verifies managed-file postconditions before committing release stat
     language: "zh-CN",
   });
   const files = [
-    path.join(root, ".code-workspace", "config.yaml"),
-    path.join(root, ".code-workspace", "state.json"),
+    path.join(root, ".codew", "config.yaml"),
+    path.join(root, ".codew", "state.json"),
     path.join(root, "USER_GUIDE.md"),
     path.join(root, "openspec", "config.yaml"),
   ];
@@ -299,8 +299,8 @@ test("project configuration restores config and permissions at each write bounda
   fs.mkdirSync(path.dirname(claudePermissionsFile), { recursive: true });
   fs.writeFileSync(codexPermissionsFile, "# user configuration\n");
   fs.writeFileSync(claudePermissionsFile, '{"user":true}\n');
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const projectConfigFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const configFile = path.join(root, ".codew", "config.yaml");
+  const projectConfigFile = path.join(root, ".codew", "config-projects.yaml");
   const baselineConfig = fs.readFileSync(configFile);
   const baselineProjectConfig = fs.readFileSync(projectConfigFile);
   const baselineCodexPermissions = fs.readFileSync(codexPermissionsFile);
@@ -340,7 +340,7 @@ test("project add stdin restores the project registry when a write postcondition
     monitor: { enable: false, url: "http://127.0.0.1:3211" },
     projects: [],
   });
-  const projectFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const projectFile = path.join(root, ".codew", "config-projects.yaml");
   const before = fs.readFileSync(projectFile, "utf8");
   const batch = {
     schemaVersion: 1,
@@ -388,8 +388,8 @@ test("accepting an actual branch rolls back configuration at apply and verificat
     monitor: { enable: false, url: "http://127.0.0.1:3211" },
     projects: [project],
   });
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const projectConfigFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const configFile = path.join(root, ".codew", "config.yaml");
+  const projectConfigFile = path.join(root, ".codew", "config-projects.yaml");
   const baseline = fs.readFileSync(configFile);
   const baselineProjectConfig = fs.readFileSync(projectConfigFile);
   const plan = {
@@ -455,8 +455,8 @@ test("an accept-actual conflict preserves another writer's configuration", () =>
     projects: [{ name: "service", location: "/tmp/service", branch: "main", type: "backend", context: "service" }],
   };
   saveConfig(root, base);
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const projectConfigFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const configFile = path.join(root, ".codew", "config.yaml");
+  const projectConfigFile = path.join(root, ".codew", "config-projects.yaml");
   const baselineProjectConfig = fs.readFileSync(projectConfigFile);
   const plan = {
     action: "update",

@@ -119,8 +119,8 @@ test("migration planning reports ready and unavailable package states without wr
   const plan = resolveExtensionPlans(discoverExtensions({ extensionsRoot: source }), ["example"], { tools: ["codex"], state: emptyExtensionState() })[0];
   const state = emptyExtensionState();
   state.extensions.example = { installed: { version: plan.version, manifestSha256: "a".repeat(64), packageSha256: plan.packageSha256, artifacts: [] } };
-  fs.mkdirSync(path.join(workspace, ".code-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, ".code-workspace", "ext-manifest.json"), `${JSON.stringify(state)}\n`);
+  fs.mkdirSync(path.join(workspace, ".codew"), { recursive: true });
+  fs.writeFileSync(path.join(workspace, ".codew", "ext-manifest.json"), `${JSON.stringify(state)}\n`);
   const ready = planExtensionStoreMigration(workspace, "example", { extensionsRoot: source, extensionStoreRoot: store });
   assert.equal(ready.status, "ready");
   fs.rmSync(packageDir, { recursive: true, force: true });

@@ -20,7 +20,7 @@ phase-04 之后核心仍有约 180 行 monitor 专属代码：CLI 兼容命令�
 ## Decisions
 
 1. **Host 新增 `runCommandRuntime` 而非扩展 manifest schema。** service runtime 通过 `codew ext <id> <argv>` 调用时：空 argv 或 `serve` 走 singleton 服务机制；其他首参数以继承 stdio、调用方 cwd 执行入口，超时仍为 `timeoutMs`。约定写入 Extension Spec v1 规范，不改 manifest schema。
-2. **report 由扩展 runtime 自包含实现。** runtime 入口识别 `report` argv：读 stdin、从 cwd 向上查找 `.code-workspace/monitor-reporting.json`、POST、任何失败 exit 0。不依赖 workspace root 注入（spec 禁止 context 携带真实路径）。
+2. **report 由扩展 runtime 自包含实现。** runtime 入口识别 `report` argv：读 stdin、从 cwd 向上查找 `.codew/monitor-reporting.json`、POST、任何失败 exit 0。不依赖 workspace root 注入（spec 禁止 context 携带真实路径）。
 3. **配置域以剥离方式移除。** `normalizeConfig` 解构丢弃 `monitor` 键，旧配置文件在下次保存时自然瘦身，不引入 schema 版本迁移。
 4. **扩展版本升至 1.1.0。** Hook 命令与 runtime 行为变化属于机器可观察变化；Host 重跑 init 时按最高受支持版本升级并重写自有 Hook 条目。
 

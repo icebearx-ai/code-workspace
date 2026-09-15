@@ -39,7 +39,7 @@ codew init --language en-US
 codew language
 ```
 
-The selected preference is stored at `workspace.language` in `.code-workspace/config.yaml`. Change an initialized workspace with:
+The selected preference is stored at `workspace.language` in `.codew/config.yaml`. Change an initialized workspace with:
 
 ```bash
 codew update --language en-US
@@ -64,7 +64,7 @@ Use another port when necessary:
 codew ext monitor serve --port 8080
 ```
 
-The extension reports to the URL recorded in `.code-workspace/monitor-reporting.json`. After installation, review and trust the project hooks with `/hooks` in Codex.
+The extension reports to the URL recorded in `.codew/monitor-reporting.json`. After installation, review and trust the project hooks with `/hooks` in Codex.
 
 ## Practical commands
 

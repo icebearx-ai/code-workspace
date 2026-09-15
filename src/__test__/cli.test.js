@@ -33,11 +33,11 @@ function jsonData(result) {
 }
 
 function loadWorkspaceYaml(root) {
-  return yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"));
+  return yaml.load(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8"));
 }
 
 function loadProjectYaml(root) {
-  return yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config-projects.yaml"), "utf8"));
+  return yaml.load(fs.readFileSync(path.join(root, ".codew", "config-projects.yaml"), "utf8"));
 }
 
 function gitRepository(parent, name) {
@@ -67,7 +67,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   ]);
   assert.equal(output.openspec, undefined);
   assert.equal(output.language, "zh-CN");
-  assert(fs.existsSync(path.join(root, ".code-workspace", "config.yaml")));
+  assert(fs.existsSync(path.join(root, ".codew", "config.yaml")));
   assert.equal(output.workspace.name, "code-workspace");
   assert.match(output.workspace.uuid, /^[0-9a-f-]{36}$/);
   assert.equal(output.monitor, undefined);
@@ -75,7 +75,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   const mainConfig = loadWorkspaceYaml(root);
   assert.deepEqual(mainConfig.projects, { ref: "config-projects.yaml" });
   assert.deepEqual(loadProjectYaml(root), { schemaVersion: 1, projects: [] });
-  assert.match(fs.readFileSync(path.join(root, ".gitignore"), "utf8"), /\.code-workspace\//);
+  assert.match(fs.readFileSync(path.join(root, ".gitignore"), "utf8"), /\.codew\//);
   const expected = [
     ".claude/commands/code-workspace/add-projects.md",
     ".claude/skills/code-workspace-add-projects/SKILL.md",
@@ -122,7 +122,7 @@ test("init installs only workspace-owned integrations and does not create opensp
     assert.match(instructions, /Do not rerun targeted `project verify` after update-latest/);
     assert.match(instructions, /fastForwarded: true/);
     assert.match(instructions, /re-read the project files and instructions/);
-    assert.match(instructions, /Users may manually edit `\.code-workspace\/config\.yaml`/);
+    assert.match(instructions, /Users may manually edit `\.codew\/config\.yaml`/);
     assert.match(instructions, /AI\/Agent must not imitate that edit/);
     assert.match(instructions, /effects, diagnostics, transactions, and verification results remain project-isolated/);
     assert.match(instructions, /even when the top-level `ok` is false/);
@@ -169,7 +169,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.match(resolveBranchSkill, /together with projects that were already matching during inspection/);
   assert.doesNotMatch(resolveBranchSkill, /Coordinate through the branch CLI/);
   assert.doesNotMatch(resolveBranchSkill, /branchAsk|Workspace ASK language|\{\{WORKSPACE_LANGUAGE\}\}|Requirement:|Scenario:|Single-project example|Multi-project example|project verify|project list/);
-  assert.doesNotMatch(resolveBranchSkill, /git status|git show-ref|git switch|\.code-workspace\/config\.yaml|project list --json/);
+  assert.doesNotMatch(resolveBranchSkill, /git status|git show-ref|git switch|\.codew\/config\.yaml|project list --json/);
   assert.match(addProjectsCommand, /project inspect "\$path" --json/);
   assert.match(addProjectsCommand, /explicitly invokes `\/code-workspace:add-projects`/);
   assert.match(addProjectsCommand, /\/code-workspace:add-projects \/absolute\/path\/to\/project-a \/absolute\/path\/to\/project-b/);
@@ -182,7 +182,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.doesNotMatch(addProjectsCommand, /--projects-file|temporary JSON document/);
   assert(!fs.existsSync(path.join(root, ".claude", "commands", "opsxw", "explore.md")));
   assert(!fs.existsSync(path.join(root, ".codex", "skills", "code-workspace-explore", "SKILL.md")));
-  const state = JSON.parse(fs.readFileSync(path.join(root, ".code-workspace", "state.json"), "utf8"));
+  const state = JSON.parse(fs.readFileSync(path.join(root, ".codew", "state.json"), "utf8"));
   assert.equal(state.status, "healthy");
   assert.deepEqual(state.tools, ["claude", "codex"]);
   assert.equal(state.workspaceLanguage, undefined);
@@ -193,7 +193,7 @@ test("workspace language command reports the configured workspace language", () 
   const initialized = run(root, ["init", ".", "--tools", "none", "--language", "en-US", "--yes", "--json"]);
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.equal(jsonData(initialized).language, "en-US");
-  assert.equal(yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8")).workspace.language, "en-US");
+  assert.equal(yaml.load(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8")).workspace.language, "en-US");
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
 
   const plain = run(root, ["language"]);
@@ -219,7 +219,7 @@ test("init defaults its target path to the current directory", () => {
   const result = run(root, ["init", "--tools", "none", "--yes", "--json"]);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(jsonData(result).root, fs.realpathSync(root));
-  assert(fs.existsSync(path.join(root, ".code-workspace", "config.yaml")));
+  assert(fs.existsSync(path.join(root, ".codew", "config.yaml")));
 });
 
 test("update changes workspace language and its derived managed artifacts", () => {
@@ -231,7 +231,7 @@ test("update changes workspace language and its derived managed artifacts", () =
   assert.equal(updated.status, 0, updated.stderr);
   const output = jsonData(updated);
   assert.equal(output.language, "en-US");
-  assert.equal(yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8")).workspace.language, "en-US");
+  assert.equal(yaml.load(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8")).workspace.language, "en-US");
   assert.match(fs.readFileSync(path.join(root, "USER_GUIDE.md"), "utf8"), /^# Code Workspace User Guide/m);
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
   assert(!fs.existsSync(path.join(root, "USER_GUIDE.zh-CN.md")));
@@ -258,7 +258,7 @@ test("language update does not rewrite the static branch ASK contract", () => {
 test("language update leaves existing project context unchanged", () => {
   const root = temporaryRoot();
   assert.equal(run(root, ["init", ".", "--tools", "none", "--language", "zh-CN", "--yes", "--json"]).status, 0);
-  const projectFile = path.join(root, ".code-workspace", "config-projects.yaml");
+  const projectFile = path.join(root, ".codew", "config-projects.yaml");
   const projects = loadProjectYaml(root);
   projects.projects.push({
     name: "portal",
@@ -301,7 +301,7 @@ test("language update protects an obsolete localized guide with local changes", 
   const target = path.join(root, relative);
   const managedContent = "previous localized guide\n";
   fs.writeFileSync(target, `${managedContent}local edit\n`);
-  const stateFile = path.join(root, ".code-workspace", "state.json");
+  const stateFile = path.join(root, ".codew", "state.json");
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   state.managedFiles[relative] = { installedSha256: createHash("sha256").update(managedContent).digest("hex") };
   fs.writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
@@ -316,8 +316,8 @@ test("language update protects an obsolete localized guide with local changes", 
 test("update migrates legacy workspace language state", () => {
   const root = temporaryRoot();
   assert.equal(run(root, ["init", ".", "--tools", "none", "--language", "zh-CN", "--yes", "--json"]).status, 0);
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
-  const stateFile = path.join(root, ".code-workspace", "state.json");
+  const configFile = path.join(root, ".codew", "config.yaml");
+  const stateFile = path.join(root, ".codew", "state.json");
   const legacyConfig = yaml.load(fs.readFileSync(configFile, "utf8"));
   legacyConfig.schemaVersion = 1;
   delete legacyConfig.workspace.language;
@@ -372,7 +372,7 @@ test("init installs Codex monitor hooks through the monitor extension", () => {
   assert.equal(output.workspace.name, "payments");
   assert(fs.existsSync(path.join(root, ".codex", "hooks.json")));
   assert.match(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"), /codew ext monitor report/);
-  assert(fs.existsSync(path.join(root, ".code-workspace", "config-monitor.yaml")));
+  assert(fs.existsSync(path.join(root, ".codew", "config-monitor.yaml")));
   assert.equal(output.extensions.requested.includes("monitor"), true);
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").status, "installed");
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").version, "1.1.0");
@@ -391,7 +391,7 @@ test("project inspect is read-only and project add registers an explicit record"
   fs.mkdirSync(workspace);
   const repository = gitRepository(parent, "portal");
   assert.equal(run(workspace, ["init", ".", "--tools", "claude", "--yes", "--json"]).status, 0);
-  const configBefore = fs.readFileSync(path.join(workspace, ".code-workspace", "config.yaml"), "utf8");
+  const configBefore = fs.readFileSync(path.join(workspace, ".codew", "config.yaml"), "utf8");
   const inspection = run(workspace, ["project", "inspect", repository, "--json"]);
   assert.equal(inspection.status, 0, inspection.stderr);
   const inspectionOutput = jsonData(inspection);
@@ -399,7 +399,7 @@ test("project inspect is read-only and project add registers an explicit record"
   assert.equal(inspectionOutput.project.location, fs.realpathSync(repository));
   assert.equal(inspectionOutput.project.branch, "main");
   assert.deepEqual(inspectionOutput.project.facts.manifestFiles, ["package.json"]);
-  assert.equal(fs.readFileSync(path.join(workspace, ".code-workspace", "config.yaml"), "utf8"), configBefore);
+  assert.equal(fs.readFileSync(path.join(workspace, ".codew", "config.yaml"), "utf8"), configBefore);
 
   const projectFile = path.join(parent, "portal.json");
   fs.writeFileSync(projectFile, JSON.stringify({
@@ -412,11 +412,11 @@ test("project inspect is read-only and project add registers an explicit record"
       context: "职责：门户页面和交互。\n技术栈：React。\n代码定位：src。\n项目边界：负责门户前端。",
     }],
   }));
-  const mainBeforeAdd = fs.readFileSync(path.join(workspace, ".code-workspace", "config.yaml"), "utf8");
+  const mainBeforeAdd = fs.readFileSync(path.join(workspace, ".codew", "config.yaml"), "utf8");
   const added = run(workspace, ["project", "add", "--projects-file", projectFile, "--yes", "--json"]);
   assert.equal(added.status, 0, added.stderr);
   assert.equal(jsonData(added).project.name, "portal");
-  assert.equal(fs.readFileSync(path.join(workspace, ".code-workspace", "config.yaml"), "utf8"), mainBeforeAdd);
+  assert.equal(fs.readFileSync(path.join(workspace, ".codew", "config.yaml"), "utf8"), mainBeforeAdd);
 
   const repeated = run(workspace, ["project", "add", "--projects-file", projectFile, "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
@@ -488,7 +488,7 @@ test("project add stdin failures leave the project registry unchanged", () => {
   const repository = gitRepository(parent, "stdin-failure");
   assert.equal(run(workspace, ["init", ".", "--tools", "none", "--yes", "--json"]).status, 0);
 
-  const projectFile = path.join(workspace, ".code-workspace", "config-projects.yaml");
+  const projectFile = path.join(workspace, ".codew", "config-projects.yaml");
   const before = fs.readFileSync(projectFile, "utf8");
   const batch = JSON.stringify({
     schemaVersion: 1,
@@ -626,7 +626,7 @@ test("update removes obsolete workspace aliases tracked by an earlier release", 
   const content = "obsolete managed command\n";
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, content);
-  const stateFile = path.join(root, ".code-workspace", "state.json");
+  const stateFile = path.join(root, ".codew", "state.json");
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   state.managedFiles[relative] = { sha256: createHash("sha256").update(content).digest("hex") };
   fs.writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`);
@@ -641,7 +641,7 @@ test("update removes obsolete workspace aliases tracked by an earlier release", 
 test("update migrates an unchanged managed AGENT.md to AGENTS.md", () => {
   const root = temporaryRoot();
   assert.equal(run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]).status, 0);
-  const stateFile = path.join(root, ".code-workspace", "state.json");
+  const stateFile = path.join(root, ".codew", "state.json");
   const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
   const legacyContent = "legacy managed Codex instructions\n";
   delete state.managedFiles["AGENTS.md"];
@@ -668,7 +668,7 @@ test("update migrates an unchanged managed AGENT.md to AGENTS.md", () => {
 test("update protects modified legacy and unknown new Codex instruction targets", () => {
   const legacyRoot = temporaryRoot();
   assert.equal(run(legacyRoot, ["init", ".", "--tools", "codex", "--yes", "--json"]).status, 0);
-  const legacyStateFile = path.join(legacyRoot, ".code-workspace", "state.json");
+  const legacyStateFile = path.join(legacyRoot, ".codew", "state.json");
   const legacyState = JSON.parse(fs.readFileSync(legacyStateFile, "utf8"));
   const managedContent = "legacy managed Codex instructions\n";
   delete legacyState.managedFiles["AGENTS.md"];
@@ -688,7 +688,7 @@ test("update protects modified legacy and unknown new Codex instruction targets"
 
   const newTargetRoot = temporaryRoot();
   assert.equal(run(newTargetRoot, ["init", ".", "--tools", "codex", "--yes", "--json"]).status, 0);
-  const newTargetStateFile = path.join(newTargetRoot, ".code-workspace", "state.json");
+  const newTargetStateFile = path.join(newTargetRoot, ".codew", "state.json");
   const newTargetState = JSON.parse(fs.readFileSync(newTargetStateFile, "utf8"));
   delete newTargetState.managedFiles["AGENTS.md"];
   fs.writeFileSync(newTargetStateFile, `${JSON.stringify(newTargetState, null, 2)}\n`);
@@ -698,4 +698,13 @@ test("update protects modified legacy and unknown new Codex instruction targets"
   assert.equal(unknownNew.status, 1);
   assert(JSON.parse(unknownNew.stdout).diagnostics.some((entry) => entry.code === "MANAGED_FILE_UNKNOWN"));
   assert.equal(fs.readFileSync(path.join(newTargetRoot, "AGENTS.md"), "utf8"), "user-owned instructions\n");
+});
+
+
+test("workspace-required commands report WORKSPACE_NOT_FOUND outside a .codew workspace", () => {
+  const outside = run(temporaryRoot(), ["project", "list", "--json"]);
+  assert.equal(outside.status, 1);
+  const envelope = JSON.parse(outside.stdout);
+  assert.equal(envelope.ok, false);
+  assert(envelope.diagnostics.some((entry) => entry.code === "WORKSPACE_NOT_FOUND"));
 });

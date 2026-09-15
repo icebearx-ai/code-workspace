@@ -22,26 +22,26 @@ function temporaryRoot() {
 }
 
 function writeConfig(root, content) {
-  fs.mkdirSync(path.join(root, ".code-workspace"), { recursive: true });
+  fs.mkdirSync(path.join(root, ".codew"), { recursive: true });
   const value = yaml.load(content);
   if (Array.isArray(value?.projects)) {
     fs.writeFileSync(
-      path.join(root, ".code-workspace", "config-projects.yaml"),
+      path.join(root, ".codew", "config-projects.yaml"),
       yaml.dump({ schemaVersion: 1, projects: value.projects }, { lineWidth: -1, noRefs: true, sortKeys: false })
     );
     value.projects = { ref: "config-projects.yaml" };
     content = yaml.dump(value, { lineWidth: -1, noRefs: true, sortKeys: false });
   }
-  fs.writeFileSync(path.join(root, ".code-workspace", "config.yaml"), content);
+  fs.writeFileSync(path.join(root, ".codew", "config.yaml"), content);
 }
 
 function writeRawConfig(root, content) {
-  fs.mkdirSync(path.join(root, ".code-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".code-workspace", "config.yaml"), content);
+  fs.mkdirSync(path.join(root, ".codew"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".codew", "config.yaml"), content);
 }
 
 function loadProjectYaml(root) {
-  return yaml.load(fs.readFileSync(path.join(root, ".code-workspace", "config-projects.yaml"), "utf8"));
+  return yaml.load(fs.readFileSync(path.join(root, ".codew", "config-projects.yaml"), "utf8"));
 }
 
 function run(root, args) {
@@ -287,7 +287,7 @@ test("project projections read split configuration without requiring language or
     "",
   ].join("\n");
   writeConfig(root, content);
-  const file = path.join(root, ".code-workspace", "config.yaml");
+  const file = path.join(root, ".codew", "config.yaml");
   const persisted = fs.readFileSync(file, "utf8");
   assert.equal(run(root, ["project", "list"]).status, 0);
   assert.equal(run(root, ["project", "show", "portal", "--json"]).status, 0);
@@ -329,7 +329,7 @@ test("future configuration versions fail without rewriting the document", () => 
   const result = run(root, ["project", "list", "--json"]);
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).diagnostics[0].code, "CONFIG_SCHEMA_VERSION_UNSUPPORTED");
-  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), content);
+  assert.equal(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8"), content);
 });
 
 test("configuration migration registry plans v0 and v1 upgrades without mutating inputs", () => {
@@ -358,8 +358,8 @@ test("maintenance migration plan combines schema and legacy language actions wit
     "",
   ].join("\n");
   writeConfig(root, content);
-  const persisted = fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8");
-  fs.writeFileSync(path.join(root, ".code-workspace", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
+  const persisted = fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8");
+  fs.writeFileSync(path.join(root, ".codew", "state.json"), `${JSON.stringify({ workspaceLanguage: "zh-CN" }, null, 2)}\n`);
   const plan = planWorkspaceMaintenance(root, { allowLegacy: true, defaultLanguage: false });
   assert.equal(plan.schema.fromVersion, 1);
   assert.equal(plan.schema.toVersion, CURRENT_CONFIG_VERSION);
@@ -369,22 +369,22 @@ test("maintenance migration plan combines schema and legacy language actions wit
   assert(plan.steps.some((step) => step.kind === "workspace-language"));
   assert(plan.steps.some((step) => step.kind === "state-cleanup"));
   assert.deepEqual(plan.writeTargets.sort(), [
-    path.join(root, ".code-workspace", "config.yaml"),
-    path.join(root, ".code-workspace", "state.json"),
+    path.join(root, ".codew", "config.yaml"),
+    path.join(root, ".codew", "state.json"),
   ].sort());
-  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), persisted);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".code-workspace", "state.json"), "utf8")).workspaceLanguage, "zh-CN");
+  assert.equal(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8"), persisted);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, ".codew", "state.json"), "utf8")).workspaceLanguage, "zh-CN");
 });
 
 test("versionless configuration is projected read-only", () => {
   const root = temporaryRoot();
   const content = "projects: []\n";
   writeConfig(root, content);
-  const persisted = fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8");
+  const persisted = fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8");
   const result = run(root, ["project", "list", "--json"]);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).data.projects.length, 0);
-  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), persisted);
+  assert.equal(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8"), persisted);
 });
 
 test("tool resolution uses cli, workspace state, then manifest precedence", () => {
@@ -471,11 +471,11 @@ test("JSON writes require confirmation before changing files", () => {
     "",
   ].join("\n");
   writeConfig(root, content);
-  const configBefore = fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8");
+  const configBefore = fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8");
   const result = run(root, ["project", "remove", "service", "--json"]);
   assert.equal(result.status, 1);
   assert.equal(JSON.parse(result.stdout).diagnostics[0].code, "CLI_CONFIRMATION_REQUIRED");
-  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), configBefore);
+  assert.equal(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8"), configBefore);
 });
 
 test("project branch inspect and accept-actual are targeted, canonical, and transactional", () => {
@@ -511,7 +511,7 @@ test("project branch inspect and accept-actual are targeted, canonical, and tran
     "",
   ].join("\n");
   writeConfig(root, content);
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const configFile = path.join(root, ".codew", "config.yaml");
   const configBefore = fs.readFileSync(configFile, "utf8");
 
   const inspection = run(root, ["project", "branch", "inspect", "service", "--json"]);
@@ -669,7 +669,7 @@ test("project branch use-registered enforces safety and leaves configuration unc
     "",
   ].join("\n");
   writeConfig(root, render("main"));
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const configFile = path.join(root, ".codew", "config.yaml");
   const configBefore = fs.readFileSync(configFile);
 
   const unconfirmed = run(root, ["project", "branch", "use-registered", "service", "--json"]);
@@ -922,7 +922,7 @@ test("project verify targets one project without unrelated branch or config-doma
     "",
   ].join("\n");
   writeConfig(root, content);
-  const configFile = path.join(root, ".code-workspace", "config.yaml");
+  const configFile = path.join(root, ".codew", "config.yaml");
   const configBefore = fs.readFileSync(configFile, "utf8");
 
   const selected = run(root, ["project", "verify", "service", "--json"]);
@@ -1002,13 +1002,13 @@ test("legacy language absence does not block unrelated command matrix", () => {
     "",
   ].join("\n");
   writeConfig(root, content);
-  const persisted = fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8");
+  const persisted = fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8");
   for (const args of [["project", "list"], ["project", "verify"], ["permissions", "apply"]]) {
     const result = run(root, [...args, "--json"]);
     assert.equal(result.status, 0, `${args.join(" ")}: ${result.stdout} ${result.stderr}`);
     assert(!JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === "WORKSPACE_LANGUAGE_MISSING"));
   }
-  assert.equal(fs.readFileSync(path.join(root, ".code-workspace", "config.yaml"), "utf8"), persisted);
+  assert.equal(fs.readFileSync(path.join(root, ".codew", "config.yaml"), "utf8"), persisted);
 });
 
 test("project inspection is workspace-independent", () => {

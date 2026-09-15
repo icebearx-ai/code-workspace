@@ -63,7 +63,7 @@
 - **THEN** 系统报告 `EXTENSION_ROLLBACK_INCOMPLETE` 并继续处理后续扩展
 
 ### Requirement: Workspace 状态区分安装与尝试
-系统 SHALL 在 `.code-workspace/ext-manifest.json` 中使用 schemaVersion 1 和 experimental 标记，并为每个扩展分别维护 `installed` 与 `lastAttempt`。新 installed protocol v3 record SHALL 记录 Extension Spec 版本、扩展版本、manifest 摘要、完整扩展包摘要、通用输出所有权和 Host 验证事实。Host SHALL 继续读取旧 installed protocol v1/v2 以验证和卸载历史制品。失败尝试 MUST NOT 将仍有效的旧 installed 状态清空。
+系统 SHALL 在 `.codew/ext-manifest.json` 中使用 schemaVersion 1 和 experimental 标记，并为每个扩展分别维护 `installed` 与 `lastAttempt`。新 installed protocol v3 record SHALL 记录 Extension Spec 版本、扩展版本、manifest 摘要、完整扩展包摘要、通用输出所有权和 Host 验证事实。Host SHALL 继续读取旧 installed protocol v1/v2 以验证和卸载历史制品。失败尝试 MUST NOT 将仍有效的旧 installed 状态清空。
 
 #### Scenario: 首次安装失败
 - **WHEN** Workspace 中没有该扩展 installed 状态且首次安装失败
@@ -171,7 +171,7 @@ npm 包 SHALL 包含基于 Extension Spec v1 的 `zhuiyi-jira-mcp` 扩展，且�
 
 #### Scenario: 初始化安装 Jira MCP
 - **WHEN** Workspace init 选择 `zhuiyi-jira-mcp` 且扩展准备成功
-- **THEN** Host 将最高受支持版本 `1.0.0` 的候选目录安装到 `.code-workspace/extensions/zhuiyi-jira-mcp/1.0.0`，并为所选 Agent 安装指向 `dist/index.js` 的配置
+- **THEN** Host 将最高受支持版本 `1.0.0` 的候选目录安装到 `.codew/extensions/zhuiyi-jira-mcp/1.0.0`，并为所选 Agent 安装指向 `dist/index.js` 的配置
 
 #### Scenario: 独立安装 Jira MCP
 - **WHEN** 用户执行 `codew extension install zhuiyi-jira-mcp --yes`

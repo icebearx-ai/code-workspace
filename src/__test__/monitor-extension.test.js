@@ -10,9 +10,9 @@ const { resolveExtensionRuntime, runServiceRuntime, saveRuntimeServiceRegistry }
 
 function temp(prefix) { return fs.mkdtempSync(path.join(os.tmpdir(), prefix)); }
 function workspace(root, name, uuid) {
-  fs.mkdirSync(path.join(root, ".code-workspace"), { recursive: true });
-  fs.writeFileSync(path.join(root, ".code-workspace", "config.yaml"), `schemaVersion: 2\nworkspace:\n  name: ${name}\n  uuid: ${uuid}\n  language: en-US\nmonitor:\n  enable: true\n  url: http://127.0.0.1:3211\nprojects:\n  ref: config-projects.yaml\n`);
-  fs.writeFileSync(path.join(root, ".code-workspace", "config-projects.yaml"), "schemaVersion: 1\nprojects: []\n");
+  fs.mkdirSync(path.join(root, ".codew"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".codew", "config.yaml"), `schemaVersion: 2\nworkspace:\n  name: ${name}\n  uuid: ${uuid}\n  language: en-US\nmonitor:\n  enable: true\n  url: http://127.0.0.1:3211\nprojects:\n  ref: config-projects.yaml\n`);
+  fs.writeFileSync(path.join(root, ".codew", "config-projects.yaml"), "schemaVersion: 1\nprojects: []\n");
 }
 
 test("Monitor extension is global-service plus workspace activation and has no core Monitor import", () => {
@@ -39,7 +39,7 @@ test("two Workspaces can activate Monitor against one Store package and uninstal
   assert.equal(listPackageReferences(store)[0].references.workspaces.length, 2);
   const uninstall = applyExtensionUninstall(planExtensionUninstall(a, "monitor"), { extensionStoreRoot: store });
   assert.equal(uninstall.status, "uninstalled");
-  assert.equal(fs.existsSync(path.join(b, ".code-workspace", "config-monitor.yaml")), true);
+  assert.equal(fs.existsSync(path.join(b, ".codew", "config-monitor.yaml")), true);
   assert.equal(listPackageReferences(store)[0].references.workspaces.length, 1);
 });
 

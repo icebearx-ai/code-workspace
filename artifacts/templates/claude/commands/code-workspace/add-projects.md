@@ -60,6 +60,6 @@ Use the runtime's native stdin channel when available. Do not create a temporary
 
 Completion requires `ok: true`, the expected registered projects, and every applicable permission result to report `verified: true`. `project add` performs the existing configuration and authorization postcondition verification inside its transaction. Do not run `code-workspace project verify --json` by default; run it only when the user explicitly asks for an independent final check.
 
-Do not hand-edit `.code-workspace/config.yaml` or permission files.
+Do not hand-edit `.codew/config.yaml` or permission files.
 
 $ARGUMENTS

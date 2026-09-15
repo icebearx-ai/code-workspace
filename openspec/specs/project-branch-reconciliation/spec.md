@@ -186,7 +186,7 @@ CLI 必须（SHALL）移除 `project sync-branch`，并以 `project branch accep
 - **THEN** 命令的参数、结果合同和 Git 效果不因最新版本更新能力而改变
 
 ### Requirement: AI/Agent 不得直接编辑 Workspace 配置
-托管的 Agent 指令 SHALL 明确：用户可以手动编辑 `.code-workspace/config.yaml` 并对结果负责；AI/Agent 不得直接写入、重写、删除或通过脚本绕过 CLI 修改该文件。`updateLatest` 作为用户维护的策略字段 SHALL 由 Agent 只读并遵循。
+托管的 Agent 指令 SHALL 明确：用户可以手动编辑 `.codew/config.yaml` 并对结果负责；AI/Agent 不得直接写入、重写、删除或通过脚本绕过 CLI 修改该文件。`updateLatest` 作为用户维护的策略字段 SHALL 由 Agent 只读并遵循。
 
 #### Scenario: 用户需要开启 updateLatest
 - **WHEN** 用户希望某个项目自动更新最新分支

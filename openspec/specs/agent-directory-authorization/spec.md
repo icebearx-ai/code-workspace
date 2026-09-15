@@ -106,7 +106,7 @@ Claude 权限适配器必须（SHALL）修改 `.claude/settings.local.json` 中 
 
 #### Scenario: 不记录所有权元数据
 - **WHEN** Claude 适配器成功修改目录授权
-- **THEN** `.code-workspace/state.json` 和 Claude 设置文件均不写入 Code Workspace 权限所有权元数据
+- **THEN** `.codew/state.json` 和 Claude 设置文件均不写入 Code Workspace 权限所有权元数据
 
 ### Requirement: 原子化的多工具授权
 授权操作必须（SHALL）验证所有请求的后置条件，并且必须（SHALL）针对可回滚的本地适配器原子提交项目文件和权限文件。

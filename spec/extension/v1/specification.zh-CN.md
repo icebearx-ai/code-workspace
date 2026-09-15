@@ -88,7 +88,7 @@ Spec v1 manifest 使用 schema v3。manifest 是安装权限和最大输出范�
       "id": "runtime",
       "kind": "directory",
       "ownership": "exclusive",
-      "target": ".code-workspace/extensions/example-extension/1.0.0"
+      "target": ".codew/extensions/example-extension/1.0.0"
     }
   ]
 }

@@ -37,7 +37,7 @@ code-workspace init . \
 
 初始化只写入 Workspace 自有状态和集成：
 
-- `.code-workspace/config.yaml`、其引用的项目配置文件（默认：`.code-workspace/config-projects.yaml`）与 `.code-workspace/state.json`
+- `.codew/config.yaml`、其引用的项目配置文件（默认：`.codew/config-projects.yaml`）与 `.codew/state.json`
 - `USER_GUIDE.md`
 - `CLAUDE.md` 和/或 `AGENTS.md`
 - 名称以 `code-workspace-` 开头或使用 `/code-workspace` 命名空间的 Workspace 专用命令与 Skill
@@ -80,7 +80,7 @@ codew extension uninstall code-workspace-jira-prd-analysis --yes
 
 `zhuiyi-opensvn-mcp` 使用 `opssvn.in.wezhuiyi.com` 访问 OpenSVN 静态资源。内置配置将 `SVN_OUTPUT_DIR` 设为 `.mcp-cache-opensvn`，运行时必须提供 `SVN_AUTHORIZATION`，`SVN_MAX_RESOURCES` 默认为 `200`；认证信息不会写入扩展包，应通过本地配置或运行环境注入。
 
-扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.code-workspace/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
+扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.codew/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
 
 扩展可以独占完整文件，也可以声明由 Host 管理的抽象 Hook。Host 通过 Codex/Claude adaptor
 把声明转换为各自的原生配置，并在扩展安装、升级和卸载时动态插拔；共享目标由 Code
@@ -113,10 +113,10 @@ cat projects.json | code-workspace project add --stdin --yes --json
 
 注册表保存项目名称、真实路径、注册分支、类型和上下文。注册分支是 Code Workspace 的期望状态，实际分支是从选中 Git worktree 观测到的状态。Workspace 不会根据对话猜测路径，也不会自动判断哪一侧分支更权威。
 
-项目注册配置始终独立保存于 `.code-workspace` 目录下的单独文件。初始化默认使用 `config-projects.yaml`，但 `projects.ref` 可以引用该目录下任意安全的普通文件名：
+项目注册配置始终独立保存于 `.codew` 目录下的单独文件。初始化默认使用 `config-projects.yaml`，但 `projects.ref` 可以引用该目录下任意安全的普通文件名：
 
 ```yaml
-# .code-workspace/config.yaml
+# .codew/config.yaml
 projects:
   ref: config-projects.yaml
 ```
@@ -124,7 +124,7 @@ projects:
 引用文件使用以下格式：
 
 ```yaml
-# .code-workspace/config-projects.yaml
+# .codew/config-projects.yaml
 schemaVersion: 1
 projects:
   - name: payments
@@ -135,9 +135,9 @@ projects:
       服务职责和代码导航上下文。
 ```
 
-`projects.ref` 相对于 `config.yaml` 解析，必须是同一 `.code-workspace` 目录下的安全普通文件名。不支持 URL、glob、绝对路径、路径逃逸或内联 `projects` 数组。项目命令的现有参数和行为保持兼容，`project add` 额外支持 `--stdin`；项目数据仍只读取和写入引用文件。`.code-workspace/` 默认被忽略；如需 Git 历史，需要显式制定仓库策略。
+`projects.ref` 相对于 `config.yaml` 解析，必须是同一 `.codew` 目录下的安全普通文件名。不支持 URL、glob、绝对路径、路径逃逸或内联 `projects` 数组。项目命令的现有参数和行为保持兼容，`project add` 额外支持 `--stdin`；项目数据仍只读取和写入引用文件。`.codew/` 默认被忽略；如需 Git 历史，需要显式制定仓库策略。
 
-例如，`ref: team-projects.yaml` 会将项目注册表放在 `.code-workspace/team-projects.yaml`；默认名称仍为 `config-projects.yaml`。
+例如，`ref: team-projects.yaml` 会将项目注册表放在 `.codew/team-projects.yaml`；默认名称仍为 `config-projects.yaml`。
 
 ## 日常命令
 
@@ -163,10 +163,10 @@ code-workspace doctor --json
 
 两条命令都会检查计划漂移并验证后置条件。`project branch update-latest` 是独立的显式配置路径：仅当项目 `updateLatest: true` 时，才对干净且分支一致的 worktree fetch upstream 并 fast-forward。Code Workspace 不会创建或下载分支，也不会执行 stash、reset、rebase、非 fast-forward merge、生产代码编辑或冲突处理。
 
-用户可以手动在 `projects.ref` 指定的文件（默认：`.code-workspace/config-projects.yaml`）中设置项目策略：
+用户可以手动在 `projects.ref` 指定的文件（默认：`.codew/config-projects.yaml`）中设置项目策略：
 
 ```yaml
-# .code-workspace/config-projects.yaml
+# .codew/config-projects.yaml
 schemaVersion: 1
 projects:
   - name: payments

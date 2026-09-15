@@ -40,7 +40,7 @@ arguments:
 options:
   yes: boolean
 writes:
-  - .code-workspace/config.yaml
+  - .codew/config.yaml
 verification:
   - persisted state matches the requested state
 rollback:

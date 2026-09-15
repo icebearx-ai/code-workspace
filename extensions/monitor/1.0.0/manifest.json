@@ -15,7 +15,7 @@
       "id": "reporting-config",
       "kind": "file",
       "ownership": "exclusive",
-      "target": ".code-workspace/monitor-reporting.json"
+      "target": ".codew/monitor-reporting.json"
     }
   ],
   "hooks": [
