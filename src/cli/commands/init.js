@@ -5,6 +5,7 @@ const { WorkspaceError } = require("../../core/errors");
 const { acquireInitLock } = require("../../core/init-lock");
 const {
   discoverExtensions,
+  discoverSystemExtensions,
   emptyExtensionState,
   hasWorkspaceConfiguration,
   inspectExtensionState,
@@ -70,14 +71,26 @@ async function executeInitUnlocked(invocation, root) {
   });
   const interactive = !options.json && !options.yes && process.stdin.isTTY && process.stdout.isTTY;
   const existingWorkspace = hasWorkspaceConfiguration(root);
-  const inspectExtensions = interactive || explicitExtensions?.length > 0 || (explicitExtensions === null && existingWorkspace);
+  const inspectExtensions = true;
   const extensionStateInspection = inspectExtensions ? inspectExtensionState(root) : { state: emptyExtensionState(), error: null };
   const extensionState = extensionStateInspection.state;
-  const defaultExtensions = existingWorkspace && !extensionStateInspection.error ? installedExtensionNames(extensionState) : [];
+  const defaultExtensions = existingWorkspace && !extensionStateInspection.error
+    ? installedExtensionNames(extensionState).filter((id) => extensionState.extensions[id]?.installed?.system !== true)
+    : [];
   const extensionCatalogResult = inspectExtensions ? discoverExtensions({ tolerant: true }) : { catalog: [], invalid: [] };
+  const systemCatalogResult = inspectExtensions ? discoverSystemExtensions({ tolerant: true }) : { catalog: [], invalid: [] };
+  const combinedCatalogResult = {
+    catalog: [...extensionCatalogResult.catalog, ...systemCatalogResult.catalog],
+    invalid: [...extensionCatalogResult.invalid, ...systemCatalogResult.invalid],
+  };
+  const duplicateIds = new Set();
+  for (const entry of combinedCatalogResult.catalog) {
+    if (duplicateIds.has(entry.id)) throw new WorkspaceError("EXTENSION_ID_CONFLICT", `Extension id is declared by both ordinary and system repositories: ${entry.id}`, { extension: entry.id });
+    duplicateIds.add(entry.id);
+  }
   const extensionCatalog = extensionStateInspection.error && interactive ? [] : extensionCatalogResult.catalog;
   if (interactive && explicitExtensions !== null) {
-    prepareExtensionPlans(extensionCatalogResult, explicitExtensions, { tools: resolvedTools.tools, state: extensionState, stateError: extensionStateInspection.error });
+    prepareExtensionPlans(combinedCatalogResult, explicitExtensions, { tools: resolvedTools.tools, state: extensionState, stateError: extensionStateInspection.error });
   }
   const interactiveExplicitExtensions = explicitExtensions === null
     ? undefined
@@ -104,10 +117,12 @@ async function executeInitUnlocked(invocation, root) {
     }
   }
   const tools = plan?.tools || resolvedTools.tools;
-  const requestedExtensions = explicitExtensions !== null
+  const ordinaryRequestedExtensions = explicitExtensions !== null
     ? explicitExtensions
     : plan ? plan.extensions.map((entry) => entry.id) : defaultExtensions;
-  const extensionPreparation = prepareExtensionPlans(extensionCatalogResult, requestedExtensions, { tools, state: extensionState, stateError: extensionStateInspection.error });
+  const systemRequestedExtensions = systemCatalogResult.catalog.filter((entry) => entry.latestSupported).map((entry) => entry.id);
+  const requestedExtensions = [...new Set([...ordinaryRequestedExtensions, ...systemRequestedExtensions])];
+  const extensionPreparation = prepareExtensionPlans(combinedCatalogResult, requestedExtensions, { tools, state: extensionState, stateError: extensionStateInspection.error });
   const extensionPlans = extensionPreparation.plans;
   const toolSelection = { tools, source: plan ? (options.tools !== undefined ? "cli" : "interactive") : resolvedTools.source };
   const result = await initializeWorkspace(root, {

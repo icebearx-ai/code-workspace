@@ -1082,7 +1082,7 @@ test("packaged skills and README files reference registered commands and options
   }
   assert(checked >= 20, `expected at least 20 command references, found ${checked}`);
   const addProjects = fs.readFileSync(
-    path.resolve(__dirname, "..", "..", "artifacts", "templates", "codex", "skills", "codew-add-projects", "SKILL.md"),
+    path.resolve(__dirname, "..", "..", "extensions", ".system", "codew-add-projects", "1.0.0", "assets", "SKILL.md"),
     "utf8"
   );
   assert.match(addProjects, /data\.language/);
@@ -1103,7 +1103,7 @@ test("final branch migration leaves no legacy public contract in implementation 
     "README.zh-CN.md",
     "docs/code-workspace-flow.zh-CN.md",
     "artifacts/templates/agents/WORKSPACE_GUARD.md.template",
-    "artifacts/templates/agents/skills/codew-resolve-branch/SKILL.md",
+    "extensions/.system/codew-resolve-branch/1.0.0/assets/SKILL.md",
     "artifacts/templates/user-guide/en-US.md",
     "artifacts/templates/user-guide/zh-CN.md",
   ];

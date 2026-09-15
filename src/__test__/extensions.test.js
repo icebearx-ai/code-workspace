@@ -20,6 +20,7 @@ const {
   applyExtensionUninstall,
   compareSemver,
   discoverExtensions,
+  discoverSystemExtensions,
   emptyExtensionState,
   executeExtension,
   extensionStatePath,
@@ -1133,7 +1134,7 @@ test("extension install requires explicit names non-interactively and confirmati
     config: loadConfigProjection(root, ["identity", "language"]),
     dependencies: { extensionsRoot: repository, interactive: false },
   }), (error) => error.code === "CLI_CONFIRMATION_REQUIRED");
-  assert.equal(fs.existsSync(extensionStatePath(root)), false);
+  assert.equal(fs.existsSync(extensionStatePath(root)), true);
 });
 
 test("standalone extension install is idempotent without rewriting core assets", async () => {
@@ -1324,8 +1325,48 @@ test("explicit none isolates core re-init from an unreadable extension state", (
   fs.writeFileSync(extensionStatePath(root), "not json\n");
   const repeated = runCli(root, ["init", ".", "--tools", "none", "--extensions", "none", "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
-  assert.deepEqual(JSON.parse(repeated.stdout).data.extensions.requested, []);
+  assert.deepEqual(JSON.parse(repeated.stdout).data.extensions.requested, ["codew-add-projects", "codew-resolve-branch"]);
   assert.equal(fs.readFileSync(extensionStatePath(root), "utf8"), "not json\n");
+});
+
+test("system extensions are discovered separately and auto-installed by init", () => {
+  const system = discoverSystemExtensions();
+  assert(!discoverExtensions().some((entry) => system.some((candidate) => candidate.id === entry.id)));
+  assert.deepEqual(system.map((entry) => entry.id), ["codew-add-projects", "codew-resolve-branch"]);
+  assert(system.every((entry) => entry.system === true));
+  const root = temporaryRoot();
+  const result = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert.deepEqual(output.data.extensions.requested, ["codew-add-projects", "codew-resolve-branch"]);
+  assert(output.data.extensions.results.every((entry) => entry.status === "installed"));
+  const state = loadExtensionState(root);
+  assert.equal(state.extensions["codew-add-projects"].installed.system, true);
+  assert.equal(state.extensions["codew-resolve-branch"].installed.system, true);
+  const repeated = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]);
+  assert.equal(repeated.status, 0, repeated.stderr);
+  assert.equal(JSON.parse(repeated.stdout).data.extensions.summary.skipped, 2);
+});
+
+test("system extensions skip cleanly when no Agent tool is selected", () => {
+  const root = temporaryRoot();
+  const result = runCli(root, ["init", ".", "--tools", "none", "--extensions", "none", "--yes", "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  assert(output.data.extensions.results.every((entry) => entry.status === "skipped" && entry.reason === "no-applicable-outputs"));
+});
+
+test("system extensions cannot be manually installed or uninstalled", async () => {
+  const root = temporaryRoot();
+  assert.equal(runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]).status, 0);
+  await assert.rejects(executeExtensionInstall({
+    root,
+    args: ["codew-add-projects"],
+    options: { yes: true, json: true },
+    config: loadConfigProjection(root, ["identity", "language"]),
+    dependencies: { interactive: false, extensionStoreRoot: temporaryRoot() },
+  }), (error) => error.code === "EXTENSION_SYSTEM_MANAGED");
+  assert.throws(() => planExtensionUninstall(root, "codew-add-projects"), (error) => error.code === "EXTENSION_SYSTEM_MANAGED");
 });
 
 test("ordinary core re-init survives an unreadable extension state with a warning", () => {

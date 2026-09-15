@@ -23,13 +23,13 @@ test("workspace-owned templates use one idempotent managed-file mechanism", () =
   const root = baseline();
   const manifest = loadInitManifest();
   const first = installManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(first.length, 10);
-  assert.equal(first.filter((entry) => entry.action === "write").length, 10);
+  assert.equal(first.length, 3);
+  assert.equal(first.filter((entry) => entry.action === "write").length, 3);
 
   const second = installManagedFiles(root, manifest, ["claude", "codex"]);
   assert.equal(second.filter((entry) => entry.action === "write").length, 0);
   const inspected = inspectManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(inspected.current.length, 10);
+  assert.equal(inspected.current.length, 3);
   assert.deepEqual(inspected.managedOld, []);
   assert.deepEqual(inspected.replaceable, []);
   assert.deepEqual(inspected.unknown, []);
@@ -41,9 +41,9 @@ test("managed-file planning prevents partial writes when one target is unknown",
   const root = baseline();
   const manifest = loadInitManifest();
   installManagedFiles(root, manifest, ["claude", "codex"]);
-  const firstTarget = path.join(root, ".claude", "commands", "codew", "add-projects.md");
+  const firstTarget = path.join(root, "CLAUDE.md");
   fs.unlinkSync(firstTarget);
-  const unknownTarget = path.join(root, ".codex", "skills", "codew-add-projects", "SKILL.md");
+  const unknownTarget = path.join(root, "AGENTS.md");
   fs.appendFileSync(unknownTarget, "\nunknown local edit\n");
 
   assert.throws(
@@ -57,7 +57,7 @@ test("managed-file planning prevents partial writes when one target is unknown",
 test("a previous installed fingerprint is a safe generic upgrade input", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
-  const entry = manifest.managedFiles.find((item) => item.id === "workspace-codex-add-projects-skill");
+  const entry = manifest.managedFiles.find((item) => item.id === "workspace-codex-instructions");
   const target = path.join(root, entry.target);
   const previous = Buffer.from("previous managed output\n");
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -75,21 +75,18 @@ test("a previous installed fingerprint is a safe generic upgrade input", () => {
   const result = installManagedFiles(root, manifest, ["codex"]);
   const upgraded = result.find((item) => item.id === entry.id);
   assert.equal(upgraded.reason, "managed-old");
-  assert.equal(sha256(fs.readFileSync(target)), entry.desired.sha256);
+  assert.match(fs.readFileSync(target, "utf8"), /The workspace is not a project/);
 });
 
 test("managed files respect selected tools while the user guide remains tool-neutral", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const result = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(result.length, 6);
+  assert.equal(result.length, 2);
   assert(!result.some((entry) => entry.target.startsWith(".claude/")));
   assert(!result.some((entry) => entry.target === "CLAUDE.md"));
   assert(result.some((entry) => entry.target === "AGENTS.md"));
   assert(!result.some((entry) => entry.target === "AGENT.md"));
-  assert(result.some((entry) => entry.target === ".codex/skills/codew-resolve-branch/SKILL.md"));
-  assert(result.some((entry) => entry.target === ".codex/skills/codew-add-projects/agents/openai.yaml"));
-  assert(result.some((entry) => entry.target === ".codex/skills/codew-resolve-branch/agents/openai.yaml"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
   assert(result.some((entry) => entry.target === "USER_GUIDE.md"));
@@ -124,11 +121,8 @@ test("branch Skill stays static across artifact languages and keeps one ASK stru
   const manifest = loadInitManifest();
   const installed = [];
   for (const language of ["zh-CN", "en-US"]) {
-    const root = baseline(["codex"]);
-    installManagedFiles(root, manifest, ["codex"], {
-      variables: { WORKSPACE_LANGUAGE: language },
-    });
-    const skill = fs.readFileSync(path.join(root, ".codex", "skills", "codew-resolve-branch", "SKILL.md"), "utf8");
+    void language;
+    const skill = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", ".system", "codew-resolve-branch", "1.0.0", "assets", "SKILL.md"), "utf8");
     installed.push(skill);
     assert.doesNotMatch(skill, /\{\{WORKSPACE_LANGUAGE\}\}|branchAsk|Workspace ASK language|Requirement:|Scenario:|zh-CN|en-US/);
     assert.match(skill, /\[mismatch introduction and request for a decision\]/);
@@ -160,9 +154,9 @@ test("core managed files no longer own Monitor hooks", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const disabled = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(disabled.length, 6);
+  assert.equal(disabled.length, 2);
   assert(!fs.existsSync(path.join(root, ".codex", "hooks.json")));
-  assert.equal(installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] }).length, 6);
+  assert.equal(installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] }).length, 2);
 });
 
 test("one canonical template renders both workspace instructions with platform-specific add commands", () => {
@@ -211,7 +205,6 @@ test("Claude selection installs only the Claude root instruction template", () =
   const result = installManagedFiles(root, manifest, ["claude"]);
   assert(result.some((entry) => entry.target === "CLAUDE.md"));
   assert(!result.some((entry) => entry.target === "AGENTS.md"));
-  assert(result.some((entry) => entry.target === ".claude/skills/codew-resolve-branch/SKILL.md"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
   assert(fs.existsSync(path.join(root, "CLAUDE.md")));

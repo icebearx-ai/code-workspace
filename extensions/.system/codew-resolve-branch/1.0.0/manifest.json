@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
+  "experimental": true,
+  "id": "codew-resolve-branch",
+  "name": "Code Workspace Resolve Branch",
+  "description": "解决选中项目的分支不一致",
+  "version": "1.0.0",
+  "entry": "init.js",
+  "entrySha256": "edde8c7ad7e4096a9eccd11f28f70cb186a288aa821db2850fac4b73373d2fe8",
+  "timeoutMs": 30000,
+  "capabilities": {},
+  "outputs": [
+    { "id": "codex-skill", "kind": "file", "ownership": "exclusive", "target": ".codex/skills/codew-resolve-branch/SKILL.md", "tools": ["codex"] },
+    { "id": "codex-openai", "kind": "file", "ownership": "exclusive", "target": ".codex/skills/codew-resolve-branch/agents/openai.yaml", "tools": ["codex"] },
+    { "id": "claude-skill", "kind": "file", "ownership": "exclusive", "target": ".claude/skills/codew-resolve-branch/SKILL.md", "tools": ["claude"] }
+  ]
+}

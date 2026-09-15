@@ -45,6 +45,7 @@ const {
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 const EXTENSIONS_ROOT = path.join(PACKAGE_ROOT, "extensions");
+const SYSTEM_EXTENSIONS_ROOT = path.join(EXTENSIONS_ROOT, ".system");
 const EXTENSION_STATE_FILE = "ext-manifest.json";
 const EXTENSION_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
@@ -441,6 +442,7 @@ function discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensi
     const latestSupported = versions.find((entry) => entry.supported) || null;
     return Object.freeze({
       id,
+      system: options.system === true,
       name: (latestSupported || versions[0]).manifest.name,
       description: (latestSupported || versions[0]).manifest.description,
       versions: Object.freeze(versions),
@@ -448,16 +450,16 @@ function discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensi
     });
 }
 
-function discoverExtensions(options = {}) {
-  const extensionsRoot = path.resolve(options.extensionsRoot || EXTENSIONS_ROOT);
+function discoverExtensionsFromRoot(extensionsRoot, options = {}) {
+  const resolvedRoot = path.resolve(extensionsRoot);
   const supportedExtensionSpecVersions = Object.freeze([...(options.supportedExtensionSpecVersions || SUPPORTED_EXTENSION_SPEC_VERSIONS)]);
-  if (!fs.existsSync(extensionsRoot)) return options.tolerant ? { catalog: [], invalid: [] } : [];
-  const entries = fs.readdirSync(extensionsRoot, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
+  if (!fs.existsSync(resolvedRoot)) return options.tolerant ? { catalog: [], invalid: [] } : [];
+  const entries = fs.readdirSync(resolvedRoot, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
   const catalog = [];
   const invalid = [];
   for (const extensionEntry of entries) {
     try {
-      catalog.push(discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensionSpecVersions, options));
+      catalog.push(discoverExtensionEntry(resolvedRoot, extensionEntry, supportedExtensionSpecVersions, options));
     } catch (error) {
       if (!options.tolerant) throw error;
       invalid.push({ id: EXTENSION_NAME_PATTERN.test(extensionEntry.name) ? extensionEntry.name : null, entry: extensionEntry.name, code: error.code || "EXTENSION_REPOSITORY_INVALID", message: error.message });
@@ -466,6 +468,19 @@ function discoverExtensions(options = {}) {
   catalog.sort((left, right) => left.id.localeCompare(right.id));
   invalid.sort((left, right) => left.entry.localeCompare(right.entry));
   return options.tolerant ? { catalog, invalid } : catalog;
+}
+
+function discoverExtensions(options = {}) {
+  return discoverExtensionsFromRoot(options.extensionsRoot || EXTENSIONS_ROOT, { ...options, system: false });
+}
+
+function discoverSystemExtensions(options = {}) {
+  const root = options.systemExtensionsRoot || path.join(path.resolve(options.extensionsRoot || EXTENSIONS_ROOT), ".system");
+  return discoverExtensionsFromRoot(root, { ...options, system: true });
+}
+
+function isSystemExtensionId(id, options = {}) {
+  return discoverSystemExtensions({ ...options, tolerant: true }).catalog.some((entry) => entry.id === id);
 }
 
 function resolvePlanFromStore(plan, options = {}) {
@@ -601,6 +616,7 @@ function validateInstalledState(id, installed) {
   if (installed === null) return null;
   if (!installed || typeof installed !== "object" || Array.isArray(installed)) throw extensionError("EXTENSION_STATE_INVALID", `Invalid installed state for ${id}`, { extension: id });
   parseSemver(installed.version);
+  if (installed.system !== undefined && typeof installed.system !== "boolean") throw extensionError("EXTENSION_STATE_INVALID", `Invalid system flag for ${id}`, { extension: id });
   if (!SHA256_PATTERN.test(installed.manifestSha256 || "") || !Array.isArray(installed.artifacts)) {
     throw extensionError("EXTENSION_STATE_INVALID", `Invalid installed state for ${id}`, { extension: id });
   }
@@ -805,6 +821,7 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
     }
     plans.push(Object.freeze({
       id,
+      system: extension.system === true,
       name: resolved.manifest.name,
       version: resolved.version,
       extensionSpecVersion: resolved.extensionSpecVersion,
@@ -852,12 +869,17 @@ function prepareExtensionPlans(catalogResult, requested, options = {}) {
       plans.push(plan);
       planningState.extensions[id] = {
         installed: {
+          system: plan.system === true,
           artifacts: plan.artifacts.map((artifact) => ({ id: artifact.id, kind: artifact.kind, ownership: artifact.ownership, target: artifact.target, ...(artifact.selector ? { selector: artifact.selector } : {}) })),
           hooks: plan.hooks.map((hook) => ({ ...hook })),
         },
       };
     } catch (error) {
-      failures.push({ id, version: null, status: "failed", code: error.code || "EXTENSION_INIT_FAILED", message: error.message, statePersisted: false, phase: "prepare" });
+      if (error.code === "EXTENSION_NO_APPLICABLE_OUTPUTS" && catalog.find((entry) => entry.id === id)?.system === true) {
+        failures.push({ id, version: catalog.find((entry) => entry.id === id)?.latestSupported?.version || null, status: "skipped", reason: "no-applicable-outputs", statePersisted: false, phase: "prepare" });
+      } else {
+        failures.push({ id, version: null, status: "failed", code: error.code || "EXTENSION_INIT_FAILED", message: error.message, statePersisted: false, phase: "prepare" });
+      }
     }
   }
   return { plans, failures, diagnostics };
@@ -1186,6 +1208,7 @@ function installVerifiedArtifacts(root, plan, verified, previousState, options =
     installed: {
       protocolVersion: 3,
       extensionSpecVersion: plan.extensionSpecVersion,
+      system: plan.system === true,
       version: plan.version,
       manifestSha256: plan.manifestSha256,
       packageSha256: plan.packageSha256,
@@ -1335,8 +1358,14 @@ function runExtensionBatch(root, plans, context, options = {}) {
 
 function planExtensionUninstall(root, id) {
   const extensionId = validateExtensionName(id);
+  if (isSystemExtensionId(extensionId)) {
+    throw extensionError("EXTENSION_SYSTEM_MANAGED", `System extension cannot be manually uninstalled: ${extensionId}`, { extension: extensionId });
+  }
   const state = loadExtensionState(root);
   const installed = state.extensions[extensionId]?.installed || null;
+  if (installed?.system === true) {
+    throw extensionError("EXTENSION_SYSTEM_MANAGED", `System extension cannot be manually uninstalled: ${extensionId}`, { extension: extensionId });
+  }
   if (!installed) return Object.freeze({ root: path.resolve(root), id: extensionId, action: "skip", reason: "not-installed", targets: [] });
   for (const artifact of installed.artifacts) assertSafeWorkspaceTarget(root, targetForArtifact(artifact), { directory: artifact.kind === "directory" });
   const next = structuredClone(state);
@@ -1359,6 +1388,9 @@ function planExtensionUninstall(root, id) {
 }
 
 function applyExtensionUninstall(plan, options = {}) {
+  if (plan.system === true || isSystemExtensionId(plan.id)) {
+    throw extensionError("EXTENSION_SYSTEM_MANAGED", `System extension cannot be manually uninstalled: ${plan.id}`, { extension: plan.id });
+  }
   if (plan.action === "skip") return { id: plan.id, status: "skipped", reason: plan.reason, removed: [] };
   if (stateFingerprint(plan.root) !== plan.stateFingerprint) {
     throw extensionError("EXTENSION_STATE_CONFLICT", `Extension state changed before uninstalling ${plan.id}`, { extension: plan.id });
@@ -1408,6 +1440,7 @@ function applyExtensionUninstall(plan, options = {}) {
 
 module.exports = {
   EXTENSIONS_ROOT,
+  SYSTEM_EXTENSIONS_ROOT,
   EXTENSION_NAME_PATTERN,
   EXTENSION_STATE_FILE,
   SUPPORTED_EXTENSION_SPEC_VERSIONS,
@@ -1418,11 +1451,13 @@ module.exports = {
   compareSemver,
   coreManagedTargets,
   discoverExtensions,
+  discoverSystemExtensions,
   emptyExtensionState,
   executeExtension,
   extensionStatePath,
   hasWorkspaceConfiguration,
   inspectExtensionState,
+  isSystemExtensionId,
   installedExtensionNames,
   loadExtensionState,
   normalizeArtifactTarget,

@@ -4,6 +4,7 @@ const {
   applyExtensionUninstall,
   EXTENSION_STATE_FILE,
   discoverExtensions,
+  discoverSystemExtensions,
   inspectExtensionState,
   normalizeExtensionNames,
   planExtensionUninstall,
@@ -104,6 +105,12 @@ async function executeExtensionInstall(invocation) {
   }
 
   const catalogResult = discoverExtensions({ tolerant: true, ...(dependencies.extensionsRoot ? { extensionsRoot: dependencies.extensionsRoot } : {}) });
+  const systemCatalogResult = discoverSystemExtensions({ tolerant: true, ...(dependencies.extensionsRoot ? { extensionsRoot: dependencies.extensionsRoot } : {}) });
+  const systemIds = new Set(systemCatalogResult.catalog.map((entry) => entry.id));
+  const requestedSystemId = requested?.find((id) => systemIds.has(id));
+  if (requestedSystemId) {
+    throw new WorkspaceError("EXTENSION_SYSTEM_MANAGED", `System extension is managed automatically by init: ${requestedSystemId}`, { extension: requestedSystemId });
+  }
   const stateInspection = inspectExtensionState(invocation.root);
   if (requested === null) {
     try {

@@ -97,7 +97,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "zhuiyi-jira-task-breakdown")));
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "zhuiyi-jira-issue-fix-summary")));
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "zhuiyi-guangda-coding-spec")));
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 10);
+  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 3);
   assert.equal(output.workspace.language, "zh-CN");
   assert.match(fs.readFileSync(path.join(root, "USER_GUIDE.md"), "utf8"), /Code Workspace 用户指南/);
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
@@ -336,15 +336,13 @@ test("update migrates legacy workspace language state", () => {
   assert.equal(JSON.parse(fs.readFileSync(stateFile, "utf8")).workspaceLanguage, undefined);
 });
 
-test("doctor rejects a modified workspace-owned skill", () => {
+test("doctor leaves system extension skill drift to extension state checks", () => {
   const root = temporaryRoot();
   assert.equal(run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]).status, 0);
   const target = path.join(root, ".codex", "skills", "codew-add-projects", "SKILL.md");
   fs.appendFileSync(target, "\nlocal modification\n");
   const result = run(root, ["doctor", "--json"]);
-  assert.equal(result.status, 1);
-  const output = JSON.parse(result.stdout);
-  assert(output.diagnostics.some((entry) => entry.code === "MANAGED_FILE_UNKNOWN"));
+  assert.equal(result.status, 0);
 });
 
 test("update and doctor preserve the workspace tool selection when --tools is omitted", () => {
@@ -376,7 +374,7 @@ test("init installs Codex monitor hooks through the monitor extension", () => {
   assert.equal(output.extensions.requested.includes("monitor"), true);
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").status, "installed");
   assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").version, "1.1.0");
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 6);
+  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 2);
 
   const repeated = run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
@@ -584,10 +582,10 @@ test("project add validates duplicate names across a batch before writing any pr
   assert.deepEqual(jsonData(listed).projects, []);
 });
 
-test("update protects locally modified managed assets unless forced", () => {
+test("update protects locally modified core managed assets unless forced", () => {
   const root = temporaryRoot();
   assert.equal(run(root, ["init", ".", "--tools", "claude", "--yes", "--json"]).status, 0);
-  const target = path.join(root, ".claude", "commands", "codew", "add-projects.md");
+  const target = path.join(root, "CLAUDE.md");
   fs.appendFileSync(target, "\nlocal edit\n");
   const blocked = run(root, ["update", "--tools", "claude"]);
   assert.equal(blocked.status, 1);
