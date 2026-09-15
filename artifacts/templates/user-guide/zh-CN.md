@@ -97,17 +97,17 @@ codew project verify <project-name>
 以下 Skill 以独立扩展提供，不会随 `init` 或 `update` 自动安装。需要时按名称安装，也可以单独卸载；交互式扩展选择默认不勾选任何扩展，每个选项会显示扩展名称和简短描述：
 
 ```bash
-codew extension install code-workspace-jira-prd-analysis --yes
-codew extension install code-workspace-jira-task-breakdown --yes
-codew extension install code-workspace-issue-fix-summary --yes
-codew extension install code-workspace-guangda-coding-spec --yes
-codew extension uninstall code-workspace-jira-prd-analysis --yes
+codew extension install zhuiyi-jira-prd-analysis --yes
+codew extension install zhuiyi-jira-task-breakdown --yes
+codew extension install zhuiyi-jira-issue-fix-summary --yes
+codew extension install zhuiyi-guangda-coding-spec --yes
+codew extension uninstall zhuiyi-jira-prd-analysis --yes
 ```
 
-- `$code-workspace-jira-prd-analysis` — 在确认 Jira 范围后分析需求清晰度、一致性和代码可行性。
-- `$code-workspace-jira-task-breakdown` — 将已确认的 Jira 需求按前端、后端、测试拆分为可执行任务。
-- `$code-workspace-issue-fix-summary` — 总结已完成的问题修复，并在确认后发布到 Jira 评论。
-- `$code-workspace-guangda-coding-spec` — 仅在项目属于中国光大银行客户项目时，按本次任务的风险域落实研发、安全、测试与投产规范。
+- `$zhuiyi-jira-prd-analysis` — 在确认 Jira 范围后分析需求清晰度、一致性和代码可行性。
+- `$zhuiyi-jira-task-breakdown` — 将已确认的 Jira 需求按前端、后端、测试拆分为可执行任务。
+- `$zhuiyi-jira-issue-fix-summary` — 总结已完成的问题修复，并在确认后发布到 Jira 评论。
+- `$zhuiyi-guangda-coding-spec` — 仅在项目属于中国光大银行客户项目时，按本次任务的风险域落实研发、安全、测试与投产规范。
 
 这些扩展只安装 Skill 指令。Jira 相关扩展需要实际访问 Jira 时，还应安装 `zhuiyi-jira-mcp` 扩展；光大规范扩展不依赖任何 MCP 服务。
 
@@ -115,7 +115,7 @@ codew extension uninstall code-workspace-jira-prd-analysis --yes
 | --- | --- | --- |
 | 添加工作区项目 | `$code-workspace-add-projects` | `/code-workspace:add-projects` |
 | 解决项目分支不一致 | `$code-workspace-resolve-branch` | `/code-workspace-resolve-branch` |
-| 分析 Jira 需求 | `$code-workspace-jira-prd-analysis` | `$code-workspace-jira-prd-analysis` |
-| 拆分 Jira 任务 | `$code-workspace-jira-task-breakdown` | `$code-workspace-jira-task-breakdown` |
-| 总结问题修复 | `$code-workspace-issue-fix-summary` | `$code-workspace-issue-fix-summary` |
-| 落实光大研发规范 | `$code-workspace-guangda-coding-spec` | `$code-workspace-guangda-coding-spec` |
+| 分析 Jira 需求 | `$zhuiyi-jira-prd-analysis` | `$zhuiyi-jira-prd-analysis` |
+| 拆分 Jira 任务 | `$zhuiyi-jira-task-breakdown` | `$zhuiyi-jira-task-breakdown` |
+| 总结问题修复 | `$zhuiyi-jira-issue-fix-summary` | `$zhuiyi-jira-issue-fix-summary` |
+| 落实光大研发规范 | `$zhuiyi-guangda-coding-spec` | `$zhuiyi-guangda-coding-spec` |

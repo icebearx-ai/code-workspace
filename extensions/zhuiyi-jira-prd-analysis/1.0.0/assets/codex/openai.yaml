@@ -1,0 +1,7 @@
+interface:
+  display_name: "Zhuiyi Jira PRD Analysis"
+  short_description: "分析 Jira 需求"
+  default_prompt: "使用 $zhuiyi-jira-prd-analysis 确认范围并分析这个 Jira 需求。"
+
+policy:
+  allow_implicit_invocation: true

@@ -1,7 +1,0 @@
-interface:
-  display_name: "Code Workspace Issue Fix Summary"
-  short_description: "从会话总结已修复问题并经确认发布到 Jira 工单评论"
-  default_prompt: "Use $code-workspace-issue-fix-summary to summarize the completed fix and, after confirmation, post it to the Jira issue."
-
-policy:
-  allow_implicit_invocation: false

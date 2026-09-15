@@ -90,8 +90,8 @@ test("managed files respect selected tools while the user guide remains tool-neu
   assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-resolve-branch/SKILL.md"));
   assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-add-projects/agents/openai.yaml"));
   assert(result.some((entry) => entry.target === ".codex/skills/code-workspace-resolve-branch/agents/openai.yaml"));
-  assert(!result.some((entry) => entry.target.includes("code-workspace-jira-")));
-  assert(!result.some((entry) => entry.target.includes("code-workspace-issue-fix-summary")));
+  assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
+  assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
   assert(result.some((entry) => entry.target === "USER_GUIDE.md"));
   assert(!result.some((entry) => entry.target === "USER_GUIDE.zh-CN.md"));
   assert(!result.some((entry) => entry.target.startsWith("openspec/")));
@@ -212,8 +212,8 @@ test("Claude selection installs only the Claude root instruction template", () =
   assert(result.some((entry) => entry.target === "CLAUDE.md"));
   assert(!result.some((entry) => entry.target === "AGENTS.md"));
   assert(result.some((entry) => entry.target === ".claude/skills/code-workspace-resolve-branch/SKILL.md"));
-  assert(!result.some((entry) => entry.target.includes("code-workspace-jira-")));
-  assert(!result.some((entry) => entry.target.includes("code-workspace-issue-fix-summary")));
+  assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
+  assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
   assert(fs.existsSync(path.join(root, "CLAUDE.md")));
   assert(!fs.existsSync(path.join(root, "AGENTS.md")));
 });

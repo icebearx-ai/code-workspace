@@ -150,7 +150,7 @@ function skillExtensionTargets(id) {
   };
 }
 
-const GUANGDA_SKILL_EXTENSION = "code-workspace-guangda-coding-spec";
+const GUANGDA_SKILL_EXTENSION = "zhuiyi-guangda-coding-spec";
 const GUANGDA_SKILL_REFERENCES = [
   "critical-correctness.md",
   "data-performance.md",
@@ -1159,9 +1159,9 @@ test("standalone extension install is idempotent without rewriting core assets",
 
 test("built-in skill extensions expose only tool-applicable file outputs", () => {
   const ids = [
-    "code-workspace-issue-fix-summary",
-    "code-workspace-jira-prd-analysis",
-    "code-workspace-jira-task-breakdown",
+    "zhuiyi-jira-issue-fix-summary",
+    "zhuiyi-jira-prd-analysis",
+    "zhuiyi-jira-task-breakdown",
   ];
   const catalog = discoverExtensions();
   for (const id of ids) {
@@ -1184,9 +1184,9 @@ test("built-in skill extensions expose only tool-applicable file outputs", () =>
 
 test("built-in skill extensions install and uninstall independently", async () => {
   const ids = [
-    "code-workspace-issue-fix-summary",
-    "code-workspace-jira-prd-analysis",
-    "code-workspace-jira-task-breakdown",
+    "zhuiyi-jira-issue-fix-summary",
+    "zhuiyi-jira-prd-analysis",
+    "zhuiyi-jira-task-breakdown",
   ];
   const root = temporaryRoot();
   const initialized = runCli(root, ["init", ".", "--tools", "codex,claude", "--extensions", "none", "--yes", "--json"]);
@@ -1212,8 +1212,8 @@ test("built-in skill extensions install and uninstall independently", async () =
     for (const target of Object.values(targets)) assert.equal(fs.existsSync(path.join(root, target)), true, target);
     assert.equal(loadExtensionState(root).extensions[id].installed.artifacts.length, 3);
   }
-  assert.match(fs.readFileSync(path.join(root, skillExtensionTargets(ids[0]).codexSkill), "utf8"), /name: code-workspace-issue-fix-summary/);
-  assert.match(fs.readFileSync(path.join(root, skillExtensionTargets(ids[1]).claudeSkill), "utf8"), /name: code-workspace-jira-prd-analysis/);
+  assert.match(fs.readFileSync(path.join(root, skillExtensionTargets(ids[0]).codexSkill), "utf8"), /name: zhuiyi-jira-issue-fix-summary/);
+  assert.match(fs.readFileSync(path.join(root, skillExtensionTargets(ids[1]).claudeSkill), "utf8"), /name: zhuiyi-jira-prd-analysis/);
 
   const repeated = await executeExtensionInstall(invocation);
   assert.equal(repeated.ok, true);
@@ -1277,8 +1277,8 @@ test("multi-file skill extension installs references and the source archive, the
 
   const codexRoot = path.join(root, `.codex/skills/${id}`);
   const claudeRoot = path.join(root, `.claude/skills/${id}`);
-  assert.match(fs.readFileSync(path.join(codexRoot, "SKILL.md"), "utf8"), /name: code-workspace-guangda-coding-spec/);
-  assert.match(fs.readFileSync(path.join(codexRoot, "agents", "openai.yaml"), "utf8"), /display_name: "Code Workspace Guangda Coding Spec"/);
+  assert.match(fs.readFileSync(path.join(codexRoot, "SKILL.md"), "utf8"), /name: zhuiyi-guangda-coding-spec/);
+  assert.match(fs.readFileSync(path.join(codexRoot, "agents", "openai.yaml"), "utf8"), /display_name: "Zhuiyi Guangda Coding Spec"/);
   assert.equal(fs.existsSync(path.join(claudeRoot, "agents")), false);
   for (const reference of GUANGDA_SKILL_REFERENCES) {
     assert.equal(fs.readFileSync(path.join(codexRoot, "references", reference), "utf8").length > 0, true, reference);

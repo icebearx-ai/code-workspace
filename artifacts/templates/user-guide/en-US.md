@@ -97,17 +97,17 @@ Installed by default during Workspace initialization:
 The following skills are distributed as independent extensions. They are not installed by `init` or `update`; install or uninstall each one explicitly. The interactive extension picker starts with no extensions selected, and each choice shows the extension name and a short description:
 
 ```bash
-codew extension install code-workspace-jira-prd-analysis --yes
-codew extension install code-workspace-jira-task-breakdown --yes
-codew extension install code-workspace-issue-fix-summary --yes
-codew extension install code-workspace-guangda-coding-spec --yes
-codew extension uninstall code-workspace-jira-prd-analysis --yes
+codew extension install zhuiyi-jira-prd-analysis --yes
+codew extension install zhuiyi-jira-task-breakdown --yes
+codew extension install zhuiyi-jira-issue-fix-summary --yes
+codew extension install zhuiyi-guangda-coding-spec --yes
+codew extension uninstall zhuiyi-jira-prd-analysis --yes
 ```
 
-- `$code-workspace-jira-prd-analysis` — confirm Jira scope, then analyze requirement clarity, consistency, and code feasibility.
-- `$code-workspace-jira-task-breakdown` — split a confirmed Jira requirement into executable frontend, backend, and test tasks.
-- `$code-workspace-issue-fix-summary` — summarize a completed fix and, after confirmation, publish it as a Jira comment.
-- `$code-workspace-guangda-coding-spec` — apply research, security, testing, and release rules by risk area, only for China Everbright Bank customer projects.
+- `$zhuiyi-jira-prd-analysis` — confirm Jira scope, then analyze requirement clarity, consistency, and code feasibility.
+- `$zhuiyi-jira-task-breakdown` — split a confirmed Jira requirement into executable frontend, backend, and test tasks.
+- `$zhuiyi-jira-issue-fix-summary` — summarize a completed fix and, after confirmation, publish it as a Jira comment.
+- `$zhuiyi-guangda-coding-spec` — apply research, security, testing, and release rules by risk area, only for China Everbright Bank customer projects.
 
 These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` extension separately when the Jira-related skills require Jira access; the Guangda coding spec requires no MCP service.
 
@@ -115,7 +115,7 @@ These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` 
 | --- | --- | --- |
 | Add workspace projects | `$code-workspace-add-projects` | `/code-workspace:add-projects` |
 | Resolve a project branch mismatch | `$code-workspace-resolve-branch` | `/code-workspace-resolve-branch` |
-| Analyze a Jira requirement | `$code-workspace-jira-prd-analysis` | `$code-workspace-jira-prd-analysis` |
-| Break down Jira tasks | `$code-workspace-jira-task-breakdown` | `$code-workspace-jira-task-breakdown` |
-| Summarize an issue fix | `$code-workspace-issue-fix-summary` | `$code-workspace-issue-fix-summary` |
-| Apply the Guangda coding spec | `$code-workspace-guangda-coding-spec` | `$code-workspace-guangda-coding-spec` |
+| Analyze a Jira requirement | `$zhuiyi-jira-prd-analysis` | `$zhuiyi-jira-prd-analysis` |
+| Break down Jira tasks | `$zhuiyi-jira-task-breakdown` | `$zhuiyi-jira-task-breakdown` |
+| Summarize an issue fix | `$zhuiyi-jira-issue-fix-summary` | `$zhuiyi-jira-issue-fix-summary` |
+| Apply the Guangda coding spec | `$zhuiyi-guangda-coding-spec` | `$zhuiyi-guangda-coding-spec` |

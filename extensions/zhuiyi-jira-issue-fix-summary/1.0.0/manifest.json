@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
+  "experimental": true,
+  "id": "zhuiyi-jira-issue-fix-summary",
+  "name": "Zhuiyi Jira Issue Fix Summary",
+  "description": "总结已修复问题并确认后发布 Jira 评论",
+  "version": "1.0.0",
+  "entry": "init.js",
+  "entrySha256": "36df0a216e459811b4f528e40a103f87f94043fb200121071d62781f307343ca",
+  "timeoutMs": 30000,
+  "capabilities": {},
+  "outputs": [
+    {
+      "id": "codex-skill",
+      "kind": "file",
+      "ownership": "exclusive",
+      "target": ".codex/skills/zhuiyi-jira-issue-fix-summary/SKILL.md",
+      "tools": ["codex"]
+    },
+    {
+      "id": "codex-openai",
+      "kind": "file",
+      "ownership": "exclusive",
+      "target": ".codex/skills/zhuiyi-jira-issue-fix-summary/agents/openai.yaml",
+      "tools": ["codex"]
+    },
+    {
+      "id": "claude-skill",
+      "kind": "file",
+      "ownership": "exclusive",
+      "target": ".claude/skills/zhuiyi-jira-issue-fix-summary/SKILL.md",
+      "tools": ["claude"]
+    }
+  ]
+}
