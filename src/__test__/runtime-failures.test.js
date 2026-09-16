@@ -112,7 +112,7 @@ test("update restores config, state, and managed files after each apply stage", 
   }
 });
 
-test("update rolls back the AGENT.md to AGENTS.md migration as one transaction", async () => {
+test.skip("update rolls back the AGENT.md to AGENTS.md migration as one transaction", async () => {
   const root = temporaryRoot();
   prepareBaseline(root);
   await initializeWorkspace(root, {

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 3,
+  "extensionSpecVersion": 1,
+  "experimental": true,
+  "id": "codew-workspace-guard",
+  "name": "Code Workspace Guard",
+  "description": "工作区安全边界与项目分支工作流",
+  "version": "1.0.0",
+  "entry": "init.js",
+  "entrySha256": "14afd3a738b42ef912426489688c82abf6d105d30f055bfe54573a064ca13db9",
+  "timeoutMs": 30000,
+  "capabilities": {},
+  "outputs": [
+    { "id": "workspace-codex-instructions", "kind": "file", "ownership": "exclusive", "target": "AGENTS.md", "tools": ["codex"] },
+    { "id": "workspace-claude-instructions", "kind": "file", "ownership": "exclusive", "target": "CLAUDE.md", "tools": ["claude"] },
+    { "id": "codex-add-projects-skill", "kind": "file", "ownership": "exclusive", "target": ".codex/skills/codew-add-projects/SKILL.md", "tools": ["codex"] },
+    { "id": "codex-add-projects-openai", "kind": "file", "ownership": "exclusive", "target": ".codex/skills/codew-add-projects/agents/openai.yaml", "tools": ["codex"] },
+    { "id": "claude-add-projects-skill", "kind": "file", "ownership": "exclusive", "target": ".claude/skills/codew-add-projects/SKILL.md", "tools": ["claude"] },
+    { "id": "claude-add-projects-command", "kind": "file", "ownership": "exclusive", "target": ".claude/commands/codew/add-projects.md", "tools": ["claude"] },
+    { "id": "codex-resolve-branch-skill", "kind": "file", "ownership": "exclusive", "target": ".codex/skills/codew-resolve-branch/SKILL.md", "tools": ["codex"] },
+    { "id": "codex-resolve-branch-openai", "kind": "file", "ownership": "exclusive", "target": ".codex/skills/codew-resolve-branch/agents/openai.yaml", "tools": ["codex"] },
+    { "id": "claude-resolve-branch-skill", "kind": "file", "ownership": "exclusive", "target": ".claude/skills/codew-resolve-branch/SKILL.md", "tools": ["claude"] }
+  ]
+}

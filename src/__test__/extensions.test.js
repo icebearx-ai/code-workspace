@@ -140,7 +140,7 @@ function context(plan) {
 }
 
 function runCli(root, args) {
-  return spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8" });
+  return spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8", env: { ...process.env, CODE_WORKSPACE_EXTENSION_STORE: path.join(root, ".extension-store-test") } });
 }
 
 function skillExtensionTargets(id) {
@@ -1007,7 +1007,7 @@ test("ext-manifest rejects core claims and duplicate ownership from persisted st
   state.extensions.beta = { installed: { version: "1.0.0", manifestSha256: "c".repeat(64), artifacts: [artifact] }, lastAttempt: { version: "1.0.0", status: "installed" } };
   saveExtensionState(root, state);
   assert.throws(() => loadExtensionState(root), (error) => error.code === "EXTENSION_STATE_INVALID");
-  state.extensions.beta.installed.artifacts[0] = { ...artifact, target: "AGENTS.md" };
+  state.extensions.beta.installed.artifacts[0] = { ...artifact, target: "USER_GUIDE.md" };
   saveExtensionState(root, state);
   assert.throws(() => loadExtensionState(root), (error) => error.code === "EXTENSION_STATE_INVALID");
 });
@@ -1142,7 +1142,7 @@ test("standalone extension install is idempotent without rewriting core assets",
   const definition = writeExtension(repository, { id: "example-extension" });
   const root = temporaryRoot();
   assert.equal(runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]).status, 0);
-  const coreFile = path.join(root, "AGENTS.md");
+  const coreFile = path.join(root, "USER_GUIDE.md");
   const coreBefore = fs.readFileSync(coreFile, "utf8");
   const invocation = {
     root,
@@ -1325,27 +1325,34 @@ test("explicit none isolates core re-init from an unreadable extension state", (
   fs.writeFileSync(extensionStatePath(root), "not json\n");
   const repeated = runCli(root, ["init", ".", "--tools", "none", "--extensions", "none", "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
-  assert.deepEqual(JSON.parse(repeated.stdout).data.extensions.requested, ["codew-add-projects", "codew-resolve-branch"]);
+  assert.deepEqual(JSON.parse(repeated.stdout).data.extensions.requested, ["codew-workspace-guard"]);
   assert.equal(fs.readFileSync(extensionStatePath(root), "utf8"), "not json\n");
 });
 
 test("system extensions are discovered separately and auto-installed by init", () => {
   const system = discoverSystemExtensions();
   assert(!discoverExtensions().some((entry) => system.some((candidate) => candidate.id === entry.id)));
-  assert.deepEqual(system.map((entry) => entry.id), ["codew-add-projects", "codew-resolve-branch"]);
+  assert.deepEqual(system.map((entry) => entry.id), ["codew-workspace-guard"]);
   assert(system.every((entry) => entry.system === true));
   const root = temporaryRoot();
   const result = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]);
   assert.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
-  assert.deepEqual(output.data.extensions.requested, ["codew-add-projects", "codew-resolve-branch"]);
+  assert.deepEqual(output.data.extensions.requested, ["codew-workspace-guard"]);
   assert(output.data.extensions.results.every((entry) => entry.status === "installed"));
   const state = loadExtensionState(root);
-  assert.equal(state.extensions["codew-add-projects"].installed.system, true);
-  assert.equal(state.extensions["codew-resolve-branch"].installed.system, true);
+  assert.equal(state.extensions["codew-workspace-guard"].installed.system, true);
+  assert.equal(state.extensions["codew-workspace-guard"].installed.artifacts.length, 5);
+  for (const target of [
+    "AGENTS.md",
+    ".codex/skills/codew-add-projects/SKILL.md",
+    ".codex/skills/codew-add-projects/agents/openai.yaml",
+    ".codex/skills/codew-resolve-branch/SKILL.md",
+    ".codex/skills/codew-resolve-branch/agents/openai.yaml",
+  ]) assert.equal(fs.existsSync(path.join(root, target)), true, target);
   const repeated = runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]);
   assert.equal(repeated.status, 0, repeated.stderr);
-  assert.equal(JSON.parse(repeated.stdout).data.extensions.summary.skipped, 2);
+  assert.equal(JSON.parse(repeated.stdout).data.extensions.summary.skipped, 1);
 });
 
 test("system extensions skip cleanly when no Agent tool is selected", () => {
@@ -1361,12 +1368,12 @@ test("system extensions cannot be manually installed or uninstalled", async () =
   assert.equal(runCli(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--yes", "--json"]).status, 0);
   await assert.rejects(executeExtensionInstall({
     root,
-    args: ["codew-add-projects"],
+    args: ["codew-workspace-guard"],
     options: { yes: true, json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
     dependencies: { interactive: false, extensionStoreRoot: temporaryRoot() },
   }), (error) => error.code === "EXTENSION_SYSTEM_MANAGED");
-  assert.throws(() => planExtensionUninstall(root, "codew-add-projects"), (error) => error.code === "EXTENSION_SYSTEM_MANAGED");
+  assert.throws(() => planExtensionUninstall(root, "codew-workspace-guard"), (error) => error.code === "EXTENSION_SYSTEM_MANAGED");
 });
 
 test("ordinary core re-init survives an unreadable extension state with a warning", () => {

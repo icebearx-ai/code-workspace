@@ -5,7 +5,7 @@
 系统 SHALL 从 `extensions/.system/<name>/<version>/` 发现系统扩展，并使用与普通扩展相同的 manifest、版本、入口、摘要和 Extension Spec 校验。系统扩展 SHALL 不出现在普通扩展 catalog 中；系统 catalog 与普通 catalog 不得包含重复 ID。
 
 #### Scenario: 发现系统扩展
-- **WHEN** 发布包包含合法的 `extensions/.system/codew-add-projects/1.0.0`
+- **WHEN** 发布包包含合法的 `extensions/.system/codew-workspace-guard/1.0.0`
 - **THEN** Host 将其加入系统 catalog，并冻结与普通扩展相同的 manifest、入口和包摘要
 
 #### Scenario: 系统扩展不进入普通选择列表
@@ -14,7 +14,7 @@
 
 ### Requirement: init 自动安装系统扩展
 
-`init` SHALL 自动请求所有适用于当前 Agent 工具的系统扩展。系统扩展 SHALL 不受普通扩展选择和 `--extensions none` 影响；系统扩展 SHALL 复用普通扩展的计划冻结、Store 导入、隔离执行、逐扩展事务和 installed state。
+`init` SHALL 自动请求所有适用于当前 Agent 工具的系统扩展。系统扩展 SHALL 不受普通扩展选择和 `--extensions none` 影响；系统扩展 SHALL 复用普通扩展的计划冻结、Store 导入、隔离执行、事务和 installed state。Workspace Guard 与其两个 Skill 必须由同一系统扩展事务安装。
 
 #### Scenario: 新 Workspace 自动安装系统扩展
 - **WHEN** 新 Workspace 使用 Codex 或 Claude 初始化且未选择普通扩展
@@ -33,11 +33,11 @@
 系统 SHALL 拒绝通过 `extension install` 显式安装系统扩展，并在 `extension uninstall` 的计划或应用阶段拒绝系统扩展。拒绝必须发生在任何 Workspace 制品或状态写入前，并返回稳定错误 `EXTENSION_SYSTEM_MANAGED`。
 
 #### Scenario: 显式安装被拒绝
-- **WHEN** 用户执行 `extension install codew-add-projects --yes`
+- **WHEN** 用户执行 `extension install codew-workspace-guard --yes`
 - **THEN** 命令以 `EXTENSION_SYSTEM_MANAGED` 失败且不写入 Workspace
 
 #### Scenario: 手动卸载被拒绝
-- **WHEN** 用户执行 `extension uninstall codew-resolve-branch --yes`
+- **WHEN** 用户执行 `extension uninstall codew-workspace-guard --yes`
 - **THEN** 命令以 `EXTENSION_SYSTEM_MANAGED` 失败且不修改制品或 installed state
 
 ### Requirement: 系统管理属性持久化

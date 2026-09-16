@@ -8,8 +8,8 @@
 
 ## 2. 系统扩展包迁移
 
-- [x] 2.1 创建 `extensions/.system/codew-add-projects/1.0.0` 包及工具相关输出
-- [x] 2.2 创建 `extensions/.system/codew-resolve-branch/1.0.0` 包及工具相关输出
+- [x] 2.1 创建 `extensions/.system/codew-workspace-guard/1.0.0` 包及 Workspace Guard 输出
+- [x] 2.2 将 `codew-add-projects` 与 `codew-resolve-branch` 的工具相关输出纳入同一系统包
 - [x] 2.3 从 `artifacts/manifest.json` 删除两个 Skill、OpenAI metadata 和 Claude add-projects command 条目
 - [x] 2.4 更新扩展包入口摘要、发布清单和相关用户文档
 

@@ -39,52 +39,6 @@
       "provenance": {
         "kind": "template"
       }
-    },
-    {
-      "id": "workspace-claude-instructions",
-      "target": "CLAUDE.md",
-      "tools": [
-        "claude"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
-      },
-      "render": {
-        "variables": [
-          "ADD_PROJECTS_INVOCATION"
-        ],
-        "values": {
-          "ADD_PROJECTS_INVOCATION": "/codew:add-projects /absolute/path/to/project"
-        }
-      },
-      "provenance": {
-        "kind": "template"
-      }
-    },
-    {
-      "id": "workspace-codex-instructions",
-      "target": "AGENTS.md",
-      "tools": [
-        "codex"
-      ],
-      "allowMissing": true,
-      "desired": {
-        "source": "templates/agents/WORKSPACE_GUARD.md.template",
-        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
-      },
-      "render": {
-        "variables": [
-          "ADD_PROJECTS_INVOCATION"
-        ],
-        "values": {
-          "ADD_PROJECTS_INVOCATION": "$codew-add-projects /absolute/path/to/project"
-        }
-      },
-      "provenance": {
-        "kind": "template"
-      }
     }
   ]
 }

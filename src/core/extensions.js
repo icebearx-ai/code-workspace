@@ -46,6 +46,17 @@ const {
 const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 const EXTENSIONS_ROOT = path.join(PACKAGE_ROOT, "extensions");
 const SYSTEM_EXTENSIONS_ROOT = path.join(EXTENSIONS_ROOT, ".system");
+const SYSTEM_EXTENSION_TARGETS = new Set([
+  "AGENTS.md",
+  "CLAUDE.md",
+  ".codex/skills/codew-add-projects/SKILL.md",
+  ".codex/skills/codew-add-projects/agents/openai.yaml",
+  ".claude/skills/codew-add-projects/SKILL.md",
+  ".claude/commands/codew/add-projects.md",
+  ".codex/skills/codew-resolve-branch/SKILL.md",
+  ".codex/skills/codew-resolve-branch/agents/openai.yaml",
+  ".claude/skills/codew-resolve-branch/SKILL.md",
+]);
 const EXTENSION_STATE_FILE = "ext-manifest.json";
 const EXTENSION_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
@@ -182,9 +193,15 @@ function coreManagedTargets() {
   const root = path.parse(PACKAGE_ROOT).root;
   return new Set([
     ...coreWholeFileTargets(),
+    ...SYSTEM_EXTENSION_TARGETS,
     ".gitignore",
     ...permissionTargets(root, ["claude", "codex"]).map((target) => path.relative(root, target).split(path.sep).join("/")),
   ]);
+}
+
+function manifestValidationOptionsForPlan(plan) {
+  if (plan?.system !== true) return {};
+  return { protectedTargets: new Set([...coreManagedTargets()].filter((target) => !SYSTEM_EXTENSION_TARGETS.has(target))) };
 }
 
 function assertOnlyKeys(value, allowed, code, label) {
@@ -476,7 +493,8 @@ function discoverExtensions(options = {}) {
 
 function discoverSystemExtensions(options = {}) {
   const root = options.systemExtensionsRoot || path.join(path.resolve(options.extensionsRoot || EXTENSIONS_ROOT), ".system");
-  return discoverExtensionsFromRoot(root, { ...options, system: true });
+  const protectedTargets = new Set([...coreManagedTargets()].filter((target) => !SYSTEM_EXTENSION_TARGETS.has(target)));
+  return discoverExtensionsFromRoot(root, { ...options, system: true, protectedTargets });
 }
 
 function isSystemExtensionId(id, options = {}) {
@@ -494,7 +512,7 @@ function resolvePlanFromStore(plan, options = {}) {
         id: plan.id,
         version: plan.version,
         validate(manifest) {
-          validateManifest(manifest, { expectedId: plan.id, expectedVersion: plan.version });
+          validateManifest(manifest, { expectedId: plan.id, expectedVersion: plan.version, ...manifestValidationOptionsForPlan(plan) });
         },
       });
       const registry = loadStoreRegistry(storeRoot);
@@ -530,7 +548,7 @@ function resolvePlanFromStore(plan, options = {}) {
       version: plan.version,
       source: "builtin",
       validate(manifest) {
-        validateManifest(manifest, { expectedId: plan.id, expectedVersion: plan.version });
+        validateManifest(manifest, { expectedId: plan.id, expectedVersion: plan.version, ...manifestValidationOptionsForPlan(plan) });
       },
     });
   }
@@ -578,20 +596,20 @@ function planExtensionStoreMigration(root, id, options = {}) {
     return Object.freeze({ id: extensionId, version, status: "blocked", code: "EXTENSION_STORE_PACKAGE_UNAVAILABLE", message: `Extension package ${extensionId}@${version} is unavailable for Store migration.`, storeRoot });
   }
   try {
-    const source = packageRecordFromDirectoryForMigration(sourceRoot, extensionId, version);
+    const source = packageRecordFromDirectoryForMigration(sourceRoot, extensionId, version, installed.system === true);
     return Object.freeze({ id: extensionId, version, status: "ready", sourceRoot, packageSha256: source.packageSha256, storeRoot });
   } catch (error) {
     return Object.freeze({ id: extensionId, version, status: "blocked", code: error.code || "EXTENSION_STORE_PACKAGE_INVALID", message: error.message, storeRoot });
   }
 }
 
-function packageRecordFromDirectoryForMigration(sourceRoot, id, version) {
+function packageRecordFromDirectoryForMigration(sourceRoot, id, version, system = false) {
   try {
     const packageRecord = packageRecordFromDirectory(sourceRoot, {
       id,
       version,
       validate(manifest) {
-        validateManifest(manifest, { expectedId: id, expectedVersion: version });
+        validateManifest(manifest, { expectedId: id, expectedVersion: version, ...(system ? { protectedTargets: new Set([...coreManagedTargets()].filter((target) => !SYSTEM_EXTENSION_TARGETS.has(target))) } : {}) });
       },
     });
     return { packageSha256: packageRecord.packageSha256 };
@@ -629,7 +647,9 @@ function validateInstalledState(id, installed) {
   }
   const ids = new Set();
   const declaredArtifacts = [];
-  const exclusiveProtectedTargets = coreManagedTargets();
+  const exclusiveProtectedTargets = installed.system === true
+    ? new Set([...coreManagedTargets()].filter((target) => !SYSTEM_EXTENSION_TARGETS.has(target)))
+    : coreManagedTargets();
   const sharedProtectedTargets = coreWholeFileTargets();
   for (const artifact of installed.artifacts) {
     const artifactId = validateExtensionName(artifact?.id, "artifact");
@@ -1270,6 +1290,7 @@ function executeExtension(root, plan, context, options = {}) {
     const currentManifest = validateManifest(readJson(executionPlan.manifestFile, "EXTENSION_MANIFEST_PARSE_FAILED"), {
       expectedId: executionPlan.id,
       expectedVersion: executionPlan.version,
+      ...manifestValidationOptionsForPlan(executionPlan),
     });
     if (currentManifest.extensionSpecVersion !== executionPlan.extensionSpecVersion) {
       throw extensionError("EXTENSION_PLAN_STALE", `Extension Spec changed after planning: ${executionPlan.id}`, { extension: executionPlan.id, expectedExtensionSpecVersion: executionPlan.extensionSpecVersion, actualExtensionSpecVersion: currentManifest.extensionSpecVersion });

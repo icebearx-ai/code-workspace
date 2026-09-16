@@ -34,7 +34,7 @@
 
 ### D4: 两个 Skill 保持两个扩展 ID
 
-保留 `codew-add-projects` 与 `codew-resolve-branch` 两个独立 ID，以匹配现有 Skill 身份和独立 artifact ownership。两者都由 init 自动请求；每个扩展仍使用独立事务，符合现有批处理语义。
+系统能力采用单一 `codew-workspace-guard` ID，将 Workspace Guard、`codew-add-projects` 与 `codew-resolve-branch` 作为一个原子扩展包发布。这样三者的文件输出共享一次扩展事务：任一输出校验或写入失败时，Guard 与两个 Skill 不会出现半安装状态。Skill 的公开名称和调用方式保持不变，但不再作为可单独安装、升级或卸载的扩展 ID 暴露。
 
 ### D5: 直接移除旧核心资产定义
 
