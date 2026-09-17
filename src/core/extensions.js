@@ -395,6 +395,58 @@ function assertRegularFile(file, code, label) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw extensionError(code, `${label} must be a regular file: ${file}`, { file });
 }
 
+function inspectExtensionPackageDirectory(source, options = {}) {
+  const sourceRoot = path.resolve(source);
+  let sourceStat;
+  try {
+    sourceStat = fs.lstatSync(sourceRoot);
+  } catch (error) {
+    throw extensionError("EXTENSION_PACKAGE_MISSING", `Extension package directory is missing: ${sourceRoot}`, {
+      path: sourceRoot,
+      cause: error.code,
+    });
+  }
+  if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink()) {
+    throw extensionError("EXTENSION_PACKAGE_INVALID", `Extension package must be a regular directory: ${sourceRoot}`, { path: sourceRoot });
+  }
+
+  const manifestFile = path.join(sourceRoot, "manifest.json");
+  assertRegularFile(manifestFile, "EXTENSION_MANIFEST_MISSING", "extension manifest");
+  const manifestBytes = fs.readFileSync(manifestFile);
+  const rawManifest = readJson(manifestFile, "EXTENSION_MANIFEST_PARSE_FAILED");
+  const manifest = validateManifest(rawManifest, {
+    ...(options.expectedId ? { expectedId: options.expectedId } : {}),
+    ...(options.expectedVersion ? { expectedVersion: options.expectedVersion } : {}),
+    ...(options.supportedExtensionSpecVersions
+      ? { supportedExtensionSpecVersions: options.supportedExtensionSpecVersions }
+      : {}),
+    ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}),
+  });
+  const entryFile = path.join(sourceRoot, ...manifest.entry.split("/"));
+  assertRegularFile(entryFile, "EXTENSION_ENTRY_MISSING", "extension entry");
+  const entrySha256 = sha256(fs.readFileSync(entryFile));
+  if (entrySha256 !== manifest.entrySha256) {
+    throw extensionError("EXTENSION_ENTRY_HASH_MISMATCH", `Extension entry hash mismatch: ${manifest.id}@${manifest.version}`, {
+      extension: manifest.id,
+      version: manifest.version,
+      expectedSha256: manifest.entrySha256,
+      actualSha256: entrySha256,
+    });
+  }
+  return Object.freeze({
+    id: manifest.id,
+    version: manifest.version,
+    extensionSpecVersion: manifest.extensionSpecVersion,
+    sourceRoot,
+    manifestFile,
+    entryFile,
+    manifest,
+    manifestSha256: sha256(manifestBytes),
+    entrySha256,
+    packageSha256: directoryDigest(sourceRoot),
+  });
+}
+
 function discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensionSpecVersions, options = {}) {
     if (!extensionEntry.isDirectory() || extensionEntry.isSymbolicLink()) {
       throw extensionError("EXTENSION_REPOSITORY_INVALID", `Extension repository entry must be a directory: ${extensionEntry.name}`, { entry: extensionEntry.name });
@@ -428,30 +480,14 @@ function discoverExtensionEntry(extensionsRoot, extensionEntry, supportedExtensi
         }));
         continue;
       }
-      const manifest = validateManifest(rawManifest, {
+      const inspected = inspectExtensionPackageDirectory(sourceRoot, {
         expectedId: id,
         expectedVersion: version,
         supportedExtensionSpecVersions,
         ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}),
       });
-      const entryFile = path.join(sourceRoot, ...manifest.entry.split("/"));
-      assertRegularFile(entryFile, "EXTENSION_ENTRY_MISSING", "extension entry");
-      const entrySha256 = sha256(fs.readFileSync(entryFile));
-      if (entrySha256 !== manifest.entrySha256) {
-        throw extensionError("EXTENSION_ENTRY_HASH_MISMATCH", `Extension entry hash mismatch: ${id}@${version}`, { extension: id, version, expectedSha256: manifest.entrySha256, actualSha256: entrySha256 });
-      }
-      const packageSha256 = directoryDigest(sourceRoot);
       versions.push(Object.freeze({
-        id,
-        version,
-        sourceRoot,
-        manifestFile,
-        entryFile,
-        manifest,
-        manifestSha256: sha256(manifestBytes),
-        entrySha256,
-        packageSha256,
-        extensionSpecVersion: manifest.extensionSpecVersion,
+        ...inspected,
         supported: true,
       }));
     }
@@ -1478,6 +1514,7 @@ module.exports = {
   extensionStatePath,
   hasWorkspaceConfiguration,
   inspectExtensionState,
+  inspectExtensionPackageDirectory,
   isSystemExtensionId,
   installedExtensionNames,
   loadExtensionState,

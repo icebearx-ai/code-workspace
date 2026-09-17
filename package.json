@@ -28,6 +28,7 @@
     "src/init",
     "artifacts",
     "extensions",
+    "docs/extension-development",
     "docs/extension-architecture.zh-CN.md",
     "spec",
     "docs/extensions.md",
@@ -45,6 +46,7 @@
     "test": "node --test src/__test__/*.test.js",
     "check": "npm test && npm run cli:architecture-check && npm run pack:check",
     "cli:architecture-check": "node scripts/check-cli-architecture.js",
+    "pack:extensions": "node scripts/pack-extensions.js --output dist/extensions",
     "pack:check": "npm pack --dry-run",
     "cli": "node bin/code-workspace.js",
     "prepublishOnly": "npm run check"
@@ -53,6 +55,7 @@
     "@clack/prompts": "^1.7.0",
     "@iarna/toml": "^2.2.5",
     "js-yaml": "^5.2.2",
-    "proper-lockfile": "^4.1.2"
+    "proper-lockfile": "^4.1.2",
+    "tar": "^7.5.22"
   }
 }

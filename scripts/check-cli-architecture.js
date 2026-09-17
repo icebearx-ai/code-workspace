@@ -23,6 +23,9 @@ function validateOptions(definitions, owner) {
     if (!name || !definition || !ALLOWED_OPTION_TYPES.has(definition.type)) {
       problems.push(problem("REGISTRY_OPTION_INVALID", `${owner} option ${name || "<missing>"} must declare type boolean or string`));
     }
+    if (definition?.required !== undefined && typeof definition.required !== "boolean") {
+      problems.push(problem("REGISTRY_OPTION_REQUIRED_INVALID", `${owner} option ${name || "<missing>"} required field must be boolean`));
+    }
     if (definition?.aliases !== undefined && (!Array.isArray(definition.aliases) || definition.aliases.some((alias) => typeof alias !== "string" || !alias))) {
       problems.push(problem("REGISTRY_OPTION_ALIAS_INVALID", `${owner} option ${name} aliases must be non-empty strings`));
     }
@@ -105,9 +108,17 @@ function validateParserContracts(commands, globalOptions, parse) {
   for (const command of commands) {
     const label = command.path.join(" ");
     const requiredArgs = command.args.filter((argument) => argument.required).map((argument) => `${argument.name}-value`);
-    const base = [...command.path, ...requiredArgs];
+    const requiredOptions = Object.entries(command.options).filter(([, definition]) => definition.required);
+    const base = [
+      ...command.path,
+      ...requiredArgs,
+    ];
+    const baseWithOptions = [
+      ...base,
+      ...requiredOptions.flatMap(([name, definition]) => definition.type === "string" ? [optionToken(name), `${name}-value`] : [optionToken(name)]),
+    ];
     try {
-      const parsed = parseInvocation(parse, base);
+      const parsed = parseInvocation(parse, baseWithOptions);
       if (parsed.command?.path.join(" ") !== label) problems.push(problem("PARSER_COMMAND_MISMATCH", `${label} does not resolve to its registry definition`));
     } catch (error) {
       problems.push(problem("PARSER_COMMAND_REJECTED", `${label} cannot be parsed: ${error.code || error.message}`));
@@ -139,10 +150,21 @@ function validateParserContracts(commands, globalOptions, parse) {
     }
     if (globalOptions.json?.type === "boolean") {
       try {
-        const parsed = parseInvocation(parse, ["--json", ...base]);
+        const parsed = parseInvocation(parse, ["--json", ...baseWithOptions]);
         if (parsed.options.json !== true) problems.push(problem("PARSER_GLOBAL_OPTION_MISSING", `${label} did not accept leading --json`));
       } catch (error) {
         problems.push(problem("PARSER_GLOBAL_OPTION_REJECTED", `${label} rejected leading --json: ${error.code || error.message}`));
+      }
+    }
+    for (const [name] of requiredOptions) {
+      const missing = [...command.path, ...requiredArgs];
+      try {
+        parseInvocation(parse, missing);
+        problems.push(problem("PARSER_REQUIRED_OPTION_NOT_ENFORCED", `${label} did not reject missing --${name}`));
+      } catch (error) {
+        if (error.code !== "CLI_OPTION_REQUIRED") {
+          problems.push(problem("PARSER_REQUIRED_OPTION_REJECTED_INCORRECTLY", `${label} rejected missing --${name} as ${error.code || error.message}`));
+        }
       }
     }
   }
@@ -213,6 +235,8 @@ function validateDocumentedCommands(root, validateCommandReference) {
     ...collectMarkdownFiles(path.join(root, "README.zh-CN.md")),
     ...collectMarkdownFiles(path.join(root, "artifacts", "templates")),
     ...collectMarkdownFiles(path.join(root, "extensions")),
+    ...collectMarkdownFiles(path.join(root, "docs", "nexus-extension-registry.zh-CN.md")),
+    ...collectMarkdownFiles(path.join(root, "docs", "extension-development")),
   ];
   let checked = 0;
   for (const file of files) {
@@ -227,6 +251,40 @@ function validateDocumentedCommands(root, validateCommandReference) {
   }
   if (checked === 0) problems.push(problem("DOCUMENTED_COMMANDS_MISSING", "No documented codew commands were checked"));
   return { problems, checked };
+}
+
+function validateExtensionPackContract(registry, commandSource, coreSource) {
+  const definition = registry.COMMANDS.find((command) => command.path.join(" ") === "extension pack");
+  const expected = {
+    workspace: "none",
+    config: [],
+    interaction: "never",
+    effects: "planned-write",
+    args: [{ name: "source", required: true }],
+    options: { output: { type: "string", required: true } },
+  };
+  const problems = [];
+  if (!definition || JSON.stringify(definition, Object.keys(expected)) !== JSON.stringify(expected, Object.keys(expected))) {
+    problems.push(problem("EXTENSION_PACK_REGISTRY_INVALID", "extension pack must declare the Workspace-independent planned-write contract"));
+  }
+  if (!/require\(["']\.\.\/\.\.\/core\/extension-package["']\)/.test(commandSource) || !/\bpackExtensionToDirectory\s*\(/.test(commandSource)) {
+    problems.push(problem("EXTENSION_PACK_COMMAND_LAYERING_INVALID", "extension pack command must orchestrate the core pack API", "src/cli/commands/extension.js"));
+  }
+  if (/\bfs\./.test(commandSource)) {
+    problems.push(problem("EXTENSION_PACK_COMMAND_RAW_FS", "extension pack command must not access the filesystem directly", "src/cli/commands/extension.js"));
+  }
+  for (const [pattern, message] of [
+    [/fs\.openSync\(target,\s*"wx"/, "extension pack must reserve the output without overwriting an existing target"],
+    [/fs\.renameSync\(temporaryTarget,\s*target\)/, "extension pack must atomically rename the verified temporary tarball"],
+    [/inspectExtensionTransportTarball\s*\(/, "extension pack must re-read and verify the temporary tarball"],
+    [/EXTENSION_PACK_OUTPUT_EXISTS/, "extension pack must use the stable existing-output error"],
+    [/fs\.rmSync\(temporaryRoot,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\)/, "extension pack must clean intermediate files after failure"],
+  ]) {
+    if (!pattern.test(coreSource)) {
+      problems.push(problem("EXTENSION_PACK_IMPLEMENTATION_INVALID", message, "src/core/extension-package.js"));
+    }
+  }
+  return problems;
 }
 
 function runChecks(root) {
@@ -245,6 +303,11 @@ function runChecks(root) {
     const file = path.join(commandDirectory, name);
     problems.push(...inspectCommandSource(path.relative(root, file), fs.readFileSync(file, "utf8")));
   }
+  problems.push(...validateExtensionPackContract(
+    registry,
+    fs.readFileSync(path.join(commandDirectory, "extension.js"), "utf8"),
+    fs.readFileSync(path.join(root, "src", "core", "extension-package.js"), "utf8")
+  ));
   const documented = validateDocumentedCommands(root, registry.validateCommandReference);
   problems.push(...documented.problems);
   return {
@@ -287,6 +350,7 @@ module.exports = {
   runChecks,
   validateDispatchCoverage,
   validateDocumentedCommands,
+  validateExtensionPackContract,
   validateParserContracts,
   validateRegistry,
 };

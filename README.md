@@ -70,6 +70,14 @@ Users select names, not versions; `zhuiyi-jira-mcp@0.1.0` is intentionally rejec
 
 `extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run.
 
+`extension pack` creates a Nexus/npm-ready `codew-ext-<extension-id>-<version>.tgz` from an extension package directory:
+
+```bash
+code-workspace extension pack extensions/zhuiyi-jira-mcp/1.1.0 --output dist/extensions --json
+```
+
+The command is Workspace-independent, creates a missing output directory recursively, never executes extension or npm lifecycle code, and reopens the generated tarball to verify the npm envelope, manifest, entry digest, and unchanged `packageSha256` before atomically committing it. Existing outputs are never overwritten. It does not publish or store Registry credentials; CI can pass the verified tarball to `npm publish --registry`.
+
 The bundled `zhuiyi-jira-mcp` and `zhuiyi-opensvn-mcp` extensions configure the Jira and OpenSVN MCP services for the selected Agent tools. They do not create an `openspec/` directory or install native OpenSpec commands.
 
 The bundled `zhuiyi-jira-prd-analysis`, `zhuiyi-jira-task-breakdown`, and `zhuiyi-jira-issue-fix-summary` extensions install optional Codex and Claude Code skill files. They are independent extensions, are not installed by core `init` or `update`, and can be uninstalled separately. Install `zhuiyi-jira-mcp` separately when they need Jira access.
@@ -89,7 +97,7 @@ verified by Code Workspace; extensions never patch the real Workspace directly. 
 recorded installed state and does not execute extension code. Unknown changes to extension-owned
 files or contributions stop the operation instead of being overwritten.
 
-This is fault isolation, not a malicious-code security sandbox. The experimental release trusts only extension code shipped with Code Workspace; network sources, external extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`.
+This is fault isolation, not a malicious-code security sandbox. The experimental release trusts only extension code shipped with Code Workspace; network sources, external extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`; a step-by-step guide is in `docs/extension-development/guide.zh-CN.md`.
 
 ## Register projects
 

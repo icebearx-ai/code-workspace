@@ -122,6 +122,13 @@ function parse(argv) {
     if (!options.help && !variadic && args.length > resolved.command.args.length) {
       throw new WorkspaceError("CLI_EXTRA_ARGUMENT", `Unexpected argument for ${resolved.command.path.join(" ")}: ${args[resolved.command.args.length]}`, { argument: args[resolved.command.args.length] });
     }
+    if (!options.help) {
+      for (const [name, definition] of Object.entries(resolved.command.options)) {
+        if (definition.required && !Object.prototype.hasOwnProperty.call(options, name)) {
+          throw new WorkspaceError("CLI_OPTION_REQUIRED", `${resolved.command.path.join(" ")} requires --${name}`, { option: name });
+        }
+      }
+    }
     return {
       command: resolved.command,
       args,

@@ -9,6 +9,7 @@ const project = require("./core/project");
 const validation = require("./core/validation");
 const extensionRuntime = require("./core/extension-runtime");
 const extensionRuntimeContract = require("./core/extension-runtime-contract");
+const extensionPackage = require("./core/extension-package");
 const hooks = require("./hooks");
 const hookAdapters = require("./hooks/adapters");
 
@@ -24,6 +25,7 @@ module.exports = {
   ...validation,
   ...extensionRuntime,
   ...extensionRuntimeContract,
+  ...extensionPackage,
   ...hooks,
   ...hookAdapters,
 };

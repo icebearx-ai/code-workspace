@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://icebearx.ai/code-workspace/extension-npm-transport-envelope-v1.json",
+  "title": "Code Workspace extension npm transport envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "description", "keywords", "codeWorkspace", "files"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "pattern": "^@codew-ext/[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "version": { "$ref": "#/$defs/semver" },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "pattern": "^[^\\r\\n]+$"
+    },
+    "keywords": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "codeWorkspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "extensionId", "extensionSpecVersion", "packageRoot", "packageSha256"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "extensionId": { "$ref": "#/$defs/extensionId" },
+        "extensionSpecVersion": { "const": 1 },
+        "packageRoot": { "const": "extension" },
+        "packageSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": { "const": "extension" }
+    }
+  },
+  "$defs": {
+    "extensionId": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "semver": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+    },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

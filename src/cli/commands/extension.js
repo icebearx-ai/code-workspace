@@ -14,6 +14,7 @@ const {
 const { loadInitManifest } = require("../../core/init");
 const { acquireInitLock } = require("../../core/init-lock");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
+const { packExtensionToDirectory } = require("../../core/extension-package");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { createInteractiveUi, formatExtensionChoice } = require("../../init/ui");
 const { confirm } = require("../confirmation");
@@ -190,8 +191,19 @@ async function executeExtensionUninstall(invocation) {
   return success(command, { ...result, targets: plan.targets }, text);
 }
 
+async function executeExtensionPack(invocation) {
+  const command = "extension.pack";
+  const result = await packExtensionToDirectory(invocation.args[0], invocation.options.output, invocation.dependencies || {});
+  return success(
+    command,
+    result,
+    `Packed ${result.npmName}@${result.version} to ${result.tarball.path}.`
+  );
+}
+
 async function executeExtension(invocation) {
   const command = invocation.definition.path.join(".");
+  if (command === "extension.pack") return await executeExtensionPack(invocation);
   const releaseLock = await (invocation.dependencies?.acquireInitLock || acquireInitLock)(invocation.root);
   try {
     if (command === "extension.install") return await executeExtensionInstall(invocation);
@@ -206,6 +218,7 @@ module.exports = {
   collectExtensionInstallSelection,
   executeExtension,
   executeExtensionInstall,
+  executeExtensionPack,
   executeExtensionUninstall,
   formatInstallPlan,
   formatUninstallPlan,

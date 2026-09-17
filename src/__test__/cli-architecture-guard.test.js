@@ -11,6 +11,7 @@ const {
   inspectCommandSource,
   runChecks,
   validateDispatchCoverage,
+  validateExtensionPackContract,
   validateRegistry,
 } = require(path.join(repositoryRoot, "scripts", "check-cli-architecture.js"));
 
@@ -73,6 +74,33 @@ test("CLI architecture guard rejects registered commands without a dispatch rout
   );
   assert.deepEqual(problems.map((entry) => entry.code), ["DISPATCH_HANDLER_MISSING"]);
   assert.match(problems[0].message, /orphan/);
+});
+
+test("CLI architecture guard rejects unsafe extension pack implementations", () => {
+  const registry = {
+    COMMANDS: [{
+      path: ["extension", "pack"],
+      args: [{ name: "source", required: true }],
+      workspace: "none",
+      config: [],
+      interaction: "never",
+      effects: "planned-write",
+      options: { output: { type: "string", required: true } },
+    }],
+  };
+  const commandSource = [
+    'const fs = require("node:fs");',
+    'const { packExtensionToDirectory } = require("../../core/extension-package");',
+    'await packExtensionToDirectory(source, output);',
+    'const { success } = require("../result");',
+    'success("extension.pack", fs.statSync(output));',
+    "",
+  ].join("\n");
+  const coreSource = "module.exports = {};";
+  const problems = validateExtensionPackContract(registry, commandSource, coreSource);
+  const codes = new Set(problems.map((entry) => entry.code));
+  assert(codes.has("EXTENSION_PACK_COMMAND_RAW_FS"));
+  assert(codes.has("EXTENSION_PACK_IMPLEMENTATION_INVALID"));
 });
 
 test("CLI architecture guard skill consumes repository-owned architecture checks", () => {

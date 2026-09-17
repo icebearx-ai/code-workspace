@@ -112,6 +112,33 @@ test("extension install is an optional variadic planned-write contract", () => {
   assert.throws(() => parse(argv("extension", "install", "alpha", "--force")), (error) => error.code === "CLI_UNKNOWN_OPTION");
 });
 
+test("extension pack is a Workspace-independent required-option contract", () => {
+  const definition = getCommand("extension pack");
+  assert(definition);
+  assert.equal(definition.workspace, "none");
+  assert.deepEqual(definition.config, []);
+  assert.equal(definition.interaction, "never");
+  assert.equal(definition.effects, "planned-write");
+  assert.deepEqual(definition.args, [{ name: "source", required: true }]);
+  assert.deepEqual(definition.options, { output: { type: "string", required: true } });
+  assert.deepEqual(parse(argv("extension", "pack", "extensions/example", "--output", "dist")).options, {
+    output: "dist",
+  });
+  assert.deepEqual(parse(argv("--json", "extension", "pack", "--output", "dist", "extensions/example")).args, ["extensions/example"]);
+  assert.throws(() => parse(argv("extension", "pack", "extensions/example")), (error) =>
+    error.code === "CLI_OPTION_REQUIRED" && error.details.option === "output"
+  );
+  assert.throws(() => parse(argv("extension", "pack", "extensions/example", "--output")), (error) =>
+    error.code === "CLI_OPTION_VALUE_REQUIRED"
+  );
+  assert.throws(() => parse(argv("extension", "pack", "one", "two", "--output", "dist")), (error) =>
+    error.code === "CLI_EXTRA_ARGUMENT"
+  );
+  assert.throws(() => parse(argv("extension", "pack", "extensions/example", "--output", "dist", "--force")), (error) =>
+    error.code === "CLI_UNKNOWN_OPTION"
+  );
+});
+
 test("project branch commands are registry-driven three-segment contracts", () => {
   const contracts = {
     "project branch inspect": { interaction: "never", effects: "read-only", options: [] },
@@ -186,6 +213,7 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /update-latest/);
     assert.match(script, /install/);
     assert.match(script, /uninstall/);
+    assert.match(script, /pack/);
     assert.doesNotMatch(script, /sync-branch/);
   }
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
@@ -194,8 +222,10 @@ test("completion scripts include subcommands and command-specific options", () =
   assert(!projectList.options.includes("--projects-file"));
   assert(projectAdd.options.includes("--projects-file"));
   const permissionsApply = spec.commands.find((entry) => entry.path.join(" ") === "permissions apply");
+  const extensionPack = spec.commands.find((entry) => entry.path.join(" ") === "extension pack");
   assert(permissionsApply.options.includes("--tools"));
   assert(permissionsApply.options.includes("--yes"));
+  assert(extensionPack.options.includes("--output"));
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("sync"));
   assert.deepEqual(
     new Set(spec.children.find((entry) => entry.path.join(" ") === "project branch").values),

@@ -70,6 +70,14 @@ codew extension uninstall zhuiyi-jira-prd-analysis --yes
 
 `extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。
 
+`extension pack` 可以从扩展包目录生成可交给 Nexus/npm 的 `codew-ext-<extension-id>-<version>.tgz`：
+
+```bash
+code-workspace extension pack extensions/zhuiyi-jira-mcp/1.1.0 --output dist/extensions --json
+```
+
+该命令与 Workspace 无关，会在输出目录缺失时递归创建，不执行扩展入口或任何 npm 生命周期脚本；生成 tarball 后会重新读取并验证 npm envelope、manifest、入口摘要和未变化的 `packageSha256`，再原子提交。目标文件已存在时拒绝覆盖。命令本身不发布、不保存 Registry 凭证；CI 可将已验证的 tarball 交给 `npm publish --registry`。
+
 当前随包提供的内置扩展包括 `zhuiyi-jira-mcp` 和 `zhuiyi-opensvn-mcp`，分别用于为选中的 Agent 工具配置 Jira MCP 与 OpenSVN MCP 服务；它们不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
 
 随包还提供 `zhuiyi-jira-prd-analysis`、`zhuiyi-jira-task-breakdown` 和 `zhuiyi-jira-issue-fix-summary` 三个 Skill 扩展，用于安装可选的 Codex 与 Claude Code Skill 文件。它们不随核心 `init` 或 `update` 安装，可以独立安装和卸载；需要 Jira 访问时另行安装 `zhuiyi-jira-mcp`。
@@ -87,7 +95,7 @@ codew extension uninstall zhuiyi-jira-prd-analysis --yes
 Workspace 合成和验证，扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行
 扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
 
-这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码；暂不支持网络源、外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令，也不会通过 `codew update` 自动更新扩展。开发契约见 `docs/extensions.zh-CN.md`。
+这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码；暂不支持网络源、外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令，也不会通过 `codew update` 自动更新扩展。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/guide.zh-CN.md`。
 
 ## 注册项目
 
