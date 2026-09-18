@@ -105,11 +105,59 @@ test("extension install is an optional variadic planned-write contract", () => {
   assert.equal(definition.interaction, "required");
   assert.equal(definition.effects, "planned-write");
   assert.deepEqual(definition.args, [{ name: "name", required: false, variadic: true }]);
-  assert.deepEqual(Object.keys(definition.options), ["yes"]);
+  assert.deepEqual(definition.options, {
+    yes: { type: "boolean" },
+    version: { type: "string" },
+    "allow-deprecated": { type: "boolean" },
+    offline: { type: "boolean" },
+  });
   assert.deepEqual(parse(argv("extension", "install")).args, []);
   assert.deepEqual(parse(argv("extension", "install", "alpha", "beta", "--yes", "--json")).args, ["alpha", "beta"]);
   assert.deepEqual(parse(argv("extension", "install", "--yes", "alpha")).args, ["alpha"]);
   assert.throws(() => parse(argv("extension", "install", "alpha", "--force")), (error) => error.code === "CLI_UNKNOWN_OPTION");
+});
+
+test("extension search, info, and upgrade declare Registry lifecycle contracts", () => {
+  const search = getCommand("extension search");
+  const info = getCommand("extension info");
+  const upgrade = getCommand("extension upgrade");
+  assert.deepEqual(search, {
+    path: ["extension", "search"],
+    args: [{ name: "query", required: false }],
+    workspace: "none",
+    config: [],
+    interaction: "never",
+    effects: "external",
+    options: {},
+  });
+  assert.deepEqual(info, {
+    path: ["extension", "info"],
+    args: [{ name: "name", required: true }],
+    workspace: "none",
+    config: [],
+    interaction: "never",
+    effects: "external",
+    options: {},
+  });
+  assert.deepEqual(upgrade, {
+    path: ["extension", "upgrade"],
+    args: [{ name: "name", required: true, variadic: true }],
+    workspace: "required",
+    config: ["identity", "language"],
+    interaction: "required",
+    effects: "planned-write",
+    options: { yes: { type: "boolean" }, offline: { type: "boolean" } },
+  });
+
+  assert.deepEqual(parse(argv("--json", "extension", "search", "jira")).options, { json: true });
+  assert.deepEqual(parse(argv("extension", "search", "jira", "--json")).args, ["jira"]);
+  assert.deepEqual(parse(argv("extension", "info", "zhuiyi-jira-mcp", "--json")).args, ["zhuiyi-jira-mcp"]);
+  assert.deepEqual(parse(argv("extension", "upgrade", "alpha", "beta", "--yes", "--offline")).args, ["alpha", "beta"]);
+  assert.deepEqual(parse(argv("extension", "upgrade", "--yes", "alpha")).args, ["alpha"]);
+  assert.throws(() => parse(argv("extension", "search", "one", "two")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
+  assert.throws(() => parse(argv("extension", "info", "one", "two")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
+  assert.throws(() => parse(argv("extension", "upgrade")), (error) => error.code === "CLI_ARGUMENT_REQUIRED");
+  assert.throws(() => parse(argv("extension", "upgrade", "alpha", "--vresion", "1.0.0")), (error) => error.code === "CLI_UNKNOWN_OPTION");
 });
 
 test("extension pack is a Workspace-independent required-option contract", () => {
@@ -214,6 +262,9 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /install/);
     assert.match(script, /uninstall/);
     assert.match(script, /pack/);
+    assert.match(script, /search/);
+    assert.match(script, /info/);
+    assert.match(script, /upgrade/);
     assert.doesNotMatch(script, /sync-branch/);
   }
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
@@ -223,9 +274,15 @@ test("completion scripts include subcommands and command-specific options", () =
   assert(projectAdd.options.includes("--projects-file"));
   const permissionsApply = spec.commands.find((entry) => entry.path.join(" ") === "permissions apply");
   const extensionPack = spec.commands.find((entry) => entry.path.join(" ") === "extension pack");
+  const extensionInstall = spec.commands.find((entry) => entry.path.join(" ") === "extension install");
+  const extensionUpgrade = spec.commands.find((entry) => entry.path.join(" ") === "extension upgrade");
   assert(permissionsApply.options.includes("--tools"));
   assert(permissionsApply.options.includes("--yes"));
   assert(extensionPack.options.includes("--output"));
+  assert(extensionInstall.options.includes("--version"));
+  assert(extensionInstall.options.includes("--allow-deprecated"));
+  assert(extensionInstall.options.includes("--offline"));
+  assert(extensionUpgrade.options.includes("--offline"));
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("sync"));
   assert.deepEqual(
     new Set(spec.children.find((entry) => entry.path.join(" ") === "project branch").values),

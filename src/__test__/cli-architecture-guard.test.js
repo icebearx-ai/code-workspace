@@ -12,6 +12,7 @@ const {
   runChecks,
   validateDispatchCoverage,
   validateExtensionPackContract,
+  validateExtensionRegistryLifecycleContract,
   validateRegistry,
 } = require(path.join(repositoryRoot, "scripts", "check-cli-architecture.js"));
 
@@ -101,6 +102,18 @@ test("CLI architecture guard rejects unsafe extension pack implementations", () 
   const codes = new Set(problems.map((entry) => entry.code));
   assert(codes.has("EXTENSION_PACK_COMMAND_RAW_FS"));
   assert(codes.has("EXTENSION_PACK_IMPLEMENTATION_INVALID"));
+});
+
+test("CLI architecture guard rejects unsafe Registry lifecycle implementations", () => {
+  const problems = validateExtensionRegistryLifecycleContract(
+    { COMMANDS: [] },
+    "module.exports = {};",
+    "module.exports = {};"
+  );
+  const codes = new Set(problems.map((entry) => entry.code));
+  assert(codes.has("EXTENSION_LIFECYCLE_REGISTRY_INVALID"));
+  assert(codes.has("EXTENSION_LIFECYCLE_COMMAND_LAYERING_INVALID"));
+  assert(codes.has("EXTENSION_LIFECYCLE_IMPLEMENTATION_INVALID"));
 });
 
 test("CLI architecture guard skill consumes repository-owned architecture checks", () => {

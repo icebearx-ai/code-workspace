@@ -250,7 +250,37 @@ grep -E "token|Authorization|npmrc" \
 
 该命令应没有任何输出。
 
-## 8. 清理
+## 8. 使用用户 CLI 验收
+
+Provider 冒烟测试通过后，再用用户命令完成一次真实生命周期验收：
+
+```bash
+codew extension search monitor --json
+codew extension info monitor --json
+codew extension install monitor --version 1.1.0 --yes --json
+codew extension install monitor --version 1.1.0 --yes --json
+codew extension upgrade monitor --yes --json
+codew extension install monitor --offline --version 1.1.0 --yes --json
+codew extension uninstall monitor --yes --json
+```
+
+预期结果：
+
+- `search` 能看到 `@codew-ext/monitor`;
+- `info` 显示版本集合和默认候选；
+- 第一次 install 返回 installed;
+- 第二次精确 install 返回 skipped/current;
+- 没有更高默认目标时 upgrade 返回 skipped/current;
+- offline install 不访问 Nexus；
+- uninstall 移除 Workspace activation，但保留无引用 Store 缓存或按引用策略处理。
+
+如果测试版本已被 deprecated，`info` 应显示 deprecated 原因，默认 install 不选择它；只有以下精确命令可以请求：
+
+```bash
+codew extension install monitor --version 1.1.0 --allow-deprecated --yes --json
+```
+
+## 9. 清理
 
 测试完成后，可以删除临时目录：
 
@@ -269,7 +299,7 @@ npm deprecate \
 
 Nexus 不支持 `unpublish`。错误版本应使用 `deprecate` 标记，而不是尝试删除。
 
-## 9. 常见问题
+## 10. 常见问题
 
 ### 401 未认证
 
@@ -308,7 +338,7 @@ Nexus 通常启用 `Disable redeploy`。同名同版本不能重复上传。需�
 3. 检查远端 `dist.integrity`;
 4. 如仍不一致，停止发布并排查 Nexus 或上传流程。
 
-## 10. 发布检查清单
+## 11. 发布检查清单
 
 - [ ] 使用专用 Nexus hosted repository；
 - [ ] `npm whoami` 能返回用户名；
@@ -316,6 +346,7 @@ Nexus 通常启用 `Disable redeploy`。同名同版本不能重复上传。需�
 - [ ] tarball 文件清单符合 `package/extension/` 布局；
 - [ ] 本地 `tarball.integrity` 与远端 `dist.integrity` 一致；
 - [ ] Provider 端到端验证通过；
+- [ ] `extension search`、`info`、install、幂等 install、upgrade、offline 和 uninstall 验收通过；
 - [ ] Store provenance 为 `nexus-npm`;
 - [ ] Store registry 中没有 token、Authorization 或 `.npmrc` 路径；
 - [ ] 发布后版本不可覆盖；

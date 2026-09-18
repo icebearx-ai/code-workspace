@@ -1,0 +1,33 @@
+{
+  "items": [
+    {
+      "id": "<component-id>",
+      "repository": "codew-extensions",
+      "format": "npm",
+      "group": "codew-ext",
+      "name": "monitor",
+      "version": "1.1.0",
+      "assets": [
+        {
+          "downloadUrl": "https://pkg.in.wezhuiyi.com/repository/codew-extensions/@codew-ext/monitor/-/monitor-1.1.0.tgz",
+          "path": "@codew-ext/monitor/-/monitor-1.1.0.tgz",
+          "id": "<asset-id>",
+          "repository": "codew-extensions",
+          "format": "npm",
+          "checksum": { "sha1": "<sha1>" },
+          "contentType": "application/gzip",
+          "lastModified": "<timestamp>",
+          "lastDownloaded": "<timestamp>",
+          "uploader": "<redacted>",
+          "uploaderIp": "<redacted>",
+          "fileSize": 124105,
+          "npm": {
+            "name": "@codew-ext/monitor",
+            "version": "1.1.0"
+          }
+        }
+      ]
+    }
+  ],
+  "continuationToken": null
+}

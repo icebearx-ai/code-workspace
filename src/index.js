@@ -11,6 +11,7 @@ const extensionRuntime = require("./core/extension-runtime");
 const extensionRuntimeContract = require("./core/extension-runtime-contract");
 const extensionPackage = require("./core/extension-package");
 const extensionPackageProviders = require("./core/extension-package-providers");
+const extensionRegistryLifecycle = require("./core/extension-registry-lifecycle");
 const nexusExtensionProvider = require("./core/nexus-extension-provider");
 const hooks = require("./hooks");
 const hookAdapters = require("./hooks/adapters");
@@ -29,6 +30,7 @@ module.exports = {
   ...extensionRuntimeContract,
   ...extensionPackage,
   ...extensionPackageProviders,
+  ...extensionRegistryLifecycle,
   ...nexusExtensionProvider,
   ...hooks,
   ...hookAdapters,

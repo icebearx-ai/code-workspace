@@ -276,7 +276,23 @@ codew extension uninstall example-extension --yes
 - 共享输出与其他扩展共存；
 - 初始化失败后 Workspace 无残留。
 
-外部扩展的远端发现和安装属于后续 phase；当前外部扩展先用 pack 校验和受控测试流程。
+发布到 Nexus 后，可以在任意目录先做只读验证：
+
+```bash
+codew extension search example --json
+codew extension info example-extension --json
+```
+
+在已初始化的 Workspace 中安装：
+
+```bash
+codew extension install example-extension --yes
+codew extension install example-extension --version 1.0.0 --yes
+codew extension install example-extension --offline --version 1.0.0 --yes
+codew extension upgrade example-extension --yes
+```
+
+默认安装选择最高的兼容、稳定、非 deprecated 版本；`name@version` 位置语法和 SemVer range 不支持。prerelease 必须通过精确 `--version` 请求；deprecated 版本必须同时使用 `--version` 和 `--allow-deprecated`。`--offline` 禁止网络，只使用内置目录和已验证 Store。`init` 不会隐式查询 Nexus。
 
 ## 6. npm/Nexus 打包
 
@@ -345,6 +361,20 @@ npm publish dist/extensions/codew-ext-example-extension-1.0.0.tgz --registry=htt
 
 发布后仍以下载端重新校验为准：npm integrity、运输 envelope、Extension manifest、入口摘要和 `extension/` package digest 都必须重新验证。
 
+发布后的用户侧验收顺序：
+
+```bash
+codew extension search example --json
+codew extension info example-extension --json
+codew extension install example-extension --version 1.0.0 --yes --json
+codew extension install example-extension --version 1.0.0 --yes --json
+codew extension upgrade example-extension --yes --json
+codew extension install example-extension --offline --version 1.0.0 --yes --json
+codew extension uninstall example-extension --yes --json
+```
+
+第二次精确安装应返回 skipped/current；`upgrade` 在没有更高默认目标时也应返回 skipped/current；offline 命令不得访问 Nexus。
+
 完整的 Nexus 登录、上传、远端验证和 Provider 冒烟测试步骤见 `nexus-publish.zh-CN.md`。
 
 ## 8. 开发检查清单
@@ -358,5 +388,7 @@ npm publish dist/extensions/codew-ext-example-extension-1.0.0.tgz --registry=htt
 - [ ] staging 内容普通、安全且与 result 完全一致；
 - [ ] 无凭证、无 npm 依赖、无 lifecycle scripts；
 - [ ] 安装、重复安装、升级和卸载测试通过；
+- [ ] `extension search` 和 `extension info` 返回预期身份与版本；
+- [ ] 默认安装、精确版本、幂等安装、offline 复用和升级测试通过；
 - [ ] `extension pack` 成功并返回预期 digest；
 - [ ] tarball 文件清单经过人工或 CI 复核。

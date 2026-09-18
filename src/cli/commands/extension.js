@@ -7,14 +7,20 @@ const {
   discoverSystemExtensions,
   inspectExtensionState,
   normalizeExtensionNames,
+  parseSemver,
   planExtensionUninstall,
-  prepareExtensionPlans,
   runExtensionBatch,
 } = require("../../core/extensions");
 const { loadInitManifest } = require("../../core/init");
 const { acquireInitLock } = require("../../core/init-lock");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { packExtensionToDirectory } = require("../../core/extension-package");
+const {
+  getRegistryExtensionInfo,
+  listRegistryExtensionChoices,
+  prepareRegistryExtensionPlans,
+  searchRegistryExtensions,
+} = require("../../core/extension-registry-lifecycle");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { createInteractiveUi, formatExtensionChoice } = require("../../init/ui");
 const { confirm } = require("../confirmation");
@@ -33,12 +39,33 @@ function formatInstallPlan(plans) {
   return [
     `Install ${plans.length} extension${plans.length === 1 ? "" : "s"}:`,
     ...plans.flatMap((plan) => [
-      `  ${plan.id}@${plan.version} [Extension Spec ${plan.extensionSpecVersion}] (manifest ${plan.manifestSha256})`,
+      `  ${plan.id}@${plan.version} [${plan.source || "local"}] [Extension Spec ${plan.extensionSpecVersion}]`,
+      `    PACKAGE ${plan.packageSha256}`,
       ...(plan.capabilities.networkHosts || []).map((host) => `    NETWORK https://${host}`),
       ...plan.artifacts.map((artifact) => `    WRITE ${artifact.target} (${artifact.kind})`),
       ...(plan.hooks || []).map((hook) => `    HOOK ${hook.id} (${hook.event}${hook.tools?.length ? ` · ${hook.tools.join(",")}` : ""}) -> ${hook.command}`),
     ]),
   ].join("\n");
+}
+
+function formatRegistrySearchText(result) {
+  if (result.items.length === 0) return "No extensions matched the query.";
+  return [
+    ...result.items.map((entry) => `${entry.extensionId}  ${entry.latestCandidate ? `@${entry.latestCandidate.version}` : "(no default candidate)"}  ${entry.description}`),
+    result.truncated ? `Results are truncated at ${result.limit}.` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function formatRegistryInfoText(result) {
+  const lines = [
+    `${result.packageName}`,
+    result.description,
+    `Default candidate: ${result.defaultCandidate ? `${result.defaultCandidate.version} (Extension Spec ${result.defaultCandidate.extensionSpecVersion})` : "none"}`,
+    "Versions:",
+    ...result.versions.map((entry) => `  ${entry.version}  spec ${entry.extensionSpecVersion}${entry.prerelease ? "  prerelease" : ""}${entry.deprecated ? "  deprecated" : ""}${entry.metadataCompatible ? "" : "  unsupported spec"}`),
+    "Compatibility shown here is metadata-only; the tarball and Extension package are verified before installation.",
+  ];
+  return lines.join("\n");
 }
 
 async function collectExtensionInstallSelection(catalog, state, options = {}) {
@@ -63,6 +90,32 @@ async function collectExtensionInstallSelection(catalog, state, options = {}) {
   return normalizeExtensionNames(selected);
 }
 
+async function collectRegistryExtensionInstallSelection(choices, state, options = {}) {
+  const ui = options.ui || await createInteractiveUi({
+    ...options,
+    cancelCode: "EXTENSION_INSTALL_CANCELLED",
+    cancelMessage: "Extension installation cancelled. No changes were made.",
+  });
+  const installed = new Set(Object.entries(state.extensions || {}).filter(([, value]) => value.installed).map(([id]) => id));
+  const selectable = choices.map((entry) => entry.available);
+  const choicesForUi = choices.map((entry) => ({
+    value: entry.id,
+    label: formatExtensionChoice({
+      ...entry,
+      description: `${entry.description} · ${entry.source || "unavailable"}${entry.version ? ` · ${entry.version}` : ""}`,
+    }, { includeId: true, installed: installed.has(entry.id) }),
+    ...(entry.available ? {} : { disabled: true }),
+  }));
+  ui.intro("Code Workspace extensions");
+  if (selectable.length === 0) {
+    ui.close("No extensions are available.");
+    return [];
+  }
+  const selected = await ui.multiselect("Extensions (select any)", choicesForUi, []);
+  ui.close(selected.length > 0 ? "Extension selection ready." : "No extensions selected.");
+  return normalizeExtensionNames(selected);
+}
+
 function installResultEntry(entry) {
   const failed = entry.status === "failed";
   return {
@@ -81,22 +134,62 @@ function installResultEntry(entry) {
   };
 }
 
-function installResultText(results) {
+function lifecycleResultEntry(entry, action) {
+  const result = installResultEntry(entry);
+  return {
+    ...result,
+    action: entry.status === "skipped" ? "skip" : action,
+    requestedVersion: entry.requestedVersion || null,
+    resolvedVersion: entry.version,
+    source: entry.source || null,
+    offline: entry.offline === true,
+  };
+}
+
+function lifecycleResultText(results, action) {
   const lines = results.map((entry) => entry.status === "installed"
-    ? `Installed ${entry.id}@${entry.version}.`
+    ? `${action === "upgrade" ? "Upgraded" : "Installed"} ${entry.id}@${entry.version}.`
     : entry.status === "skipped"
       ? `Skipped ${entry.id}@${entry.version}: already current.`
       : `Failed ${entry.id}${entry.version ? `@${entry.version}` : ""}: ${entry.message}`);
   const installed = results.filter((entry) => entry.status === "installed").length;
   const skipped = results.filter((entry) => entry.status === "skipped").length;
   const failed = results.filter((entry) => entry.status === "failed").length;
-  lines.push(`Extensions: ${installed} installed, ${skipped} skipped, ${failed} failed.`);
+  lines.push(`Extensions: ${installed} ${action === "upgrade" ? "upgraded" : "installed"}, ${skipped} skipped, ${failed} failed.`);
   return lines.join("\n");
+}
+
+function validateInstallOptions(invocation) {
+  if (invocation.options.version) {
+    if (invocation.args.length !== 1) {
+      throw new WorkspaceError("EXTENSION_VERSION_SELECTION_INVALID", "--version requires exactly one extension name", {
+        names: invocation.args,
+        remediation: "Use extension install <name> --version <exact-semver>, or omit --version for a batch.",
+      });
+    }
+    parseSemver(invocation.options.version);
+  }
+  if (invocation.options.allowDeprecated && !invocation.options.version) {
+    throw new WorkspaceError("EXTENSION_VERSION_SELECTION_INVALID", "--allow-deprecated requires an exact --version", {
+      remediation: "Use extension install <name> --version <exact-semver> --allow-deprecated.",
+    });
+  }
+}
+
+function decorateBatchResults(batch, plans, options) {
+  const planById = new Map(plans.map((plan) => [plan.id, plan]));
+  return batch.results.map((entry) => ({
+    ...entry,
+    requestedVersion: planById.get(entry.id)?.requestedVersion || null,
+    source: planById.get(entry.id)?.source || null,
+    offline: options.offline === true,
+  }));
 }
 
 async function executeExtensionInstall(invocation) {
   const command = "extension.install";
   const dependencies = invocation.dependencies || {};
+  validateInstallOptions(invocation);
   const interactive = dependencies.interactive ?? (!invocation.options.json && invocation.options.yes !== true && process.stdin.isTTY && process.stdout.isTTY);
   let requested = invocation.args.length > 0 ? normalizeExtensionNames(invocation.args) : null;
   if (requested === null && !interactive) {
@@ -115,7 +208,27 @@ async function executeExtensionInstall(invocation) {
   const stateInspection = inspectExtensionState(invocation.root);
   if (requested === null) {
     try {
-      requested = await (dependencies.collectExtensionInstallSelection || collectExtensionInstallSelection)(catalogResult.catalog, stateInspection.state, dependencies);
+      if (dependencies.collectRegistryExtensionInstallSelection) {
+        const choices = await (dependencies.listRegistryExtensionChoices || listRegistryExtensionChoices)({
+          ...dependencies,
+          extensionsRoot: dependencies.extensionsRoot,
+          extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+          provider: dependencies.nexusProvider,
+          offline: invocation.options.offline,
+        });
+        requested = await dependencies.collectRegistryExtensionInstallSelection(choices, stateInspection.state, dependencies);
+      } else if (dependencies.collectExtensionInstallSelection) {
+        requested = await dependencies.collectExtensionInstallSelection(catalogResult.catalog, stateInspection.state, dependencies);
+      } else {
+        const choices = await listRegistryExtensionChoices({
+          ...dependencies,
+          extensionsRoot: dependencies.extensionsRoot,
+          extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+          provider: dependencies.nexusProvider,
+          offline: invocation.options.offline,
+        });
+        requested = await collectRegistryExtensionInstallSelection(choices, stateInspection.state, dependencies);
+      }
     } catch (error) {
       if (error.code === "EXTENSION_INSTALL_CANCELLED") {
         return success(command, { action: "cancel", scope: "selection", requested: [], results: [], summary: { total: 0, succeeded: 0, skipped: 0, failed: 0 } }, "Extension installation cancelled. No changes were made.");
@@ -128,10 +241,18 @@ async function executeExtensionInstall(invocation) {
   }
 
   const tools = resolveWorkspaceTools({ state: loadState(invocation.root), manifestTools: loadInitManifest().tools }).tools;
-  const preparation = prepareExtensionPlans(catalogResult, requested, {
+  const preparation = await prepareRegistryExtensionPlans({
+    ...dependencies,
+    requested,
     tools,
     state: stateInspection.state,
     stateError: stateInspection.error,
+    extensionsRoot: dependencies.extensionsRoot,
+    extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+    provider: dependencies.nexusProvider,
+    version: invocation.options.version,
+    allowDeprecated: invocation.options.allowDeprecated,
+    offline: invocation.options.offline,
   });
   if (preparation.plans.length > 0) {
     const planText = formatInstallPlan(preparation.plans);
@@ -170,9 +291,90 @@ async function executeExtensionInstall(invocation) {
       version: entry.version,
     }))),
   ];
-  return selectionResult(command, requested, batch.results.map(installResultEntry), {
+  const results = decorateBatchResults(batch, preparation.plans, invocation.options);
+  return selectionResult(command, requested, results.map((entry) => lifecycleResultEntry(entry, "install")), {
     diagnostics,
-    text: installResultText(batch.results),
+    text: lifecycleResultText(results, "install"),
+  });
+}
+
+async function executeExtensionSearch(invocation) {
+  const result = await searchRegistryExtensions({
+    query: invocation.args[0] || "",
+    ...(invocation.dependencies || {}),
+  });
+  return success("extension.search", result, formatRegistrySearchText(result), result.diagnostics || []);
+}
+
+async function executeExtensionInfo(invocation) {
+  const result = await getRegistryExtensionInfo({
+    name: invocation.args[0],
+    ...(invocation.dependencies || {}),
+  });
+  return success("extension.info", result, formatRegistryInfoText(result));
+}
+
+async function executeExtensionUpgrade(invocation) {
+  const command = "extension.upgrade";
+  const dependencies = invocation.dependencies || {};
+  const requested = normalizeExtensionNames(invocation.args);
+  const stateInspection = inspectExtensionState(invocation.root);
+  const systemIds = new Set(discoverSystemExtensions({ tolerant: true, ...(dependencies.extensionsRoot ? { extensionsRoot: dependencies.extensionsRoot } : {}) }).catalog.map((entry) => entry.id));
+  const preFailures = [];
+  for (const id of requested) {
+    if (systemIds.has(id)) {
+      preFailures.push({ id, version: null, status: "failed", code: "EXTENSION_SYSTEM_MANAGED", message: `System extension is managed automatically by init: ${id}`, statePersisted: false, phase: "prepare" });
+    } else if (!stateInspection.state.extensions[id]?.installed) {
+      preFailures.push({ id, version: null, status: "failed", code: "EXTENSION_NOT_INSTALLED", message: `Extension is not installed: ${id}`, statePersisted: false, phase: "prepare" });
+    }
+  }
+  const eligible = requested.filter((id) => !preFailures.some((entry) => entry.id === id));
+  const preparation = await prepareRegistryExtensionPlans({
+    ...dependencies,
+    requested: eligible,
+    tools: resolveWorkspaceTools({ state: loadState(invocation.root), manifestTools: loadInitManifest().tools }).tools,
+    state: stateInspection.state,
+    stateError: eligible.length > 0 ? stateInspection.error : null,
+    extensionsRoot: dependencies.extensionsRoot,
+    extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+    provider: dependencies.nexusProvider,
+    offline: invocation.options.offline,
+  });
+  if (preparation.plans.length > 0) {
+    const planText = formatInstallPlan(preparation.plans).replace(/^Install /, "Upgrade ");
+    if (!(await (dependencies.confirm || confirm)(`${planText}\nContinue?`, invocation.options))) {
+      throw new WorkspaceError("CLI_CANCELLED", "Extension upgrade cancelled.");
+    }
+  }
+  const workspace = invocation.config.workspace;
+  const tools = resolveWorkspaceTools({ state: loadState(invocation.root), manifestTools: loadInitManifest().tools }).tools;
+  const batch = runExtensionBatch(invocation.root, preparation.plans, (extension) => ({
+    schemaVersion: 1,
+    extensionSpecVersion: extension.extensionSpecVersion,
+    extension: { id: extension.id, version: extension.version },
+    workspace: { name: workspace.name, uuid: workspace.uuid, language: workspace.language },
+    tools,
+  }), {
+    requested,
+    preFailures: [...preFailures, ...preparation.failures],
+    useExtensionStore: true,
+    extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+  });
+  const failedIds = new Set(batch.results.filter((entry) => entry.status === "failed").map((entry) => entry.id));
+  const diagnostics = [
+    ...preparation.diagnostics.filter((entry) => !entry.extension || !failedIds.has(entry.extension)),
+    ...batch.results.filter((entry) => entry.status === "failed").map((entry) => ({
+      code: entry.code || "EXTENSION_UPGRADE_FAILED",
+      severity: "error",
+      message: entry.message || `Extension ${entry.id} failed to upgrade.`,
+      extension: entry.id,
+      version: entry.version,
+    })),
+  ];
+  const results = decorateBatchResults(batch, preparation.plans, invocation.options);
+  return selectionResult(command, requested, results.map((entry) => lifecycleResultEntry(entry, "upgrade")), {
+    diagnostics,
+    text: lifecycleResultText(results, "upgrade"),
   });
 }
 
@@ -204,9 +406,12 @@ async function executeExtensionPack(invocation) {
 async function executeExtension(invocation) {
   const command = invocation.definition.path.join(".");
   if (command === "extension.pack") return await executeExtensionPack(invocation);
+  if (command === "extension.search") return await executeExtensionSearch(invocation);
+  if (command === "extension.info") return await executeExtensionInfo(invocation);
   const releaseLock = await (invocation.dependencies?.acquireInitLock || acquireInitLock)(invocation.root);
   try {
     if (command === "extension.install") return await executeExtensionInstall(invocation);
+    if (command === "extension.upgrade") return await executeExtensionUpgrade(invocation);
     if (command === "extension.uninstall") return await executeExtensionUninstall(invocation);
     throw new WorkspaceError("CLI_HANDLER_MISSING", `Unsupported extension action: ${command}`);
   } finally {
@@ -216,10 +421,14 @@ async function executeExtension(invocation) {
 
 module.exports = {
   collectExtensionInstallSelection,
+  collectRegistryExtensionInstallSelection,
   executeExtension,
   executeExtensionInstall,
   executeExtensionPack,
+  executeExtensionSearch,
+  executeExtensionInfo,
   executeExtensionUninstall,
+  executeExtensionUpgrade,
   formatInstallPlan,
   formatUninstallPlan,
 };

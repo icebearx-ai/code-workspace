@@ -287,6 +287,78 @@ function validateExtensionPackContract(registry, commandSource, coreSource) {
   return problems;
 }
 
+function validateExtensionRegistryLifecycleContract(registry, commandSource, lifecycleSource) {
+  const expected = {
+    "extension search": {
+      workspace: "none",
+      config: [],
+      interaction: "never",
+      effects: "external",
+      args: [{ name: "query", required: false }],
+      options: {},
+    },
+    "extension info": {
+      workspace: "none",
+      config: [],
+      interaction: "never",
+      effects: "external",
+      args: [{ name: "name", required: true }],
+      options: {},
+    },
+    "extension install": {
+      workspace: "required",
+      config: ["identity", "language"],
+      interaction: "required",
+      effects: "planned-write",
+      args: [{ name: "name", required: false, variadic: true }],
+      options: {
+        yes: { type: "boolean" },
+        version: { type: "string" },
+        "allow-deprecated": { type: "boolean" },
+        offline: { type: "boolean" },
+      },
+    },
+    "extension upgrade": {
+      workspace: "required",
+      config: ["identity", "language"],
+      interaction: "required",
+      effects: "planned-write",
+      args: [{ name: "name", required: true, variadic: true }],
+      options: {
+        yes: { type: "boolean" },
+        offline: { type: "boolean" },
+      },
+    },
+  };
+  const problems = [];
+  for (const [label, contract] of Object.entries(expected)) {
+    const definition = registry.COMMANDS.find((command) => command.path.join(" ") === label);
+    if (!definition || JSON.stringify(definition, Object.keys(contract)) !== JSON.stringify(contract, Object.keys(contract))) {
+      problems.push(problem("EXTENSION_LIFECYCLE_REGISTRY_INVALID", `${label} must declare the complete Registry lifecycle contract`));
+    }
+  }
+  if (!/require\(["']\.\.\/\.\.\/core\/extension-registry-lifecycle["']\)/.test(commandSource)) {
+    problems.push(problem("EXTENSION_LIFECYCLE_COMMAND_LAYERING_INVALID", "extension Registry commands must orchestrate the core lifecycle service", "src/cli/commands/extension.js"));
+  }
+  for (const forbidden of [/\.npmrc/, /\bAuthorization\b/, /\bnpm\s+pack\b/, /\btar\.list\b/, /\btar\.extract\b/]) {
+    if (forbidden.test(commandSource)) {
+      problems.push(problem("EXTENSION_LIFECYCLE_COMMAND_BOUNDARY_INVALID", "extension Registry command module must not parse npm config, Authorization, or tar payloads", "src/cli/commands/extension.js"));
+    }
+  }
+  for (const [pattern, message] of [
+    [/function prepareRegistryExtensionPlans/, "extension lifecycle must freeze remote candidates before Workspace activation"],
+    [/function searchRegistryExtensions/, "extension lifecycle must provide search result conversion"],
+    [/function getRegistryExtensionInfo/, "extension lifecycle must provide metadata info conversion"],
+    [/EXTENSION_REGISTRY_PACKAGE_CONFLICT/, "extension lifecycle must detect same-version digest conflicts"],
+    [/EXTENSION_SYSTEM_MANAGED/, "extension lifecycle must preserve system-extension boundaries"],
+  ]) {
+    if (!pattern.test(lifecycleSource)) {
+      problems.push(problem("EXTENSION_LIFECYCLE_IMPLEMENTATION_INVALID", message, "src/core/extension-registry-lifecycle.js"));
+    }
+  }
+  return problems;
+}
+
 function runChecks(root) {
   const registryFile = path.join(root, "src", "cli", "registry.js");
   const parserFile = path.join(root, "src", "cli", "parser.js");
@@ -307,6 +379,11 @@ function runChecks(root) {
     registry,
     fs.readFileSync(path.join(commandDirectory, "extension.js"), "utf8"),
     fs.readFileSync(path.join(root, "src", "core", "extension-package.js"), "utf8")
+  ));
+  problems.push(...validateExtensionRegistryLifecycleContract(
+    registry,
+    fs.readFileSync(path.join(commandDirectory, "extension.js"), "utf8"),
+    fs.readFileSync(path.join(root, "src", "core", "extension-registry-lifecycle.js"), "utf8")
   ));
   const documented = validateDocumentedCommands(root, registry.validateCommandReference);
   problems.push(...documented.problems);
@@ -351,6 +428,7 @@ module.exports = {
   validateDispatchCoverage,
   validateDocumentedCommands,
   validateExtensionPackContract,
+  validateExtensionRegistryLifecycleContract,
   validateParserContracts,
   validateRegistry,
 };

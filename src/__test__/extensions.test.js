@@ -1132,7 +1132,7 @@ test("extension install requires explicit names non-interactively and confirmati
     args: ["example-extension"],
     options: { json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { extensionsRoot: repository, interactive: false },
+    dependencies: { extensionsRoot: repository, interactive: false, home: temporaryRoot() },
   }), (error) => error.code === "CLI_CONFIRMATION_REQUIRED");
   assert.equal(fs.existsSync(extensionStatePath(root)), true);
 });
@@ -1149,7 +1149,7 @@ test("standalone extension install is idempotent without rewriting core assets",
     args: [definition.id],
     options: { yes: true, json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { extensionsRoot: repository, extensionStoreRoot: temporaryRoot(), interactive: false },
+    dependencies: { extensionsRoot: repository, extensionStoreRoot: temporaryRoot(), interactive: false, home: temporaryRoot() },
   };
   const installed = await executeExtensionInstall(invocation);
   assert.equal(installed.data.results[0].status, "installed");
@@ -1203,7 +1203,7 @@ test("built-in skill extensions install and uninstall independently", async () =
     args: ids,
     options: { yes: true, json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { extensionStoreRoot, interactive: false },
+    dependencies: { extensionStoreRoot, interactive: false, home: temporaryRoot() },
   };
   const installed = await executeExtensionInstall(invocation);
   assert.equal(installed.ok, true);
@@ -1270,7 +1270,7 @@ test("multi-file skill extension installs references and the source archive, the
     args: [id],
     options: { yes: true, json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { extensionStoreRoot, interactive: false },
+    dependencies: { extensionStoreRoot, interactive: false, home: temporaryRoot() },
   };
   const installed = await executeExtensionInstall(invocation);
   assert.equal(installed.ok, true);
@@ -1309,7 +1309,7 @@ test("standalone extension install preserves ordered best-effort results and fai
     args: ["broken", "working"],
     options: { yes: true, json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { extensionsRoot: repository, extensionStoreRoot: temporaryRoot() },
+    dependencies: { extensionsRoot: repository, extensionStoreRoot: temporaryRoot(), home: temporaryRoot() },
   });
   assert.equal(result.ok, false);
   assert.deepEqual(result.data.requested, ["broken", "working"]);

@@ -255,7 +255,7 @@ Code Workspace 默认只解析最高的、非 deprecated 的兼容正式版本�
 
 公司 Nexus 当前实测为 Sonatype Nexus Repository Manager `3.47.1-01` OSS。`codew-extensions` 是 npm hosted repository；匿名 Search 返回 `items` 与 `continuationToken`，不存在的 scoped packument 返回结构化 404。脱敏契约样本位于 `src/__test__/fixtures/nexus-contract/`。已由授权用户完成受控认证验证：npm 登录使用 URL 作用域 `_authToken`，即 bearer token；packument、Search、流式下载、Store 导入、provenance 和敏感信息检查均通过。
 
-phase-07 已提供 core Provider 公共接口：
+phase-07 提供的 core Provider 公共接口包括：
 
 - 按固定 repository/format/scope 调用 Nexus Search，并处理 continuation token；
 - 获取 npm packument 并冻结精确版本、tarball URL 和 SHA-512 integrity；
@@ -264,7 +264,37 @@ phase-07 已提供 core Provider 公共接口：
 - 通过现有锁和原子目录提交导入 User Extension Store，记录非敏感 provenance；
 - 提供 configuration/authentication/metadata/search 四项健康检查。
 
-本阶段不新增用户 CLI，也不改变 Workspace activation。phase-08 才把发现、选择、远端安装和升级接入用户生命周期。
+phase-08 在该 Provider 之上提供用户生命周期命令：
+
+```bash
+codew extension search jira --json
+codew extension info zhuiyi-jira-mcp --json
+codew extension install zhuiyi-jira-mcp --yes
+codew extension install zhuiyi-jira-mcp --version 1.1.0 --yes
+codew extension install zhuiyi-jira-mcp --offline --version 1.1.0 --yes
+codew extension upgrade zhuiyi-jira-mcp --yes
+```
+
+`search` 和 `info` 不要求 Workspace，也不执行扩展代码。`install` 和 `upgrade` 要求已初始化 Workspace，先冻结远端候选并导入 Store，再进入现有确认、锁、逐扩展事务、后置验证和回滚。`init` 不隐式联网发现或安装远端普通扩展。
+
+默认解析规则：
+
+- 合并内置目录、Nexus metadata 和已验证 Store；
+- 选择最高的 Host 支持稳定版本；
+- 默认排除 prerelease 和 deprecated；
+- 不使用可变 `latest` dist-tag 作为 activation 事实；
+- 相同 `id@version` 且不同 package digest 时稳定失败；
+- 系统扩展只由内置生命周期管理。
+
+精确版本规则：
+
+- `--version` 只能与一个显式扩展名组合；
+- 值必须是精确 SemVer，不支持 range；
+- prerelease 只能通过精确版本请求；
+- deprecated 精确版本必须加 `--allow-deprecated`;
+- `name@version` 位置语法继续拒绝。
+
+`--offline` 禁止 Registry 请求，只允许内置目录和已验证 Store，并在结果中标记 local-only 解析。Registry 已配置但默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默降级为旧内置版本。
 
 发现使用 Nexus REST Search API，并固定：
 

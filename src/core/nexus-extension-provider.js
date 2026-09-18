@@ -283,7 +283,7 @@ async function requestWithRedirects(fetch, url, options) {
           if (
             !fixed(next, "repository", configuration.repository) ||
             !fixed(next, "format", "npm") ||
-            !fixed(next, "q", `assets.attributes.npm.scope:${NPM_SCOPE}`) ||
+            next.searchParams.get("q") !== current.searchParams.get("q") ||
             next.searchParams.get("continuationToken") !== current.searchParams.get("continuationToken")
           ) {
             throw nexusError("EXTENSION_REGISTRY_REDIRECT_FORBIDDEN", "Nexus redirect changed a fixed Search parameter", {
@@ -345,7 +345,7 @@ function normalizeIntegrity(value) {
   return `sha512-${sha512[0].digest}`;
 }
 
-function packageVersionCandidate(configuration, packageName, version, value) {
+function packageVersionMetadata(configuration, packageName, version, value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw nexusError("EXTENSION_REGISTRY_METADATA_INVALID", `Nexus version metadata is invalid for ${packageName}@${version}`);
   }
@@ -354,9 +354,6 @@ function packageVersionCandidate(configuration, packageName, version, value) {
   }
   if (value.version !== version) {
     throw nexusError("EXTENSION_NPM_IDENTITY_MISMATCH", "Nexus package version does not match the requested version", { expected: version, actual: value.version ?? null });
-  }
-  if (value.deprecated !== undefined && value.deprecated !== false && value.deprecated !== "") {
-    throw nexusError("EXTENSION_REGISTRY_PACKAGE_DEPRECATED", `${packageName}@${version} is deprecated in Nexus`, { packageName, version });
   }
   const metadataEnvelope = value.codeWorkspace;
   const extensionId = packageName.slice(NPM_SCOPE.length + 1);
@@ -374,6 +371,7 @@ function packageVersionCandidate(configuration, packageName, version, value) {
   const dist = value.dist && typeof value.dist === "object" && !Array.isArray(value.dist) ? value.dist : {};
   const tarball = assertRegistryUrl(dist.tarball, configuration);
   const archiveIntegrity = normalizeIntegrity(dist.integrity);
+  const deprecated = value.deprecated !== undefined && value.deprecated !== false && value.deprecated !== "";
   return Object.freeze({
     schemaVersion: 1,
     providerKind: "nexus-npm",
@@ -384,7 +382,21 @@ function packageVersionCandidate(configuration, packageName, version, value) {
     tarballUrl: tarball.toString(),
     archiveIntegrity,
     transport: envelope,
+    deprecated,
+    ...(deprecated ? { deprecatedReason: String(value.deprecated) } : {}),
   });
+}
+
+function packageVersionCandidate(configuration, packageName, version, value, options = {}) {
+  const metadata = packageVersionMetadata(configuration, packageName, version, value);
+  if (metadata.deprecated && options.allowDeprecated !== true) {
+    throw nexusError("EXTENSION_REGISTRY_PACKAGE_DEPRECATED", `${packageName}@${version} is deprecated in Nexus`, {
+      packageName,
+      version,
+      ...(metadata.deprecatedReason ? { reason: metadata.deprecatedReason } : {}),
+    });
+  }
+  return metadata;
 }
 
 async function resolveNexusExtensionPackageCandidate(provider, id, version, options = {}) {
@@ -403,18 +415,72 @@ async function resolveNexusExtensionPackageCandidate(provider, id, version, opti
   return packageVersionCandidate(provider.configuration, packageName, versionValue, value);
 }
 
+async function getNexusExtensionPackageMetadata(provider, id) {
+  const extensionId = String(id || "");
+  const packageName = extensionNpmPackageName(extensionId);
+  const response = await provider.requestJson(packumentUrl(provider.configuration, packageName), {
+    expectedPath: "registry",
+    context: `${packageName} metadata`,
+  });
+  const packument = await readJsonResponse(response, provider.configuration, provider.limits);
+  if (!packument || typeof packument !== "object" || Array.isArray(packument) || packument.name !== packageName) {
+    throw nexusError("EXTENSION_REGISTRY_METADATA_INVALID", "Nexus packument name is invalid", { packageName });
+  }
+  const versions = packument.versions && typeof packument.versions === "object" && !Array.isArray(packument.versions) ? packument.versions : {};
+  const entries = Object.entries(versions)
+    .map(([version, value]) => packageVersionMetadata(provider.configuration, packageName, version, value))
+    .sort((left, right) => compareVersionStrings(right.version, left.version));
+  return Object.freeze({
+    schemaVersion: 1,
+    packageName,
+    extensionId,
+    description: entries[0]?.transport.description || `${extensionId} Code Workspace extension`,
+    versions: Object.freeze(entries),
+  });
+}
+
+function compareVersionStrings(left, right) {
+  const leftValue = parseSemver(left);
+  const rightValue = parseSemver(right);
+  for (const key of ["major", "minor", "patch"]) {
+    if (leftValue[key] !== rightValue[key]) return leftValue[key] < rightValue[key] ? -1 : 1;
+  }
+  if (leftValue.prerelease.length === 0 || rightValue.prerelease.length === 0) {
+    return leftValue.prerelease.length === rightValue.prerelease.length ? 0 : leftValue.prerelease.length === 0 ? 1 : -1;
+  }
+  const length = Math.max(leftValue.prerelease.length, rightValue.prerelease.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftValue.prerelease[index] === undefined) return -1;
+    if (rightValue.prerelease[index] === undefined) return 1;
+    const compared = comparePrereleaseIdentifiers(leftValue.prerelease[index], rightValue.prerelease[index]);
+    if (compared !== 0) return compared;
+  }
+  return 0;
+}
+
+function comparePrereleaseIdentifiers(left, right) {
+  const leftNumeric = /^\d+$/.test(left);
+  const rightNumeric = /^\d+$/.test(right);
+  if (leftNumeric && rightNumeric) return Number(left) - Number(right);
+  if (leftNumeric) return -1;
+  if (rightNumeric) return 1;
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function packageNameFromSearchItem(item) {
   if (typeof item?.name !== "string" || !item.name) return null;
   if (item.name.startsWith(`${NPM_SCOPE}/`)) return item.name;
-  if (item.group === NPM_SCOPE) return `${NPM_SCOPE}/${item.name}`;
+  const group = typeof item.group === "string" ? item.group.replace(/^@/, "") : item.group;
+  const scope = NPM_SCOPE.slice(1);
+  if (group === scope) return `${NPM_SCOPE}/${item.name}`;
   return null;
 }
 
-function searchUrl(configuration, continuationToken) {
+function searchUrl(configuration, continuationToken, query = "") {
   const url = new URL(SEARCH_PATH, configuration.registryOrigin);
   url.searchParams.set("repository", configuration.repository);
   url.searchParams.set("format", "npm");
-  url.searchParams.set("q", `assets.attributes.npm.scope:${NPM_SCOPE}`);
+  if (query) url.searchParams.set("q", query);
   if (continuationToken) url.searchParams.set("continuationToken", continuationToken);
   return url;
 }
@@ -452,7 +518,10 @@ async function searchNexusExtensionPackages(provider, options = {}) {
   let continuationToken = null;
   let pages = 0;
   do {
-    const response = await provider.requestJson(searchUrl(provider.configuration, continuationToken), { expectedPath: "search", context: "Nexus Search" }, options);
+    const response = await provider.requestJson(searchUrl(provider.configuration, continuationToken, options.query || ""), {
+      expectedPath: "search",
+      context: "Nexus Search",
+    }, options);
     const value = await readJsonResponse(response, provider.configuration, provider.limits);
     const page = normalizeSearchResponse(value, provider.configuration, seen);
     pages += 1;
@@ -658,6 +727,9 @@ async function createNexusExtensionPackageProvider(options = {}) {
     async getPackageCandidate(id, version, candidateOptions = {}) {
       return resolveNexusExtensionPackageCandidate(provider, id, version, candidateOptions);
     },
+    async getPackageMetadata(id, metadataOptions = {}) {
+      return getNexusExtensionPackageMetadata(provider, id, metadataOptions);
+    },
     async search(searchOptions = {}) {
       return searchNexusExtensionPackages(provider, searchOptions);
     },
@@ -717,6 +789,7 @@ module.exports = {
   createNexusCredentialAdapter,
   createNexusExtensionPackageProvider,
   downloadNexusExtensionPackage,
+  getNexusExtensionPackageMetadata,
   importNexusExtensionPackage,
   normalizeIntegrity,
   readUserNpmConfig,

@@ -322,14 +322,14 @@ test("Nexus Search paginates, filters, deduplicates, and reports continuation", 
     const url = new URL(request.url, "http://127.0.0.1");
     assert.equal(url.searchParams.get("repository"), "extensions");
     assert.equal(url.searchParams.get("format"), "npm");
-    assert.match(url.searchParams.get("q"), /@codew-ext/);
+    assert.equal(url.searchParams.get("q"), null);
     if (!url.searchParams.has("continuationToken")) {
       page += 1;
       json(response, {
         items: [
-          { repository: "extensions", format: "npm", group: "@codew-ext", name: "alpha" },
-          { repository: "other", format: "npm", group: "@codew-ext", name: "wrong-repository" },
-          { repository: "extensions", format: "pypi", group: "@codew-ext", name: "wrong-format" },
+          { repository: "extensions", format: "npm", group: "codew-ext", name: "alpha" },
+          { repository: "other", format: "npm", group: "codew-ext", name: "wrong-repository" },
+          { repository: "extensions", format: "pypi", group: "codew-ext", name: "wrong-format" },
         ],
         continuationToken: "page-2",
       });
@@ -345,6 +345,20 @@ test("Nexus Search paginates, filters, deduplicates, and reports continuation", 
   assert.deepEqual(result.items.map((entry) => entry.extensionId), ["alpha", "beta"]);
   assert.equal(result.complete, true);
   assert.equal(page, 2);
+});
+
+test("Nexus Search sends the user query without a field-expression prefix", async (t) => {
+  const server = startFixture(t, (request, response) => {
+    const url = new URL(request.url, "http://127.0.0.1");
+    assert.equal(url.searchParams.get("repository"), "extensions");
+    assert.equal(url.searchParams.get("format"), "npm");
+    assert.equal(url.searchParams.get("q"), "monitor");
+    json(response, { items: [{ repository: "extensions", format: "npm", group: "@codew-ext", name: "monitor" }] });
+  });
+  await new Promise((resolve) => server.on("listening", resolve));
+  const { provider } = await providerFor(t, server);
+  const result = await provider.search({ query: "monitor" });
+  assert.deepEqual(result.items.map((entry) => entry.extensionId), ["monitor"]);
 });
 
 test("Registry errors are stable, sanitized, and redirect credentials stay path-scoped", async (t) => {

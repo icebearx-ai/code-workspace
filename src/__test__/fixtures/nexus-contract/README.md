@@ -15,7 +15,9 @@ Observed probes:
 - `GET /service/rest/v1/status`: HTTP 200, empty body
 - `GET /service/rest/v1/status/writable`: HTTP 200, empty body
 - `GET /service/rest/v1/repositories/codew-extensions`: HTTP 200, `repository.json`
-- `GET /service/rest/v1/search?...`: HTTP 200, `search-empty.json`
+- `GET /service/rest/v1/search?repository=codew-extensions&format=npm&q=monitor`:
+  HTTP 200, `search-monitor.json`; Nexus 3.47 returns npm component group as
+  `codew-ext` without the leading `@`, while asset metadata uses `@codew-ext/monitor`.
 - `GET /repository/codew-extensions/@codew-ext%2Fexample-extension`: HTTP 404, `packument-not-found.json`
 
 Anonymous read and Search are enabled for this repository. A subsequent controlled

@@ -62,13 +62,20 @@ codew extension install zhuiyi-jira-issue-fix-summary --yes
 codew extension install zhuiyi-guangda-coding-spec --yes
 codew extension uninstall zhuiyi-jira-mcp --yes
 codew extension uninstall zhuiyi-jira-prd-analysis --yes
+codew extension search jira --json
+codew extension info zhuiyi-jira-mcp --json
+codew extension install zhuiyi-jira-mcp --version 1.1.0 --yes
+codew extension install zhuiyi-jira-mcp --offline --version 1.1.0 --yes
+codew extension upgrade zhuiyi-jira-mcp --yes
 ```
 
 `init`、扩展安装和扩展卸载共享的 Workspace 操作锁配置在 Code Workspace 项目自身的 `.env` 中（不在目标 Workspace 中）。`CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` 默认值为 `5000`，`CODE_WORKSPACE_INIT_LOCK_STALE_MS` 默认值为 `30000`；进程环境变量优先于 `.env`。配置项名称见 `.env.example`。
 
-用户只选择扩展名，不能选择版本；`zhuiyi-jira-mcp@0.1.0` 会被明确拒绝。Code Workspace 在确认前，从 Host 明确支持的 Extension Spec 实现中解析最高扩展 SemVer。`codew-workspace-guard` 是包含 Workspace Guard、`codew-add-projects` 和 `codew-resolve-branch` 的系统扩展，由 `init` 自动安装或升级，不出现在扩展选择列表中，也不能通过 `extension install/uninstall` 手动管理。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装普通扩展；已有 Workspace 重新初始化时，默认选择已安装普通扩展，并在存在更高受支持内置版本时升级。`none` 只跳过本次普通扩展初始化，不会卸载已有制品，也不会取消系统扩展处理。
+用户选择扩展名，不使用 `name@version` 位置语法。默认安装会在内置目录、已配置的 `@codew-ext` Nexus Registry 和已验证本地 Store 中选择最高的兼容、稳定、非 deprecated 版本。单目标安装可用 `--version` 指定精确 SemVer； prerelease 必须通过精确版本请求，deprecated 版本还必须加 `--allow-deprecated`。`--offline` 禁止 Registry 访问，只基于本地事实解析。`codew-workspace-guard` 是包含 Workspace Guard、`codew-add-projects` 和 `codew-resolve-branch` 的系统扩展，由 `init` 自动安装或升级，不出现在扩展选择列表中，也不能通过 `extension install/uninstall/upgrade` 手动管理。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装普通扩展；`init` 不会隐式查询 Nexus。`none` 只跳过本次普通扩展初始化，不会卸载已有制品，也不会取消系统扩展处理。
 
-`extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。
+`extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。Registry 已配置且默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默选择旧内置包。
+
+`extension search` 和 `extension info` 是与 Workspace 无关的 Registry 读取命令。`extension upgrade` 接受一个或多个已安装普通扩展，逐个冻结默认目标，统一确认后复用安装的逐扩展事务和回滚；已是当前版本的目标返回 skipped。
 
 `extension pack` 可以从扩展包目录生成可交给 Nexus/npm 的 `codew-ext-<extension-id>-<version>.tgz`：
 
@@ -95,7 +102,7 @@ code-workspace extension pack extensions/zhuiyi-jira-mcp/1.1.0 --output dist/ext
 Workspace 合成和验证，扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行
 扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
 
-这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码。Nexus Package Provider 核心已能验证并导入可信扩展包，但面向用户的远端发现与安装生命周期尚未启用；外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令和通过 `codew update` 自动更新扩展仍不支持。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/guide.zh-CN.md`。
+这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码，或从已配置公司 Nexus 下载并通过归档、身份、manifest、入口、runtime 和 package digest 验证的扩展包。外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令和通过 `codew update` 自动更新扩展仍不支持。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/extension-development-guide.zh-CN.md`。
 
 ## 注册项目
 
