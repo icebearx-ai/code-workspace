@@ -6,13 +6,15 @@ const { WorkspaceError } = require("./errors");
 const { atomicWrite, sha256 } = require("./fs");
 const { directoryDigest } = require("./directory-digest");
 
-const STORE_SCHEMA_VERSION = 1;
+const STORE_SCHEMA_VERSION = 2;
+const LEGACY_STORE_SCHEMA_VERSION = 1;
 const STORE_REGISTRY_FILE = ".registry.json";
 const STORE_LOCK_DIRECTORY = ".locks";
 const STORE_TEMP_PREFIX = ".tmp-";
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+const SHA512_SRI_PATTERN = /^sha512-[A-Za-z0-9+/]+={0,2}$/;
 
 function storeError(code, message, details = {}) {
   return new WorkspaceError(code, message, details);
@@ -70,6 +72,59 @@ function normalizeReferences(value) {
   };
 }
 
+function normalizeRegistryOrigin(value) {
+  const origin = String(value || "").replace(/\/+$/, "");
+  try {
+    const url = new URL(origin);
+    const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]" || url.hostname === "::1";
+    if ((url.protocol !== "https:" && !loopback) || url.username || url.password || url.search || url.hash || url.origin !== origin) {
+      throw new Error("invalid origin");
+    }
+  } catch {
+    throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", "Nexus provenance registryOrigin must be an HTTPS origin without credentials, query, or fragment", { registryOrigin: origin || null });
+  }
+  return origin;
+}
+
+function normalizeProvenance(value, key = "package") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Invalid Store provenance for ${key}`, { package: key });
+  }
+  if (value.kind === "builtin") {
+    if (Object.keys(value).length !== 1) throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Built-in Store provenance contains unsupported fields for ${key}`, { package: key });
+    return Object.freeze({ kind: "builtin" });
+  }
+  if (value.kind === "nexus-npm") {
+    const allowed = new Set(["kind", "registryOrigin", "repository", "packageName", "archiveIntegrity"]);
+    const unknown = Object.keys(value).filter((field) => !allowed.has(field));
+    if (unknown.length > 0) throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Nexus Store provenance contains unsupported field ${unknown[0]} for ${key}`, { package: key, field: unknown[0] });
+    const repository = String(value.repository || "");
+    const packageName = String(value.packageName || "");
+    const archiveIntegrity = String(value.archiveIntegrity || "");
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(repository)) throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Invalid Nexus repository in Store provenance for ${key}`, { package: key });
+    if (!/^@codew-ext\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(packageName)) throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Invalid npm package name in Store provenance for ${key}`, { package: key });
+    if (!SHA512_SRI_PATTERN.test(archiveIntegrity)) throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Invalid archive integrity in Store provenance for ${key}`, { package: key });
+    return Object.freeze({
+      kind: "nexus-npm",
+      registryOrigin: normalizeRegistryOrigin(value.registryOrigin),
+      repository,
+      packageName,
+      archiveIntegrity,
+    });
+  }
+  throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Unsupported Store provenance kind for ${key}: ${value.kind || "<missing>"}`, { package: key, kind: value.kind || null });
+}
+
+function provenanceFromOptions(options = {}, key = "package") {
+  if (options.provenance) return normalizeProvenance(options.provenance, key);
+  const source = options.source || "builtin";
+  if (source === "builtin") return Object.freeze({ kind: "builtin" });
+  if (source === "nexus-npm" || source === "nexus") {
+    throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Nexus Store imports require structured provenance for ${key}`, { package: key });
+  }
+  throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Unsupported Store package source for ${key}: ${source}`, { package: key, source });
+}
+
 function validatePackageRecord(key, value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw storeError("EXTENSION_STORE_REGISTRY_INVALID", `Invalid Store package record: ${key}`, { package: key });
   const id = validateId(value.id);
@@ -77,13 +132,17 @@ function validatePackageRecord(key, value) {
   if (packageKey(id, version) !== key || !SHA256_PATTERN.test(value.manifestSha256 || "") || !SHA256_PATTERN.test(value.entrySha256 || "") || !SHA256_PATTERN.test(value.packageSha256 || "")) {
     throw storeError("EXTENSION_STORE_REGISTRY_INVALID", `Invalid Store package digest record: ${key}`, { package: key });
   }
+  const provenance = value.provenance
+    ? normalizeProvenance(value.provenance, key)
+    : Object.freeze({ kind: "builtin" });
   return {
     id,
     version,
     manifestSha256: value.manifestSha256,
     entrySha256: value.entrySha256,
     packageSha256: value.packageSha256,
-    source: value.source || "builtin",
+    source: provenance.kind === "builtin" ? "builtin" : "nexus",
+    provenance,
     importedAt: value.importedAt || null,
     references: normalizeReferences(value.references),
   };
@@ -98,7 +157,7 @@ function loadStoreRegistry(storeRoot) {
   } catch (error) {
     throw storeError("EXTENSION_STORE_REGISTRY_PARSE_FAILED", `Cannot parse Extension Store registry: ${error.message}`, { file });
   }
-  if (!value || value.schemaVersion !== STORE_SCHEMA_VERSION || !value.packages || typeof value.packages !== "object" || Array.isArray(value.packages)) {
+  if (!value || ![STORE_SCHEMA_VERSION, LEGACY_STORE_SCHEMA_VERSION].includes(value.schemaVersion) || !value.packages || typeof value.packages !== "object" || Array.isArray(value.packages)) {
     throw storeError("EXTENSION_STORE_REGISTRY_INVALID", `Invalid Extension Store registry: ${file}`, { file });
   }
   const packages = {};
@@ -169,27 +228,37 @@ function ensureStoredExtensionPackage(options = {}) {
   const source = packageRecordFromDirectory(sourceRoot, options);
   const storeRoot = defaultExtensionStoreRoot(options);
   const target = packageRoot(storeRoot, source.id, source.version);
-  const existing = fs.existsSync(target);
-  if (existing) {
-    const current = packageRecordFromDirectory(target, { id: source.id, version: source.version, validate: options.validate });
-    if (current.packageSha256 !== source.packageSha256) throw storeError("EXTENSION_STORE_PACKAGE_CONFLICT", `Store already contains a different package for ${source.id}@${source.version}`, { id: source.id, version: source.version, expectedSha256: source.packageSha256, actualSha256: current.packageSha256 });
-    const registry = loadStoreRegistry(storeRoot);
-    registry.packages[packageKey(source.id, source.version)] = {
-      id: source.id,
-      version: source.version,
-      manifestSha256: current.manifestSha256,
-      entrySha256: current.entrySha256,
-      packageSha256: current.packageSha256,
-      source: registry.packages[packageKey(source.id, source.version)]?.source || options.source || "builtin",
-      importedAt: registry.packages[packageKey(source.id, source.version)]?.importedAt || new Date().toISOString(),
-      references: registry.packages[packageKey(source.id, source.version)]?.references || normalizeReferences(),
-    };
-    saveStoreRegistry(storeRoot, registry);
-    return current;
-  }
   const release = acquirePackageLock(storeRoot, source.id, source.version);
   try {
-    if (fs.existsSync(target)) return ensureStoredExtensionPackage(options);
+    const existing = fs.existsSync(target);
+    const provenance = provenanceFromOptions(options, packageKey(source.id, source.version));
+    if (existing) {
+      const current = packageRecordFromDirectory(target, { id: source.id, version: source.version, validate: options.validate });
+      if (current.packageSha256 !== source.packageSha256) {
+        throw storeError("EXTENSION_STORE_PACKAGE_CONFLICT", `Store already contains a different package for ${source.id}@${source.version}`, {
+          id: source.id,
+          version: source.version,
+          expectedSha256: source.packageSha256,
+          actualSha256: current.packageSha256,
+        });
+      }
+      const key = packageKey(source.id, source.version);
+      const registry = loadStoreRegistry(storeRoot);
+      const previous = registry.packages[key];
+      registry.packages[key] = {
+        id: source.id,
+        version: source.version,
+        manifestSha256: current.manifestSha256,
+        entrySha256: current.entrySha256,
+        packageSha256: current.packageSha256,
+        source: previous?.source || (provenance.kind === "builtin" ? "builtin" : "nexus"),
+        provenance: previous?.provenance || provenance,
+        importedAt: previous?.importedAt || new Date().toISOString(),
+        references: previous?.references || normalizeReferences(),
+      };
+      saveStoreRegistry(storeRoot, registry);
+      return { ...current, source: registry.packages[key].source, provenance: registry.packages[key].provenance };
+    }
     const root = path.dirname(path.dirname(target));
     fs.mkdirSync(root, { recursive: true });
     const temporary = path.join(root, `${STORE_TEMP_PREFIX}${source.id}-${source.version}-${process.pid}-${Date.now()}`);
@@ -206,12 +275,14 @@ function ensureStoredExtensionPackage(options = {}) {
         manifestSha256: copied.manifestSha256,
         entrySha256: copied.entrySha256,
         packageSha256: copied.packageSha256,
-        source: options.source || "builtin",
+        source: provenance.kind === "builtin" ? "builtin" : "nexus",
+        provenance,
         importedAt: new Date().toISOString(),
         references: registry.packages[packageKey(source.id, source.version)]?.references || normalizeReferences(),
       };
       saveStoreRegistry(storeRoot, registry);
-      return packageRecordFromDirectory(target, { id: source.id, version: source.version, validate: options.validate });
+      const imported = packageRecordFromDirectory(target, { id: source.id, version: source.version, validate: options.validate });
+      return { ...imported, source: registry.packages[packageKey(source.id, source.version)].source, provenance };
     } finally {
       if (fs.existsSync(temporary)) fs.rmSync(temporary, { recursive: true, force: true });
     }

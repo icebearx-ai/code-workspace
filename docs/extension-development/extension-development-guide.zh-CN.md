@@ -345,6 +345,8 @@ npm publish dist/extensions/codew-ext-example-extension-1.0.0.tgz --registry=htt
 
 发布后仍以下载端重新校验为准：npm integrity、运输 envelope、Extension manifest、入口摘要和 `extension/` package digest 都必须重新验证。
 
+完整的 Nexus 登录、上传、远端验证和 Provider 冒烟测试步骤见 `nexus-publish.zh-CN.md`。
+
 ## 8. 开发检查清单
 
 - [ ] 目录名、manifest id 和版本一致；

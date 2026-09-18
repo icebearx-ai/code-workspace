@@ -14,6 +14,7 @@ const {
   buildExtensionTransportEnvelope,
   collectPackageFiles,
   extensionNpmPackageName,
+  extractExtensionTransportTarball,
   inspectExtensionTransportTarball,
   packExtensionToDirectory,
   validateExtensionTransportEnvelope,
@@ -263,6 +264,41 @@ test("transport reader rejects layout drift, duplicate paths, unsafe paths, and 
   }, ["../escaped.txt"]);
   t.after(() => fs.rmSync(escapeRoot, { recursive: true, force: true }));
   await assert.rejects(inspectExtensionTransportTarball(escapeTarball), (error) => error.code === "EXTENSION_PACKAGE_LAYOUT_INVALID");
+});
+
+test("transport reader and extractor reject case conflicts and link entries", async (t) => {
+  const source = temporaryRoot();
+  writeExtension(source);
+  t.after(() => fs.rmSync(source, { recursive: true, force: true }));
+  const root = temporaryRoot();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const valid = path.join(root, "valid.tgz");
+  await createTarballFromDirectory(source, valid);
+
+  const caseSource = path.join(root, "case-source");
+  fs.cpSync(source, caseSource, { recursive: true });
+  fs.renameSync(path.join(caseSource, "manifest.json"), path.join(caseSource, "Manifest.json"));
+  const caseTar = path.join(root, "case.tar");
+  await tar.c({ file: caseTar, cwd: caseSource, prefix: EXTENSION_PACKAGE_PREFIX, portable: false, mtime: new Date(0), sync: true }, ["Manifest.json"]);
+  const caseTarball = path.join(root, "case.tgz");
+  fs.copyFileSync(valid, caseTarball);
+  await tar.r({ file: caseTarball, sync: true }, [`@${caseTar}`]);
+  await assert.rejects(inspectExtensionTransportTarball(caseTarball), (error) => error.code === "EXTENSION_PACKAGE_PATH_CASE_CONFLICT");
+
+  const linkSource = path.join(root, "link-source");
+  fs.mkdirSync(path.join(linkSource, "package", "extension"), { recursive: true });
+  fs.symlinkSync("init.js", path.join(linkSource, "package", "extension", "linked.js"));
+  const linkTar = path.join(root, "link.tar");
+  await tar.c({ file: linkTar, cwd: linkSource, portable: false, mtime: new Date(0), sync: true }, ["package/extension/linked.js"]);
+  const linkTarball = path.join(root, "link.tgz");
+  fs.copyFileSync(valid, linkTarball);
+  await tar.r({ file: linkTarball, sync: true }, [`@${linkTar}`]);
+  await assert.rejects(inspectExtensionTransportTarball(linkTarball), (error) => error.code === "EXTENSION_PACKAGE_FILE_TYPE_INVALID");
+
+  const extractedRoot = path.join(root, "extracted");
+  const extracted = await extractExtensionTransportTarball(valid, extractedRoot);
+  assert.equal(extracted.packageSha256, directoryDigest(source));
+  assert.equal(directoryDigest(path.join(extractedRoot, "package", "extension")), directoryDigest(source));
 });
 
 test("extension pack preserves existing outputs and cleans every failure stage", async () => {

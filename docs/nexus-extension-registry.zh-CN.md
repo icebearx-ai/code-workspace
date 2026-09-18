@@ -136,9 +136,19 @@ package/
 - 不受支持的 Extension Spec；
 - 符号链接、特殊文件、路径逃逸和超限包。
 
-### 4.1 打包依赖与资源限制
+### 4.1 打包与 Provider 依赖
 
 打包使用 `tar@7.5.22` 创建和读取 gzip tarball。该包采用 BlueOak-1.0.0 许可证；当前锁文件中的传递依赖为 `@isaacs/fs-minipass@4.0.1`（ISC）、`chownr@3.0.0`（BlueOak-1.0.0）、`minipass@7.1.3`（BlueOak-1.0.0）、`minizlib@3.1.0`（MIT）和 `yallist@5.0.0`（BlueOak-1.0.0）。实现不调用系统 `tar`。
+
+Provider 使用三个 npm 维护的直接依赖：
+
+| 依赖 | 版本 | 许可证 | 用途 |
+|---|---:|---|---|
+| `@npmcli/config` | 10.12.0 | ISC | 只读取用户级 npm 配置和 URL 作用域凭证 |
+| `make-fetch-happen` | 15.0.6 | ISC | 流式 HTTP 请求、超时、响应大小与手动重定向控制 |
+| `ssri` | 12.0.0 | ISC | npm SHA-512 SRI 解析和流式完整性校验 |
+
+这些依赖均支持项目声明的 Node 20.19+ 最低版本。当前锁文件中相关直接与传递依赖许可证为 ISC、MIT、BlueOak-1.0.0、BSD-2-Clause、CC-BY-3.0 和 CC0-1.0。Provider 不把配置对象、凭证、Authorization 值或 `.npmrc` 路径写入错误详情、JSON、日志或 Store。
 
 首版资源限制为：
 
@@ -182,6 +192,15 @@ npm login \
 ```
 
 Code Workspace 复用用户级 npm 配置中与该 Registry URL 精确匹配的凭证；不得读取目标 Workspace 内的 `.npmrc` 作为可信凭证来源。CI 使用独立服务账号或 Nexus 提供的服务账号 Token。
+
+phase-07 的 core Provider 读取固定 scope：
+
+```ini
+@codew-ext:registry=https://nexus.example.com/repository/codew-extensions/
+//nexus.example.com/repository/codew-extensions/:_authToken=<token>
+```
+
+测试或受控进程可以显式注入 `CODE_WORKSPACE_NEXUS_REGISTRY` 与一种凭证（`CODE_WORKSPACE_NEXUS_AUTH_TOKEN` 或 `CODE_WORKSPACE_NEXUS_BASIC_AUTH`）。这些值只存在于进程内存中；显式 HTTP loopback 仅允许测试注入，生产配置必须使用 HTTPS。
 
 凭证不得写入：
 
@@ -234,6 +253,19 @@ Code Workspace 默认只解析最高的、非 deprecated 的兼容正式版本�
 
 ## 8. 发现与安装
 
+公司 Nexus 当前实测为 Sonatype Nexus Repository Manager `3.47.1-01` OSS。`codew-extensions` 是 npm hosted repository；匿名 Search 返回 `items` 与 `continuationToken`，不存在的 scoped packument 返回结构化 404。脱敏契约样本位于 `src/__test__/fixtures/nexus-contract/`。已由授权用户完成受控认证验证：npm 登录使用 URL 作用域 `_authToken`，即 bearer token；packument、Search、流式下载、Store 导入、provenance 和敏感信息检查均通过。
+
+phase-07 已提供 core Provider 公共接口：
+
+- 按固定 repository/format/scope 调用 Nexus Search，并处理 continuation token；
+- 获取 npm packument 并冻结精确版本、tarball URL 和 SHA-512 integrity；
+- 流式下载、逐跳验证同 Registry 重定向并验证 SRI；
+- 复用 phase-06 安全读取器解包并重新验证双层身份；
+- 通过现有锁和原子目录提交导入 User Extension Store，记录非敏感 provenance；
+- 提供 configuration/authentication/metadata/search 四项健康检查。
+
+本阶段不新增用户 CLI，也不改变 Workspace activation。phase-08 才把发现、选择、远端安装和升级接入用户生命周期。
+
 发现使用 Nexus REST Search API，并固定：
 
 - repository 为 `codew-extensions`；
@@ -257,6 +289,8 @@ Code Workspace 默认只解析最高的、非 deprecated 的兼容正式版本�
 ```
 
 远端搜索和下载失败不得破坏已有本地 Store 或 Workspace activation。已在 Store 中且摘要匹配的精确版本可以离线复用。
+
+Provider 的稳定失败类别包括未配置、URL 越界、未认证、无权限、不存在、限流、超时、网络失败、响应超限、metadata/Search 不兼容、integrity 不匹配和 Store 同版本冲突。诊断只包含 Registry origin、repository、HTTP 状态和非敏感修复建议。
 
 ## 9. 废弃、事故和删除
 
@@ -288,7 +322,7 @@ Nexus cleanup policy 说明见 [Cleanup Policies](https://help.sonatype.com/en/c
 - [ ] `codew-extensions` 是独立 `npm (hosted)` repository。
 - [ ] Deployment policy 为 `Disable redeploy`。
 - [ ] Code Workspace 不经由包含公网 proxy 的 npm group 下载扩展。
-- [ ] npm Bearer Token Realm 或公司批准的 Token 方案可用。
+- [x] npm Bearer Token Realm 或公司批准的 Token 方案可用。
 - [ ] Reader、Publisher、Admin 权限已用独立账号验证。
 - [ ] Publisher 没有 delete 权限，普通开发者没有 add/edit/delete 权限。
 - [ ] `@codew-ext/*` 包只能由受控 CI 发布。

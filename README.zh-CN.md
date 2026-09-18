@@ -95,7 +95,7 @@ code-workspace extension pack extensions/zhuiyi-jira-mcp/1.1.0 --output dist/ext
 Workspace 合成和验证，扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行
 扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
 
-这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码；暂不支持网络源、外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令，也不会通过 `codew update` 自动更新扩展。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/guide.zh-CN.md`。
+这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码。Nexus Package Provider 核心已能验证并导入可信扩展包，但面向用户的远端发现与安装生命周期尚未启用；外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令和通过 `codew update` 自动更新扩展仍不支持。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/guide.zh-CN.md`。
 
 ## 注册项目
 

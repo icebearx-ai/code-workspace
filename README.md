@@ -97,7 +97,7 @@ verified by Code Workspace; extensions never patch the real Workspace directly. 
 recorded installed state and does not execute extension code. Unknown changes to extension-owned
 files or contributions stop the operation instead of being overwritten.
 
-This is fault isolation, not a malicious-code security sandbox. The experimental release trusts only extension code shipped with Code Workspace; network sources, external extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`; a step-by-step guide is in `docs/extension-development/guide.zh-CN.md`.
+This is fault isolation, not a malicious-code security sandbox. The experimental release trusts only extension code shipped with Code Workspace. The Nexus Package Provider core can verify and import trusted packages, but the user-facing remote discovery and installation lifecycle is not enabled yet; external extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`; a step-by-step guide is in `docs/extension-development/guide.zh-CN.md`.
 
 ## Register projects
 

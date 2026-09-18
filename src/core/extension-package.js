@@ -272,6 +272,7 @@ function packageDigestFromRecords(records) {
 async function inspectExtensionTransportTarball(file, options = {}) {
   const limits = normalizeLimits(options.limits);
   const records = new Map();
+  const caseInsensitivePaths = new Map();
   const archivePaths = [];
   let envelopeChunks = null;
   let envelopeSize = 0;
@@ -310,6 +311,14 @@ async function inspectExtensionTransportTarball(file, options = {}) {
           }
           const relative = assertSafeRelativePath(archivePath.slice(EXTENSION_PACKAGE_PREFIX.length + 1));
           if (records.has(relative)) throw packageError("EXTENSION_PACKAGE_PATH_DUPLICATE", `npm transport tarball repeats ${relative}`, { path: relative });
+          const caseKey = relative.toLowerCase();
+          if (caseInsensitivePaths.has(caseKey) && caseInsensitivePaths.get(caseKey) !== relative) {
+            throw packageError("EXTENSION_PACKAGE_PATH_CASE_CONFLICT", `npm transport tarball repeats path ${relative} with different letter case`, {
+              path: relative,
+              conflict: caseInsensitivePaths.get(caseKey),
+            });
+          }
+          caseInsensitivePaths.set(caseKey, relative);
           if (entry.type !== "File") throw packageError("EXTENSION_PACKAGE_FILE_TYPE_INVALID", `Extension package path ${relative} must be a regular file`, { path: relative, type: entry.type });
           if (!Number.isSafeInteger(entry.size) || entry.size < 0) throw packageError("EXTENSION_PACKAGE_FILE_SIZE_INVALID", `Extension package path ${relative} has invalid size`, { path: relative, size: entry.size ?? null });
           if (extensionCount >= limits.maxFiles) throw packageError("EXTENSION_PACKAGE_FILE_COUNT_EXCEEDED", `Extension package contains more than ${limits.maxFiles} files`, { maxFiles: limits.maxFiles });
@@ -413,6 +422,54 @@ async function inspectExtensionTransportTarball(file, options = {}) {
     entrySha256,
     packageSha256,
   });
+}
+
+async function extractExtensionTransportTarball(file, destinationRoot, options = {}) {
+  const inspected = await inspectExtensionTransportTarball(file, options);
+  const root = path.resolve(destinationRoot);
+  fs.mkdirSync(root, { recursive: true });
+  const allowed = new Set(inspected.files);
+  const extractedCases = new Map();
+  try {
+    await tar.x({
+      file: path.resolve(file),
+      cwd: root,
+      strict: true,
+      unlink: false,
+      keep: false,
+      filter: (archivePath) => allowed.has(archivePath),
+      onentry(entry) {
+        const archivePath = String(entry.path || "");
+        if (!allowed.has(archivePath)) {
+          throw packageError("EXTENSION_PACKAGE_LAYOUT_INVALID", `npm transport tarball contains an unsupported path: ${archivePath || "<missing>"}`, { path: archivePath || null });
+        }
+        if (entry.type !== "File") {
+          throw packageError("EXTENSION_PACKAGE_FILE_TYPE_INVALID", `Extension package path ${archivePath} must be a regular file`, { path: archivePath, type: entry.type });
+        }
+        const relative = assertSafeRelativePath(archivePath.slice(EXTENSION_PACKAGE_PREFIX.length + 1));
+        const caseKey = relative.toLowerCase();
+        if (extractedCases.has(caseKey) && extractedCases.get(caseKey) !== relative) {
+          throw packageError("EXTENSION_PACKAGE_PATH_CASE_CONFLICT", `npm transport tarball repeats path ${relative} with different letter case`, {
+            path: relative,
+            conflict: extractedCases.get(caseKey),
+          });
+        }
+        extractedCases.set(caseKey, relative);
+      },
+    });
+  } catch (error) {
+    if (error instanceof WorkspaceError) throw error;
+    throw packageError("EXTENSION_TARBALL_EXTRACT_FAILED", `Cannot safely extract extension npm tarball: ${error.message}`, {
+      path: path.resolve(file),
+      cause: error.code,
+    });
+  }
+  const extensionRoot = path.join(root, NPM_PACKAGE_ROOT, EXTENSION_PACKAGE_ROOT);
+  const extensionStat = fs.lstatSync(extensionRoot);
+  if (!extensionStat.isDirectory() || extensionStat.isSymbolicLink()) {
+    throw packageError("EXTENSION_PACKAGE_LAYOUT_INVALID", "Extracted Extension package root is not a regular directory", { path: EXTENSION_PACKAGE_PREFIX });
+  }
+  return Object.freeze({ ...inspected, sourceRoot: extensionRoot });
 }
 
 function normalizeTarMetadata(entry) {
@@ -663,6 +720,7 @@ module.exports = {
   collectPackageFiles,
   extensionNpmPackageName,
   extensionNpmTarballFilename,
+  extractExtensionTransportTarball,
   inspectExtensionTransportTarball,
   packExtensionToDirectory,
   validateExtensionTransportEnvelope,
