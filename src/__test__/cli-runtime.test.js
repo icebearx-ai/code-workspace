@@ -124,11 +124,11 @@ test("extension search, info, and upgrade declare Registry lifecycle contracts",
   assert.deepEqual(search, {
     path: ["extension", "search"],
     args: [{ name: "query", required: false }],
-    workspace: "none",
-    config: [],
-    interaction: "never",
-    effects: "external",
-    options: {},
+    workspace: "required",
+    config: ["identity", "language"],
+    interaction: "required",
+    effects: "planned-write",
+    options: { yes: { type: "boolean" } },
   });
   assert.deepEqual(info, {
     path: ["extension", "info"],

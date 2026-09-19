@@ -68,7 +68,7 @@ Users select names, not `name@version` positions. A default install resolves the
 
 `extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run. When the Registry is configured and a default resolution cannot obtain the remote metadata, installation fails before Workspace writes instead of silently using an older package.
 
-`extension search` and `extension info` are Workspace-independent Registry reads. `extension upgrade` accepts one or more installed ordinary extensions, freezes the default target for each, confirms once, and reuses the same per-extension transaction and rollback as install. An already-current target is skipped.
+`extension info` remains a Workspace-independent Registry read. In a TTY, `extension search` opens the same paged picker as `init`; selecting an uninstalled extension installs it, while selecting an outdated installed extension updates it. The picker hides system extensions and disables installed latest versions. JSON, non-TTY, or `--yes` search remains read-only and returns the Registry result envelope. `extension upgrade` accepts one or more installed ordinary extensions, freezes the default target for each, confirms once, and reuses the same per-extension transaction and rollback as install. An already-current target is skipped.
 
 `extension pack` creates a Nexus/npm-ready `codew-ext-<extension-id>-<version>.tgz` from an extension package directory:
 

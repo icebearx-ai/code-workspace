@@ -22,6 +22,7 @@ const {
 } = require("../../core/extension-registry-lifecycle");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { createInteractiveUi, formatExtensionChoice } = require("../../init/ui");
+const { createRegistryExtensionPicker } = require("../../init/registry-picker");
 const { confirm } = require("../confirmation");
 const { selectionResult, success } = require("../result");
 
@@ -34,11 +35,13 @@ function formatUninstallPlan(plan) {
   ].join("\n");
 }
 
-function formatInstallPlan(plans) {
+function formatInstallPlan(plans, options = {}) {
+  const actionFor = options.actionFor || (() => "install");
+  const title = options.title || `Install ${plans.length} extension${plans.length === 1 ? "" : "s"}:`;
   return [
-    `Install ${plans.length} extension${plans.length === 1 ? "" : "s"}:`,
+    title,
     ...plans.flatMap((plan) => [
-      `  ${plan.id}@${plan.version} [${plan.source || "local"}] [Extension Spec ${plan.extensionSpecVersion}]`,
+      `  ${actionFor(plan) === "update" ? "Update" : "Install"} ${plan.id}@${plan.version} [${plan.source || "local"}] [Extension Spec ${plan.extensionSpecVersion}]`,
       `    PACKAGE ${plan.packageSha256}`,
       ...(plan.capabilities.networkHosts || []).map((host) => `    NETWORK https://${host}`),
       ...plan.artifacts.map((artifact) => `    WRITE ${artifact.target} (${artifact.kind})`),
@@ -124,15 +127,17 @@ function lifecycleResultEntry(entry, action) {
 }
 
 function lifecycleResultText(results, action) {
+  const actionFor = typeof action === "function" ? action : () => action;
   const lines = results.map((entry) => entry.status === "installed"
-    ? `${action === "upgrade" ? "Upgraded" : "Installed"} ${entry.id}@${entry.version}.`
+    ? `${actionFor(entry) === "upgrade" || actionFor(entry) === "update" ? "Updated" : "Installed"} ${entry.id}@${entry.version}.`
     : entry.status === "skipped"
       ? `Skipped ${entry.id}@${entry.version}: already current.`
       : `Failed ${entry.id}${entry.version ? `@${entry.version}` : ""}: ${entry.message}`);
   const installed = results.filter((entry) => entry.status === "installed").length;
   const skipped = results.filter((entry) => entry.status === "skipped").length;
   const failed = results.filter((entry) => entry.status === "failed").length;
-  lines.push(`Extensions: ${installed} ${action === "upgrade" ? "upgraded" : "installed"}, ${skipped} skipped, ${failed} failed.`);
+  const hasUpdate = results.some((entry) => actionFor(entry) === "upgrade" || actionFor(entry) === "update");
+  lines.push(`Extensions: ${installed} ${hasUpdate ? "applied" : "installed"}, ${skipped} skipped, ${failed} failed.`);
   return lines.join("\n");
 }
 
@@ -273,11 +278,109 @@ async function executeExtensionInstall(invocation) {
 }
 
 async function executeExtensionSearch(invocation) {
-  const result = await searchRegistryExtensions({
-    query: invocation.args[0] || "",
-    ...(invocation.dependencies || {}),
+  const dependencies = invocation.dependencies || {};
+  const interactive = dependencies.interactive ?? (!invocation.options.json && invocation.options.yes !== true && process.stdin.isTTY && process.stdout.isTTY);
+  if (!interactive) {
+    const result = await searchRegistryExtensions({
+      query: invocation.args[0] || "",
+      ...dependencies,
+    });
+    return success("extension.search", result, formatRegistrySearchText(result), result.diagnostics || []);
+  }
+
+  const workspace = invocation.config?.workspace;
+  if (!workspace) {
+    throw new WorkspaceError("WORKSPACE_CONFIG_REQUIRED", "Interactive extension search requires an initialized Workspace.", {
+      remediation: "Run `codew init <path>` first, or use `codew extension search <query> --json` for read-only Registry results.",
+    });
+  }
+  const stateInspection = inspectExtensionState(invocation.root);
+  const systemIds = new Set(discoverSystemExtensions({
+    tolerant: true,
+    ...(dependencies.extensionsRoot ? { extensionsRoot: dependencies.extensionsRoot } : {}),
+  }).catalog.map((entry) => entry.id));
+  const ui = dependencies.ui || await createInteractiveUi({
+    ...dependencies,
+    cancelCode: "EXTENSION_SEARCH_CANCELLED",
+    cancelMessage: "Extension search cancelled. No changes were made.",
   });
-  return success("extension.search", result, formatRegistrySearchText(result), result.diagnostics || []);
+  ui.intro?.("Code Workspace extension search");
+  const selected = await createRegistryExtensionPicker({
+    dependencies,
+    state: stateInspection.state,
+    systemIds,
+  })({
+    ui,
+    query: invocation.args[0] || "",
+  });
+  if (!selected.length) {
+    ui.close?.("No extensions selected. No changes were made.");
+    return success("extension.search", {
+      action: "skip",
+      scope: "selection",
+      requested: [],
+      results: [],
+      summary: { total: 0, succeeded: 0, skipped: 0, failed: 0 },
+    }, "No extensions selected. No changes were made.");
+  }
+  const requested = normalizeExtensionNames(selected.map((entry) => entry.id));
+  const actionById = new Map(selected.map((entry) => [entry.id, entry.action === "update" ? "update" : "install"]));
+  const tools = resolveWorkspaceTools({ state: loadState(invocation.root), manifestTools: loadInitManifest().tools }).tools;
+  const preparation = await prepareRegistryExtensionPlans({
+    ...dependencies,
+    requested,
+    tools,
+    state: stateInspection.state,
+    stateError: stateInspection.error,
+    extensionsRoot: dependencies.extensionsRoot,
+    extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+    provider: dependencies.nexusProvider,
+  });
+  if (preparation.plans.length > 0) {
+    const planText = formatInstallPlan(preparation.plans, {
+      title: `Apply ${preparation.plans.length} extension${preparation.plans.length === 1 ? "" : "s"}:`,
+      actionFor: (plan) => actionById.get(plan.id) || "install",
+    });
+    if (!(await (dependencies.confirm || confirm)(`${planText}\nContinue?`, invocation.options))) {
+      throw new WorkspaceError("CLI_CANCELLED", "Extension search selection cancelled.");
+    }
+  }
+  const batch = runExtensionBatch(invocation.root, preparation.plans, (extension) => ({
+    schemaVersion: 1,
+    extensionSpecVersion: extension.extensionSpecVersion,
+    extension: { id: extension.id, version: extension.version },
+    workspace: { name: workspace.name, uuid: workspace.uuid, language: workspace.language },
+    tools,
+  }), {
+    requested,
+    preFailures: preparation.failures,
+    useExtensionStore: true,
+    extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+  });
+  const failedIds = new Set(batch.results.filter((entry) => entry.status === "failed").map((entry) => entry.id));
+  const diagnostics = [
+    ...preparation.diagnostics.filter((entry) => !entry.extension || !failedIds.has(entry.extension)),
+    ...batch.results.filter((entry) => entry.status === "failed").map((entry) => ({
+      code: entry.code || "EXTENSION_SEARCH_APPLY_FAILED",
+      severity: "error",
+      message: entry.message || `Extension ${entry.id} failed to apply.`,
+      extension: entry.id,
+      version: entry.version,
+    })),
+    ...batch.results.flatMap((entry) => (entry.warnings || []).map((warning) => ({
+      code: warning.code,
+      severity: "warning",
+      message: warning.message,
+      extension: entry.id,
+      version: entry.version,
+    }))),
+  ];
+  const results = decorateBatchResults(batch, preparation.plans, invocation.options);
+  ui.close?.("Extension selection applied.");
+  return selectionResult("extension.search", requested, results.map((entry) => lifecycleResultEntry(entry, actionById.get(entry.id) || "install")), {
+    diagnostics,
+    text: lifecycleResultText(results, (entry) => actionById.get(entry.id) || "install"),
+  });
 }
 
 async function executeExtensionInfo(invocation) {
@@ -380,7 +483,17 @@ async function executeExtensionPack(invocation) {
 async function executeExtension(invocation) {
   const command = invocation.definition.path.join(".");
   if (command === "extension.pack") return await executeExtensionPack(invocation);
-  if (command === "extension.search") return await executeExtensionSearch(invocation);
+  if (command === "extension.search") {
+    const dependencies = invocation.dependencies || {};
+    const interactive = dependencies.interactive ?? (!invocation.options.json && invocation.options.yes !== true && process.stdin.isTTY && process.stdout.isTTY);
+    if (!interactive) return await executeExtensionSearch(invocation);
+    const releaseLock = await (dependencies.acquireInitLock || acquireInitLock)(invocation.root);
+    try {
+      return await executeExtensionSearch(invocation);
+    } finally {
+      await releaseLock();
+    }
+  }
   if (command === "extension.info") return await executeExtensionInfo(invocation);
   const releaseLock = await (invocation.dependencies?.acquireInitLock || acquireInitLock)(invocation.root);
   try {

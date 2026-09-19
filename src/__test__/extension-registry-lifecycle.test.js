@@ -717,6 +717,105 @@ test("search and info handlers use shared results and fail when Registry is unco
   );
 });
 
+test("interactive extension search applies install and update actions through the shared lifecycle", async (t) => {
+  const remoteRoot = temporaryRoot();
+  writeExtension(path.join(remoteRoot, "example-1.0.0"), { version: "1.0.0", content: "example@1.0.0\n" });
+  writeExtension(path.join(remoteRoot, "1.1.0"), { version: "1.1.0", content: "example@1.1.0\n" });
+  const provider = createFakeProvider({
+    example: { versions: {
+      "1.0.0": { sourceRoot: path.join(remoteRoot, "example-1.0.0") },
+      "1.1.0": { sourceRoot: path.join(remoteRoot, "1.1.0") },
+    } },
+  });
+  const store = temporaryRoot();
+  const root = temporaryRoot();
+  const ui = {
+    intro() {},
+    close() {},
+    extensionPicker: async () => ({ status: "submitted", selections: [{ id: "example", action: "update" }] }),
+  };
+  t.after(() => {
+    fs.rmSync(remoteRoot, { recursive: true, force: true });
+    fs.rmSync(store, { recursive: true, force: true });
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  const installed = await executeExtensionInstall(invocation(root, ["example"], {
+    yes: true,
+    json: true,
+    version: "1.0.0",
+  }, { extensionStoreRoot: store, nexusProvider: provider }));
+  assert.equal(installed.ok, true, installed.text);
+
+  const updated = await executeExtensionSearch(invocation(root, ["example"], {}, {
+    interactive: true,
+    ui,
+    extensionStoreRoot: store,
+    nexusProvider: provider,
+    confirm: async () => true,
+  }));
+  assert.equal(updated.ok, true, updated.text);
+  assert.equal(updated.data.results[0].action, "update");
+  assert.equal(updated.data.results[0].resolvedVersion, "1.1.0");
+  assert.equal(loadExtensionState(root).extensions.example.installed.version, "1.1.0");
+});
+
+test("interactive extension search confirms once, supports cancellation, and keeps ordered partial results", async (t) => {
+  const remoteRoot = temporaryRoot();
+  const failingRoot = path.join(remoteRoot, "failing");
+  const keeperRoot = path.join(remoteRoot, "keeper");
+  writeExtension(failingRoot, { id: "failing", version: "1.0.0", script: "process.exit(2);\n" });
+  writeExtension(keeperRoot, { id: "keeper", version: "1.0.0" });
+  const provider = createFakeProvider({
+    failing: { versions: { "1.0.0": { sourceRoot: failingRoot } } },
+    keeper: { versions: { "1.0.0": { sourceRoot: keeperRoot } } },
+  });
+  const store = temporaryRoot();
+  const root = temporaryRoot();
+  t.after(() => {
+    fs.rmSync(remoteRoot, { recursive: true, force: true });
+    fs.rmSync(store, { recursive: true, force: true });
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  let confirmations = 0;
+  const ui = {
+    intro() {},
+    close() {},
+    extensionPicker: async () => ({
+      status: "submitted",
+      selections: [
+        { id: "failing", action: "install" },
+        { id: "keeper", action: "install" },
+      ],
+    }),
+  };
+  await assert.rejects(
+    () => executeExtensionSearch(invocation(root, ["keeper"], {}, {
+      interactive: true,
+      ui,
+      extensionStoreRoot: store,
+      nexusProvider: provider,
+      confirm: async () => false,
+    })),
+    (error) => error.code === "CLI_CANCELLED"
+  );
+  assert.equal(fs.existsSync(path.join(root, ".codew")), false);
+
+  const partial = await executeExtensionSearch(invocation(root, [], {}, {
+    interactive: true,
+    ui,
+    extensionStoreRoot: store,
+    nexusProvider: provider,
+    confirm: async () => { confirmations += 1; return true; },
+  }));
+  assert.equal(confirmations, 1);
+  assert.equal(partial.ok, false);
+  assert.deepEqual(partial.data.results.map((entry) => [entry.name, entry.status]), [
+    ["failing", "failed"],
+    ["keeper", "installed"],
+  ]);
+});
+
 test("interactive install choices merge Store and Nexus candidates", async (t) => {
   const extensionsRoot = temporaryRoot();
   writeExtension(path.join(extensionsRoot, "example", "1.0.0"), { version: "1.0.0" });

@@ -290,12 +290,12 @@ function validateExtensionPackContract(registry, commandSource, coreSource) {
 function validateExtensionRegistryLifecycleContract(registry, commandSource, lifecycleSource) {
   const expected = {
     "extension search": {
-      workspace: "none",
-      config: [],
-      interaction: "never",
-      effects: "external",
+      workspace: "required",
+      config: ["identity", "language"],
+      interaction: "required",
+      effects: "planned-write",
       args: [{ name: "query", required: false }],
-      options: {},
+      options: { yes: { type: "boolean" } },
     },
     "extension info": {
       workspace: "none",

@@ -10,17 +10,14 @@ const {
   parseExtensionSelection,
   prepareExtensionPlans,
   runExtensionBatch,
-  compareSemver,
 } = require("../../core/extensions");
-const {
-  createRegistryExtensionBrowseSession,
-  prepareRegistryExtensionPlans,
-} = require("../../core/extension-registry-lifecycle");
+const { prepareRegistryExtensionPlans } = require("../../core/extension-registry-lifecycle");
 const { compareVersions, loadInitManifest, minimumFromRange, runCommand } = require("../../core/init");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { initializeWorkspace } = require("../../core/initializer");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { collectInitPlan } = require("../../init/wizard");
+const { createRegistryExtensionPicker, mapPickerPage } = require("../../init/registry-picker");
 const { success } = require("../result");
 
 function stateWithPlans(state, plans) {
@@ -41,57 +38,6 @@ function stateWithPlans(state, plans) {
     };
   }
   return next;
-}
-
-function mapPickerPage(page, state = emptyExtensionState(), systemIds = new Set()) {
-  const items = (page.items || [])
-    .filter((item) => !systemIds.has(item.extensionId))
-    .map((item) => {
-      const candidate = item.latestCandidate;
-      const installed = state.extensions[item.extensionId]?.installed;
-      let status = "not-installed";
-      if (!candidate) status = "unavailable";
-      else if (installed) {
-        const same = installed.version === candidate.version && installed.packageSha256 === candidate.packageSha256;
-        status = same || compareSemver(candidate.version, installed.version) < 0 ? "installed-current" : "installed-outdated";
-      }
-      return {
-        id: item.extensionId,
-        name: item.name || item.extensionId,
-        description: item.description || "",
-        version: candidate?.version || null,
-        packageSha256: candidate?.packageSha256 || null,
-        status,
-        disabled: status === "installed-current" || status === "unavailable",
-      };
-    });
-  return { ...page, items };
-}
-
-function createInitExtensionPicker({ dependencies, state, systemIds }) {
-  const createSession = dependencies.createRegistryExtensionBrowseSession || createRegistryExtensionBrowseSession;
-  return async ({ ui, query = "", selectedIds = [] }) => ui.extensionPicker({
-    query,
-    selectedIds,
-    pageProvider: async (pageQuery) => {
-      const session = await createSession({
-        ...dependencies,
-        query: pageQuery,
-        provider: dependencies.nexusProvider,
-      });
-      const map = async (method) => mapPickerPage(await session[method](), state, systemIds);
-      return {
-        next: () => map("next"),
-        previous: () => map("previous"),
-        retry: () => map("retry"),
-        current: () => {
-          const page = session.current();
-          return page ? mapPickerPage(page, state, systemIds) : null;
-        },
-        close: () => session.close(),
-      };
-    },
-  }).then((result) => result.status === "submitted" ? result.selections : []);
 }
 
 function migrationData(plan) {
@@ -189,7 +135,7 @@ async function executeInitUnlocked(invocation, root) {
         initialExtensions: explicitExtensions === null ? undefined : explicitExtensions,
         prepareSystemExtensions: prepareSystemForTools,
         prepareExtensions: prepareOrdinaryExtensions,
-        extensionPicker: createInitExtensionPicker({ dependencies, state: extensionState, systemIds: new Set(systemRequestedExtensions) }),
+        extensionPicker: createRegistryExtensionPicker({ dependencies, state: extensionState, systemIds: new Set(systemRequestedExtensions) }),
       });
     } catch (error) {
       if (error.code === "INIT_CANCELLED") {
@@ -315,4 +261,4 @@ async function executeInitUnlocked(invocation, root) {
   return success("init", data, lines.join("\n"), extensionDiagnostics);
 }
 
-module.exports = { createInitExtensionPicker, executeInit, mapPickerPage, migrationData, stateWithPlans };
+module.exports = { createRegistryExtensionPicker, executeInit, mapPickerPage, migrationData, stateWithPlans };

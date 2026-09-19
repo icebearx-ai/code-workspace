@@ -68,7 +68,7 @@ codew extension upgrade zhuiyi-jira-mcp --yes
 
 `extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。Registry 已配置且默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默选择旧包。
 
-`extension search` 和 `extension info` 是与 Workspace 无关的 Registry 读取命令。`extension upgrade` 接受一个或多个已安装普通扩展，逐个冻结默认目标，统一确认后复用安装的逐扩展事务和回滚；已是当前版本的目标返回 skipped。
+`extension info` 仍是与 Workspace 无关的 Registry 读取命令。在 TTY 中，`extension search` 会打开与 `init` 相同的分页扩展选择器；选择未安装扩展会执行安装，选择已安装但过期的扩展会执行更新。系统扩展不会出现在列表中，已是最新版的扩展不可选择。JSON、非 TTY 或使用 `--yes` 时，search 保持只读并返回 Registry 结果 envelope。`extension upgrade` 接受一个或多个已安装普通扩展，逐个冻结默认目标，统一确认后复用安装的逐扩展事务和回滚；已是当前版本的目标返回 skipped。
 
 `extension pack` 可以从扩展包目录生成可交给 Nexus/npm 的 `codew-ext-<extension-id>-<version>.tgz`：
 
