@@ -359,30 +359,6 @@ test("update and doctor preserve the workspace tool selection when --tools is om
   assert.deepEqual(jsonData(doctor).tools, { tools: ["codex"], source: "workspace-state" });
 });
 
-test("init installs Codex monitor hooks through the monitor extension", () => {
-  const root = temporaryRoot();
-  const result = run(root, [
-    "init", ".", "--tools", "codex", "--extensions", "monitor",
-    "--workspace-name", "payments", "--yes", "--json",
-  ]);
-  assert.equal(result.status, 0, result.stderr);
-  const output = jsonData(result);
-  assert.equal(output.workspace.name, "payments");
-  assert(fs.existsSync(path.join(root, ".codex", "hooks.json")));
-  assert.match(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8"), /codew ext monitor report/);
-  assert(fs.existsSync(path.join(root, ".codew", "config-monitor.yaml")));
-  assert.equal(output.extensions.requested.includes("monitor"), true);
-  assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").status, "installed");
-  assert.equal(output.extensions.results.find((entry) => entry.id === "monitor").version, "1.1.0");
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 1);
-
-  const repeated = run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]);
-  assert.equal(repeated.status, 0, repeated.stderr);
-  const next = jsonData(repeated);
-  assert.deepEqual(next.workspace, output.workspace);
-  assert.equal(next.managedFiles.filter((entry) => entry.action === "write").length, 0);
-});
-
 test("project inspect is read-only and project add registers an explicit record", () => {
   const parent = temporaryRoot();
   const workspace = path.join(parent, "workspace");

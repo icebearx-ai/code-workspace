@@ -4,12 +4,9 @@ const { loadState } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const { acquireInitLock } = require("../../core/init-lock");
 const {
-  discoverExtensions,
   discoverSystemExtensions,
   emptyExtensionState,
-  hasWorkspaceConfiguration,
   inspectExtensionState,
-  installedExtensionNames,
   parseExtensionSelection,
   prepareExtensionPlans,
   runExtensionBatch,
@@ -70,14 +67,14 @@ async function executeInitUnlocked(invocation, root) {
     manifestTools: manifest.tools,
   });
   const interactive = !options.json && !options.yes && process.stdin.isTTY && process.stdout.isTTY;
-  const existingWorkspace = hasWorkspaceConfiguration(root);
   const inspectExtensions = true;
   const extensionStateInspection = inspectExtensions ? inspectExtensionState(root) : { state: emptyExtensionState(), error: null };
   const extensionState = extensionStateInspection.state;
-  const defaultExtensions = existingWorkspace && !extensionStateInspection.error
-    ? installedExtensionNames(extensionState).filter((id) => extensionState.extensions[id]?.installed?.system !== true)
-    : [];
-  const extensionCatalogResult = inspectExtensions ? discoverExtensions({ tolerant: true }) : { catalog: [], invalid: [] };
+  // Ordinary extensions are resolved from Nexus/Store by the registry picker.
+  // This phase deliberately removes the package-local ordinary catalog from init;
+  // only the system catalog remains here until the shared picker is wired in.
+  const defaultExtensions = [];
+  const extensionCatalogResult = { catalog: [], invalid: [] };
   const systemCatalogResult = inspectExtensions ? discoverSystemExtensions({ tolerant: true }) : { catalog: [], invalid: [] };
   const combinedCatalogResult = {
     catalog: [...extensionCatalogResult.catalog, ...systemCatalogResult.catalog],

@@ -4,7 +4,6 @@ const path = require("node:path");
 const { WorkspaceError } = require("./errors");
 const {
   SUPPORTED_EXTENSION_SPEC_VERSIONS,
-  discoverExtensions,
   discoverSystemExtensions,
   isSystemExtensionId,
   normalizeExtensionNames,
@@ -179,13 +178,6 @@ async function getRegistryExtensionInfo(options = {}) {
   });
 }
 
-function builtinChoiceCatalog(options = {}) {
-  return discoverExtensions({
-    tolerant: true,
-    ...(options.extensionsRoot ? { extensionsRoot: options.extensionsRoot } : {}),
-  });
-}
-
 function storeChoiceFacts(storeRoot) {
   const byId = new Map();
   for (const record of listPackageReferences(storeRoot)) {
@@ -230,7 +222,6 @@ function mergeChoiceCandidates(id, candidates) {
 
 async function listRegistryExtensionChoices(options = {}) {
   const provider = await resolveRegistryProvider(options);
-  const builtin = builtinChoiceCatalog(options);
   const systemIds = new Set(discoverSystemExtensions({
     tolerant: true,
     ...(options.extensionsRoot ? { extensionsRoot: options.extensionsRoot } : {}),
@@ -240,21 +231,6 @@ async function listRegistryExtensionChoices(options = {}) {
   const store = storeRoot ? storeChoiceFacts(storeRoot) : new Map();
   const byId = new Map();
 
-  for (const entry of builtin.catalog) {
-    if (systemIds.has(entry.id)) continue;
-    byId.set(entry.id, []);
-    if (entry.latestSupported) {
-      byId.get(entry.id).push(choiceCandidate(
-        entry.id,
-        entry.latestSupported.version,
-        entry.latestSupported.packageSha256,
-        "builtin",
-        entry.latestSupported.manifest.name,
-        entry.description,
-        entry.latestSupported.extensionSpecVersion
-      ));
-    }
-  }
   if (remote) {
     for (const item of remote.items) {
       if (systemIds.has(item.extensionId)) continue;
@@ -304,16 +280,11 @@ async function listRegistryExtensionChoices(options = {}) {
 }
 
 function builtinFact(id, options = {}) {
-  const system = isSystemExtensionId(id, options);
-  const catalogResult = system
-    ? discoverSystemExtensions({
-      tolerant: true,
-      ...(options.extensionsRoot ? { extensionsRoot: options.extensionsRoot } : {}),
-    })
-    : discoverExtensions({
-      tolerant: true,
-      ...(options.extensionsRoot ? { extensionsRoot: options.extensionsRoot } : {}),
-    });
+  if (!isSystemExtensionId(id, options)) return { candidates: [], diagnostics: [] };
+  const catalogResult = discoverSystemExtensions({
+    tolerant: true,
+    ...(options.extensionsRoot ? { extensionsRoot: options.extensionsRoot } : {}),
+  });
   const catalog = catalogResult;
   const entry = catalog.catalog.find((item) => item.id === id);
   if (!entry) {
@@ -478,10 +449,9 @@ async function resolveRegistryExtensionCandidate(options = {}) {
     };
   }
   const provider = await resolveRegistryProvider(options);
-  const builtin = builtinFact(id, options);
   const store = storeFacts(id, options);
   const remote = await nexusFacts(id, provider, options);
-  const candidates = mergeCandidateFacts(id, [...builtin.candidates, ...store, ...remote.candidates]);
+  const candidates = mergeCandidateFacts(id, [...store, ...remote.candidates]);
   if (candidates.length === 0) {
     throw lifecycleError("EXTENSION_NOT_FOUND", `Extension is not available from the configured providers: ${id}`, { extension: id });
   }
@@ -493,7 +463,7 @@ async function resolveRegistryExtensionCandidate(options = {}) {
     registryConfigured: remote.configured,
     system: false,
     resolutionScope: options.offline === true || !remote.configured ? "local-only" : "registry",
-    diagnostics: builtin.diagnostics,
+    diagnostics: [],
   };
 }
 
@@ -531,8 +501,8 @@ function planFromPackageRecord(id, packageRecord, options = {}) {
   })[0];
   return Object.freeze({
     ...plan,
-    source: options.source || (packageRecord.provenance?.kind === "nexus-npm" ? "nexus" : "local"),
-    provenance: packageRecord.provenance || Object.freeze({ kind: "builtin" }),
+    source: options.source || (packageRecord.provenance?.kind === "nexus-npm" ? "nexus" : "store"),
+    provenance: packageRecord.provenance || Object.freeze({ kind: "nexus" }),
     resolutionScope: options.resolutionScope || "registry",
     requestedVersion: options.requestedVersion || null,
   });
@@ -576,7 +546,7 @@ async function prepareRegistryExtensionPlans(options = {}) {
       const plan = planFromPackageRecord(id, packageRecord, {
         tools: options.tools,
         state: planningState,
-        source: selected.sources.includes("builtin") ? "builtin" : selected.sources.includes("store") ? "store" : "nexus",
+        source: selected.sources.includes("store") ? "store" : "nexus",
         resolutionScope: resolution.resolutionScope,
         requestedVersion: options.version || null,
       });

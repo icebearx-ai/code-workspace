@@ -101,7 +101,7 @@ package/
     └── assets/
 ```
 
-包装层的 `package.json` 用于 Nexus/npm 运输，不属于 Extension package digest。Code Workspace 解包后只对 `extension/` 计算现有规范目录摘要，因此同一个内置扩展和 Nexus 扩展可以得到相同 `packageSha256`。
+包装层的 `package.json` 用于 Nexus/npm 运输，不属于 Extension package digest。Code Workspace 解包后只对 `extension/` 计算现有规范目录摘要，因此同一个 Nexus 扩展在发布包和 Store 中可以得到相同 `packageSha256`。
 
 示例运输元数据：
 
@@ -157,11 +157,11 @@ Provider 使用三个 npm 维护的直接依赖：
 - 扩展载荷总大小最大 16 MiB；
 - npm 运输 envelope 最大 64 KiB。
 
-当前最大的普通内置扩展是 `monitor@1.1.0`，约 204 KiB、13 个文件，最大单文件约 78 KiB；上述限制为其保留约 75 倍总大小余量。打包只归档普通文件，目录仅用于遍历；符号链接、硬链接、设备、socket、FIFO、路径逃逸、重复路径和超限内容都会被拒绝。
+打包只归档普通文件，目录仅用于遍历；系统扩展不会进入普通发布集合。符号链接、硬链接、设备、socket、FIFO、路径逃逸、重复路径和超限内容都会被拒绝。
 
 ### 4.2 系统扩展发布策略
 
-`extensions/.system/` 中的系统扩展由 Host 版本和 `init` 流程管理，不进入 Nexus 扩展包的自动发布集合。这个排除是发布策略，不是打包协议分支；如果未来策略允许发布系统扩展，仍使用相同的 `extension pack`、npm envelope 和 `package/extension/` 布局。
+`extensions/codew-workspace-guard/` 中的系统扩展由 Host 版本和 `init` 流程管理，不进入 Nexus 普通扩展包的自动发布集合。这个排除是发布策略，不是打包协议分支；如果未来策略允许发布系统扩展，仍使用相同的 `extension pack`、npm envelope 和 `package/extension/` 布局。
 
 ## 5. 权限模型
 
@@ -230,7 +230,7 @@ phase-07 的 core Provider 读取固定 scope：
 示例：
 
 ```bash
-codew extension pack extensions/zhuiyi-jira-mcp/1.1.0 \
+codew extension pack /path/to/extension/1.1.0 \
   --output dist/extensions
 
 npm publish dist/extensions/codew-ext-zhuiyi-jira-mcp-1.1.0.tgz \
@@ -239,7 +239,7 @@ npm publish dist/extensions/codew-ext-zhuiyi-jira-mcp-1.1.0.tgz \
 
 `extension pack` 不读取或写入 Workspace 配置，不执行扩展入口，不运行 `npm pack`、`npm install` 或任何生命周期脚本，也不持有 Nexus 凭证。输出目录缺失时会递归创建。它会在输出目录的同目录临时文件中生成 tarball，重新读取并验证 envelope、manifest、入口摘要和 `package/extension/` 的 package digest，然后原子提交 `codew-ext-<extension-id>-<version>.tgz`。目标文件已存在时拒绝覆盖。
 
-仓库 CI 使用 `npm run pack:extensions` 对全部普通内置扩展执行同一 smoke test，并检查每个 tarball 的文件清单。该 job 只产出制品，不自动执行 `npm publish`。
+仓库 CI 使用 `npm run pack:extensions` 对普通扩展执行同一 smoke test，并检查每个 tarball 的文件清单；系统扩展不会进入该发布集合。该 job 只产出制品，不自动执行 `npm publish`。
 
 正式发布使用普通 SemVer；测试版本使用 prerelease：
 
@@ -279,7 +279,7 @@ codew extension upgrade zhuiyi-jira-mcp --yes
 
 默认解析规则：
 
-- 合并内置目录、Nexus metadata 和已验证 Store；
+- 合并 Nexus metadata 和已验证 Store；
 - 选择最高的 Host 支持稳定版本；
 - 默认排除 prerelease 和 deprecated；
 - 不使用可变 `latest` dist-tag 作为 activation 事实；
@@ -294,7 +294,7 @@ codew extension upgrade zhuiyi-jira-mcp --yes
 - deprecated 精确版本必须加 `--allow-deprecated`;
 - `name@version` 位置语法继续拒绝。
 
-`--offline` 禁止 Registry 请求，只允许内置目录和已验证 Store，并在结果中标记 local-only 解析。Registry 已配置但默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默降级为旧内置版本。
+`--offline` 禁止 Registry 请求，只允许已验证 Store，并在结果中标记 local-only 解析。Registry 已配置但默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默降级为包内普通扩展。
 
 发现使用 Nexus REST Search API，并固定：
 

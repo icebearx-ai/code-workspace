@@ -225,8 +225,6 @@ test("Registry search and info convert metadata without secrets or raw payloads"
 
 test("Registry version resolution merges providers and rejects unsafe defaults", async (t) => {
   const extensionsRoot = temporaryRoot();
-  const builtinRoot = path.join(extensionsRoot, "example", "1.0.0");
-  writeExtension(builtinRoot, { version: "1.0.0" });
   const remoteRoot = temporaryRoot();
   const versions = {};
   for (const definition of [
@@ -249,10 +247,10 @@ test("Registry version resolution merges providers and rejects unsafe defaults",
   assert.deepEqual(resolved.selected.sources, ["nexus"]);
   assert.equal(resolved.resolutionScope, "registry");
 
-  const offline = await resolveRegistryExtensionCandidate({ name: "example", provider, extensionsRoot, offline: true });
-  assert.equal(offline.selected.version, "1.0.0");
-  assert.deepEqual(offline.selected.sources, ["builtin"]);
-  assert.equal(offline.resolutionScope, "local-only");
+  await assert.rejects(
+    () => resolveRegistryExtensionCandidate({ name: "example", provider, extensionsRoot, offline: true }),
+    (error) => error.code === "EXTENSION_NOT_FOUND"
+  );
   const callsBeforeOffline = provider.calls.length;
   assert.equal(provider.calls.length, callsBeforeOffline);
 
@@ -264,14 +262,6 @@ test("Registry version resolution merges providers and rejects unsafe defaults",
   assert.equal(deprecated.selected.version, "2.0.0");
   const prerelease = await resolveRegistryExtensionCandidate({ name: "example", provider, extensionsRoot, version: "1.2.0-beta.1" });
   assert.equal(prerelease.selected.version, "1.2.0-beta.1");
-
-  const conflictingProvider = createFakeProvider({
-    example: { versions: { "1.0.0": { packageSha256: "1".repeat(64) } } },
-  });
-  await assert.rejects(
-    () => resolveRegistryExtensionCandidate({ name: "example", provider: conflictingProvider, extensionsRoot }),
-    (error) => error.code === "EXTENSION_REGISTRY_PACKAGE_CONFLICT"
-  );
 
   const failingProvider = createFakeProvider(
     { example: { versions } },
@@ -285,18 +275,18 @@ test("Registry version resolution merges providers and rejects unsafe defaults",
 
 test("system extension resolution ignores a same-named Nexus package", async (t) => {
   const extensionsRoot = temporaryRoot();
-  const systemRoot = path.join(extensionsRoot, ".system", "example-system", "1.0.0");
-  writeExtension(systemRoot, { id: "example-system", version: "1.0.0" });
+  const systemRoot = path.join(extensionsRoot, "codew-workspace-guard", "1.0.0");
+  writeExtension(systemRoot, { id: "codew-workspace-guard", version: "1.0.0" });
   const remoteRoot = temporaryRoot();
-  writeExtension(path.join(remoteRoot, "9.0.0"), { id: "example-system", version: "9.0.0" });
+  writeExtension(path.join(remoteRoot, "9.0.0"), { id: "codew-workspace-guard", version: "9.0.0" });
   const provider = createFakeProvider({
-    "example-system": { versions: { "9.0.0": { sourceRoot: path.join(remoteRoot, "9.0.0") } } },
+    "codew-workspace-guard": { versions: { "9.0.0": { sourceRoot: path.join(remoteRoot, "9.0.0") } } },
   });
   t.after(() => {
     fs.rmSync(extensionsRoot, { recursive: true, force: true });
     fs.rmSync(remoteRoot, { recursive: true, force: true });
   });
-  const resolved = await resolveRegistryExtensionCandidate({ name: "example-system", provider, extensionsRoot });
+  const resolved = await resolveRegistryExtensionCandidate({ name: "codew-workspace-guard", provider, extensionsRoot });
   assert.equal(resolved.system, true);
   assert.equal(resolved.provider, null);
   assert.equal(resolved.selected.version, "1.0.0");
@@ -305,7 +295,6 @@ test("system extension resolution ignores a same-named Nexus package", async (t)
 
 test("remote install preparation imports, plans, and activates a verified Store package", async (t) => {
   const extensionsRoot = temporaryRoot();
-  writeExtension(path.join(extensionsRoot, "example", "1.0.0"), { version: "1.0.0" });
   const remoteRoot = temporaryRoot();
   writeExtension(path.join(remoteRoot, "1.1.0"), { version: "1.1.0", content: "example@1.1.0\n" });
   const provider = createFakeProvider({ example: { versions: { "1.1.0": { sourceRoot: path.join(remoteRoot, "1.1.0") } } } });
@@ -368,10 +357,8 @@ test("remote install preparation imports, plans, and activates a verified Store 
     storeRoot: temporaryRoot(),
     home: noRegistryHome,
   });
-  assert.deepEqual(localPreparation.failures, []);
-  assert.equal(localPreparation.plans.length, 1, JSON.stringify(localPreparation.failures));
-  assert.equal(localPreparation.plans[0].version, "1.0.0");
-  assert.equal(localPreparation.plans[0].source, "builtin");
+  assert.equal(localPreparation.plans.length, 0);
+  assert.equal(localPreparation.failures[0].code, "EXTENSION_NOT_FOUND");
 });
 
 test("extension install CLI resolves remote versions and preserves option safety", async (t) => {
@@ -440,11 +427,17 @@ test("extension install CLI resolves remote versions and preserves option safety
 
 test("extension upgrade CLI uses installed selection and current skip semantics", async (t) => {
   const extensionsRoot = temporaryRoot();
-  writeExtension(path.join(extensionsRoot, "example", "1.0.0"), { version: "1.0.0", content: "example@1.0.0\n" });
-  writeExtension(path.join(extensionsRoot, "other", "1.0.0"), { id: "other", version: "1.0.0", content: "other@1.0.0\n" });
   const remoteRoot = temporaryRoot();
+  writeExtension(path.join(remoteRoot, "example-1.0.0"), { version: "1.0.0", content: "example@1.0.0\n" });
   writeExtension(path.join(remoteRoot, "1.1.0"), { version: "1.1.0", content: "example@1.1.0\n" });
-  const provider = createFakeProvider({ example: { versions: { "1.1.0": { sourceRoot: path.join(remoteRoot, "1.1.0") } } } });
+  writeExtension(path.join(remoteRoot, "other-1.0.0"), { id: "other", version: "1.0.0", content: "other@1.0.0\n" });
+  const provider = createFakeProvider({
+    example: { versions: {
+      "1.0.0": { sourceRoot: path.join(remoteRoot, "example-1.0.0") },
+      "1.1.0": { sourceRoot: path.join(remoteRoot, "1.1.0") },
+    } },
+    other: { versions: { "1.0.0": { sourceRoot: path.join(remoteRoot, "other-1.0.0") } } },
+  });
   const store = temporaryRoot();
   const root = temporaryRoot();
   t.after(() => {
@@ -454,12 +447,18 @@ test("extension upgrade CLI uses installed selection and current skip semantics"
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  const initial = await executeExtensionInstall(invocation(root, ["example", "other"], {
+  const initial = await executeExtensionInstall(invocation(root, ["example"], {
     yes: true,
     json: true,
-    offline: true,
-  }, { extensionsRoot, extensionStoreRoot: store }));
+    version: "1.0.0",
+  }, { extensionsRoot, extensionStoreRoot: store, nexusProvider: provider }));
   assert.equal(initial.ok, true, initial.text);
+  const otherInitial = await executeExtensionInstall(invocation(root, ["other"], {
+    yes: true,
+    json: true,
+    version: "1.0.0",
+  }, { extensionsRoot, extensionStoreRoot: store, nexusProvider: provider }));
+  assert.equal(otherInitial.ok, true, otherInitial.text);
   const coreFile = path.join(root, "USER_GUIDE.md");
   const runtimeData = path.join(root, ".codew", "runtime-data", "example.txt");
   fs.mkdirSync(path.dirname(runtimeData), { recursive: true });
@@ -580,17 +579,16 @@ test("search and info handlers use shared results and fail when Registry is unco
   );
 });
 
-test("interactive install choices merge builtin, Store, and Nexus candidates", async (t) => {
+test("interactive install choices merge Store and Nexus candidates", async (t) => {
   const extensionsRoot = temporaryRoot();
   writeExtension(path.join(extensionsRoot, "example", "1.0.0"), { version: "1.0.0" });
   const remoteRoot = temporaryRoot();
   writeExtension(path.join(remoteRoot, "1.1.0"), { version: "1.1.0" });
-  writeExtension(path.join(remoteRoot, "9.0.0"), { id: "example-system", version: "9.0.0" });
-  fs.mkdirSync(path.join(extensionsRoot, ".system", "example-system", "1.0.0"), { recursive: true });
-  writeExtension(path.join(extensionsRoot, ".system", "example-system", "1.0.0"), { id: "example-system", version: "1.0.0" });
+  writeExtension(path.join(remoteRoot, "9.0.0"), { id: "codew-workspace-guard", version: "9.0.0" });
+  writeExtension(path.join(extensionsRoot, "codew-workspace-guard", "1.0.0"), { id: "codew-workspace-guard", version: "1.0.0" });
   const provider = createFakeProvider({
     example: { versions: { "1.1.0": { sourceRoot: path.join(remoteRoot, "1.1.0") } } },
-    "example-system": { versions: { "9.0.0": { sourceRoot: path.join(remoteRoot, "9.0.0") } } },
+    "codew-workspace-guard": { versions: { "9.0.0": { sourceRoot: path.join(remoteRoot, "9.0.0") } } },
   });
   const store = temporaryRoot();
   t.after(() => {
@@ -626,13 +624,6 @@ test("interactive install choices merge builtin, Store, and Nexus candidates", a
     storeRoot: temporaryRoot(),
     home: noRegistryHome,
   });
-  assert.equal(localChoices.find((entry) => entry.id === "example").source, "builtin");
+  assert.deepEqual(localChoices, []);
 
-  const conflictingProvider = createFakeProvider({
-    example: { versions: { "1.0.0": { packageSha256: "1".repeat(64) } } },
-  });
-  await assert.rejects(
-    () => listRegistryExtensionChoices({ extensionsRoot, storeRoot: temporaryRoot(), provider: conflictingProvider }),
-    (error) => error.code === "EXTENSION_REGISTRY_PACKAGE_CONFLICT"
-  );
 });

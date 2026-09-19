@@ -45,23 +45,16 @@ Initialization writes only Workspace-owned state and integrations:
 
 It does not create `openspec/`, install native `/opsx` commands, or install native `openspec-*` skills.
 
-### Experimental built-in extensions
+### Experimental extensions
 
-`init` can install integrations from the versioned `extensions/` repository shipped inside this npm package. Select extension names interactively, or pass a comma-separated name list non-interactively. The dedicated install command accepts one or more names; without names it opens the built-in extension multiselect with no extensions selected, where each choice shows its name and a short description. ESC exits without changes:
+Ordinary extensions are published to the configured `@codew-ext` Nexus Registry and installed into the verified local Extension Store. `init` and the dedicated install command select ordinary extensions from Nexus/Store; the package-local `extensions/` directory contains only the system-managed `codew-workspace-guard`. Interactive selection can be cancelled with ESC without changes:
 
 ```bash
-codew init . --extensions zhuiyi-jira-mcp --yes
-codew init . --extensions zhuiyi-opensvn-mcp --yes
+codew init . --extensions monitor --yes
 codew init . --extensions none --yes
 codew extension install
-codew extension install zhuiyi-jira-mcp --yes
-codew extension install zhuiyi-opensvn-mcp --yes
-codew extension install zhuiyi-jira-prd-analysis --yes
-codew extension install zhuiyi-jira-task-breakdown --yes
-codew extension install zhuiyi-jira-issue-fix-summary --yes
-codew extension install zhuiyi-guangda-coding-spec --yes
-codew extension uninstall zhuiyi-jira-mcp --yes
-codew extension uninstall zhuiyi-jira-prd-analysis --yes
+codew extension install monitor --yes
+codew extension uninstall monitor --yes
 codew extension search jira --json
 codew extension info zhuiyi-jira-mcp --json
 codew extension install zhuiyi-jira-mcp --version 1.1.0 --yes
@@ -71,29 +64,21 @@ codew extension upgrade zhuiyi-jira-mcp --yes
 
 The Workspace operation lock shared by init, extension install, and extension uninstall is configured in the Code Workspace project's `.env` (not in the target Workspace). `CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` defaults to `5000`, and `CODE_WORKSPACE_INIT_LOCK_STALE_MS` defaults to `30000`; process environment variables take precedence. See `.env.example` for the project configuration names.
 
-Users select names, not `name@version` positions. A default install resolves the highest compatible stable, non-deprecated version across the built-in catalog, the configured `@codew-ext` Nexus Registry, and the verified local Store. A single-target install may instead pass an exact SemVer with `--version`; prereleases require that exact form, and a deprecated version additionally requires `--allow-deprecated`. `--offline` disables Registry access and resolves only local facts. `codew-workspace-guard` is the system extension containing the Workspace Guard, `codew-add-projects`, and `codew-resolve-branch`: `init` installs or upgrades it automatically, it is hidden from extension selection, and it cannot be managed through `extension install/uninstall/upgrade`. A new non-interactive Workspace installs no ordinary extensions unless `--extensions` is provided; `init` does not implicitly query Nexus. `none` skips ordinary extension work and does not uninstall existing artifacts or disable system extension processing.
+Users select names, not `name@version` positions. A default install resolves the highest compatible stable, non-deprecated version from the configured `@codew-ext` Nexus Registry and the verified local Store. A single-target install may instead pass an exact SemVer with `--version`; prereleases require that exact form, and a deprecated version additionally requires `--allow-deprecated`. `--offline` disables Registry access and resolves only local facts. `codew-workspace-guard` is the system extension containing the Workspace Guard, `codew-add-projects`, and `codew-resolve-branch`: `init` installs or upgrades it automatically, it is hidden from extension selection, and it cannot be managed through `extension install/uninstall/upgrade`. A new non-interactive Workspace installs no ordinary extensions unless `--extensions` is provided; `init` does not implicitly query Nexus. `none` skips ordinary extension work and does not uninstall existing artifacts or disable system extension processing.
 
-`extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run. When the Registry is configured and a default resolution cannot obtain the remote metadata, installation fails before Workspace writes instead of silently using an older built-in package.
+`extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run. When the Registry is configured and a default resolution cannot obtain the remote metadata, installation fails before Workspace writes instead of silently using an older package.
 
 `extension search` and `extension info` are Workspace-independent Registry reads. `extension upgrade` accepts one or more installed ordinary extensions, freezes the default target for each, confirms once, and reuses the same per-extension transaction and rollback as install. An already-current target is skipped.
 
 `extension pack` creates a Nexus/npm-ready `codew-ext-<extension-id>-<version>.tgz` from an extension package directory:
 
 ```bash
-code-workspace extension pack extensions/zhuiyi-jira-mcp/1.1.0 --output dist/extensions --json
+code-workspace extension pack /path/to/extension/1.0.0 --output dist/extensions --json
 ```
 
 The command is Workspace-independent, creates a missing output directory recursively, never executes extension or npm lifecycle code, and reopens the generated tarball to verify the npm envelope, manifest, entry digest, and unchanged `packageSha256` before atomically committing it. Existing outputs are never overwritten. It does not publish or store Registry credentials; CI can pass the verified tarball to `npm publish --registry`.
 
-The bundled `zhuiyi-jira-mcp` and `zhuiyi-opensvn-mcp` extensions configure the Jira and OpenSVN MCP services for the selected Agent tools. They do not create an `openspec/` directory or install native OpenSpec commands.
-
-The bundled `zhuiyi-jira-prd-analysis`, `zhuiyi-jira-task-breakdown`, and `zhuiyi-jira-issue-fix-summary` extensions install optional Codex and Claude Code skill files. They are independent extensions, are not installed by core `init` or `update`, and can be uninstalled separately. Install `zhuiyi-jira-mcp` separately when they need Jira access.
-
-The bundled `zhuiyi-guangda-coding-spec` extension installs a Codex and Claude Code skill that applies the China Everbright Bank research, security, testing, and release rules to Guangda customer projects. It is independent of core `init` and `update`, can be uninstalled separately, and requires no MCP service.
-
-The MCP runtime packages are not copied into the Workspace. Only their configuration is stored there; a launcher prepares and caches each package on demand in the user-level Extension Store.
-
-`zhuiyi-opensvn-mcp` accesses OpenSVN static resources through `opssvn.in.wezhuiyi.com`. Its bundled configuration sets `SVN_OUTPUT_DIR` to `.mcp-cache-opensvn`, requires `SVN_AUTHORIZATION`, and defaults `SVN_MAX_RESOURCES` to `200`; credentials are not stored in the extension package and should be supplied through local configuration or the runtime environment.
+The system-managed `codew-workspace-guard` extension is installed or upgraded automatically by `init`; it is hidden from ordinary extension selection and cannot be installed, upgraded, or uninstalled manually. Ordinary extension packages are downloaded from Nexus, verified, and cached in the user-level Extension Store.
 
 Extension entries run in separate Node processes and generate files in temporary staging directories. The host rejects undeclared, missing, symbolic-link, non-file, path-escaping, conflicting, and checksum-mismatched artifacts before transactionally installing them. Per-Workspace state is stored in `.codew/ext-manifest.json`. A failed extension is reported as a warning and does not roll back successful core initialization or stop later extensions; a failed upgrade restores and retains the previous installed version.
 
@@ -104,7 +89,7 @@ verified by Code Workspace; extensions never patch the real Workspace directly. 
 recorded installed state and does not execute extension code. Unknown changes to extension-owned
 files or contributions stop the operation instead of being overwritten.
 
-This is fault isolation, not a malicious-code security sandbox. The experimental release trusts extension code shipped with Code Workspace or downloaded from the configured company Nexus after archive, identity, manifest, entry, runtime, and package-digest verification. External extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`; a step-by-step guide is in `docs/extension-development/extension-development-guide.zh-CN.md`.
+This is fault isolation, not a malicious-code security sandbox. The experimental release trusts system extension code shipped with Code Workspace and ordinary extension code downloaded from the configured company Nexus after archive, identity, manifest, entry, runtime, and package-digest verification. External extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`; a step-by-step guide is in `docs/extension-development/extension-development-guide.zh-CN.md`.
 
 ## Register projects
 
@@ -211,7 +196,7 @@ code-workspace language --json
 
 ## Monitor
 
-Monitor ships as the built-in `monitor` extension. Install it into a workspace and run its dashboard through the generic extension runtime:
+Monitor is an ordinary Nexus extension. Install it into a workspace and run its dashboard through the generic extension runtime:
 
 ```bash
 code-workspace extension install monitor --yes

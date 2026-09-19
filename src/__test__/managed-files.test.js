@@ -115,7 +115,7 @@ test("branch Skill stays static across artifact languages and keeps one ASK stru
   const installed = [];
   for (const language of ["zh-CN", "en-US"]) {
     void language;
-    const skill = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", ".system", "codew-workspace-guard", "1.0.0", "assets", "codew-resolve-branch.SKILL.md"), "utf8");
+    const skill = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", "codew-workspace-guard", "1.0.0", "assets", "codew-resolve-branch.SKILL.md"), "utf8");
     installed.push(skill);
     assert.doesNotMatch(skill, /\{\{WORKSPACE_LANGUAGE\}\}|branchAsk|Workspace ASK language|Requirement:|Scenario:|zh-CN|en-US/);
     assert.match(skill, /\[mismatch introduction and request for a decision\]/);
@@ -132,7 +132,7 @@ test("branch Skill stays static across artifact languages and keeps one ASK stru
 });
 
 test("branch Skill includes reusable model-behavior eval cases", () => {
-  const skill = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", ".system", "codew-workspace-guard", "1.0.0", "assets", "codew-resolve-branch.SKILL.md"), "utf8");
+  const skill = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", "codew-workspace-guard", "1.0.0", "assets", "codew-resolve-branch.SKILL.md"), "utf8");
   assert.match(skill, /A1 B2 C3/);
 });
 
@@ -149,7 +149,7 @@ test("one canonical template renders both workspace instructions with platform-s
   const root = baseline();
   const manifest = loadInitManifest();
   installManagedFiles(root, manifest, ["claude", "codex"]);
-  const source = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", ".system", "codew-workspace-guard", "1.0.0", "assets", "templates", "WORKSPACE_GUARD.md.template"), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", "codew-workspace-guard", "1.0.0", "assets", "templates", "WORKSPACE_GUARD.md.template"), "utf8");
   const claude = source.replace("{{ADD_PROJECTS_INVOCATION}}", "/codew:add-projects /absolute/path/to/project");
   const codex = source.replace("{{ADD_PROJECTS_INVOCATION}}", "$codew-add-projects /absolute/path/to/project");
   const normalize = (content) => content

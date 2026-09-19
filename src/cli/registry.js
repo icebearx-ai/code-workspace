@@ -21,7 +21,7 @@ const COMMAND_SUMMARIES = {
   "project verify": "Validate all local projects or selected projects",
   "permissions apply": "Apply registered project directory authorization",
   "extension install": "Install one or more extensions into the Workspace",
-  "extension uninstall": "Uninstall one built-in extension from the Workspace",
+  "extension uninstall": "Uninstall one ordinary extension from the Workspace",
   "extension pack": "Create a verified npm tarball from an extension package",
   "extension search": "Search the configured Nexus extension Registry",
   "extension info": "Show extension metadata from the configured Registry",

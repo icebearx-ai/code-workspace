@@ -35,7 +35,7 @@ Host 负责确认、校验、事务提交、状态记录、升级和卸载。
 
 ## 2. 包目录
 
-内置扩展使用固定版本目录：
+系统扩展使用固定版本目录；普通扩展在独立仓库中维护并发布到 Nexus：
 
 ```text
 extensions/<extension-id>/<version>/
@@ -248,7 +248,7 @@ Host 拒绝：
 
 ## 5. 本地验证与安装测试
 
-在临时 Workspace 安装内置扩展：
+在临时 Workspace 安装已发布扩展：
 
 ```bash
 codew init /tmp/example-workspace --tools codex --extensions example-extension --yes
@@ -292,7 +292,7 @@ codew extension install example-extension --offline --version 1.0.0 --yes
 codew extension upgrade example-extension --yes
 ```
 
-默认安装选择最高的兼容、稳定、非 deprecated 版本；`name@version` 位置语法和 SemVer range 不支持。prerelease 必须通过精确 `--version` 请求；deprecated 版本必须同时使用 `--version` 和 `--allow-deprecated`。`--offline` 禁止网络，只使用内置目录和已验证 Store。`init` 不会隐式查询 Nexus。
+默认安装选择最高的兼容、稳定、非 deprecated 版本；`name@version` 位置语法和 SemVer range 不支持。prerelease 必须通过精确 `--version` 请求；deprecated 版本必须同时使用 `--version` 和 `--allow-deprecated`。`--offline` 禁止网络，只使用已验证 Store。`init` 只在用户明确选择普通扩展时查询 Nexus；系统扩展仍由 Host 自动管理。
 
 ## 6. npm/Nexus 打包
 
@@ -304,7 +304,7 @@ code-workspace extension pack extensions/example-extension/1.0.0 --output dist/e
 
 输出目录缺失时会递归创建。目标文件已存在时命令拒绝覆盖；重复打包前使用新的输出目录，或清理上一次构建产物。
 
-内置扩展可以一次打包并校验全部普通版本：
+扩展仓库可以一次打包并校验全部普通版本（系统扩展会被排除）：
 
 ```bash
 npm run pack:extensions

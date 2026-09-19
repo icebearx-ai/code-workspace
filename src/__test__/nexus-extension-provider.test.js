@@ -600,7 +600,7 @@ test("Store reads legacy provenance lazily and preserves references on migration
   assert.deepEqual(migrated.packages["example-extension@1.0.0"].references.workspaces, ["/workspace-a", "/workspace-b"]);
 });
 
-test("built-in and Nexus Providers freeze candidates and equal digests reuse immutable Store content", async (t) => {
+test("built-in provider rejects ordinary extension sources", async (t) => {
   const fixture = await preparePackage();
   t.after(() => {
     fs.rmSync(fixture.source, { recursive: true, force: true });
@@ -614,9 +614,10 @@ test("built-in and Nexus Providers freeze candidates and equal digests reuse imm
   fs.cpSync(fixture.source, path.join(directRoot, "example-extension", "1.0.0"), { recursive: true });
   t.after(() => fs.rmSync(directRoot, { recursive: true, force: true }));
   const direct = createBuiltinExtensionPackageProvider({ extensionsRoot: directRoot });
-  const frozen = await direct.getPackageCandidate("example-extension", "1.0.0");
-  assert.equal(frozen.packageSha256, fixture.packed.packageSha256);
-  assert.deepEqual(frozen.provenance, { kind: "builtin" });
+  await assert.rejects(
+    () => direct.getPackageCandidate("example-extension", "1.0.0"),
+    (error) => error.code === "EXTENSION_BUILTIN_SOURCE_UNSUPPORTED"
+  );
 });
 
 test("Provider health separately reports metadata, authentication, and Search capability", async (t) => {

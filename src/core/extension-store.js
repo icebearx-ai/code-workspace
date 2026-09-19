@@ -5,6 +5,7 @@ const path = require("node:path");
 const { WorkspaceError } = require("./errors");
 const { atomicWrite, sha256 } = require("./fs");
 const { directoryDigest } = require("./directory-digest");
+const { SYSTEM_EXTENSION_IDS } = require("./system-extensions");
 
 const STORE_SCHEMA_VERSION = 2;
 const LEGACY_STORE_SCHEMA_VERSION = 1;
@@ -295,6 +296,13 @@ function importBuiltInExtensionPackage(options = {}) {
   if (!options.extensionsRoot) throw storeError("EXTENSION_STORE_SOURCE_MISSING", "Built-in extensions root is required");
   const extensionsRoot = path.resolve(String(options.extensionsRoot));
   const id = validateId(options.id);
+  if (!SYSTEM_EXTENSION_IDS.has(id)) {
+    throw storeError(
+      "EXTENSION_BUILTIN_SOURCE_UNSUPPORTED",
+      `Ordinary extension ${id} is not available from the built-in Store importer.`,
+      { id, remediation: "Import the extension from the configured Nexus Registry." }
+    );
+  }
   const version = validateVersion(options.version);
   return ensureStoredExtensionPackage({
     ...options,

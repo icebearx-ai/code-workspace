@@ -2,7 +2,7 @@
 
 本文面向需要把 Code Workspace 扩展发布到公司 Nexus 的开发者，覆盖从登录、打包、上传到远端验证的完整流程。
 
-本文只描述 **普通扩展** 的发布。系统扩展是否发布由发布策略决定，不要默认上传 `extensions/.system/` 下的包。
+本文只描述 **普通扩展** 的发布。系统扩展由 Host 随包管理，不进入 Nexus 普通扩展发布集合；不要把 `extensions/codew-workspace-guard/` 下的包上传到 Registry。
 
 ## 1. 前置条件
 

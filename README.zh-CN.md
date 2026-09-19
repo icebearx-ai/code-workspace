@@ -45,23 +45,16 @@ code-workspace init . \
 
 它不会创建 `openspec/`，不会安装原生 `/opsx` 命令，也不会安装原生 `openspec-*` Skill。
 
-### 试验性内置扩展
+### 试验性扩展
 
-`init` 可以从 npm 包内随附的版本化 `extensions/` 仓库安装集成。交互模式按扩展名多选；非交互模式传入逗号分隔的扩展名。独立安装命令接受一个或多个扩展名；不传名称时打开内置扩展多选，每个选项显示名称和简短描述，且默认不勾选任何扩展，按 ESC 可无修改退出：
+普通扩展发布到配置的 `@codew-ext` Nexus Registry，并安装到经过验证的本地 Extension Store。`init` 和独立安装命令从 Nexus/Store 选择普通扩展；npm 包内的 `extensions/` 目录只保留系统扩展 `codew-workspace-guard`。交互选择按 ESC 可无修改退出：
 
 ```bash
-codew init . --extensions zhuiyi-jira-mcp --yes
-codew init . --extensions zhuiyi-opensvn-mcp --yes
+codew init . --extensions monitor --yes
 codew init . --extensions none --yes
 codew extension install
-codew extension install zhuiyi-jira-mcp --yes
-codew extension install zhuiyi-opensvn-mcp --yes
-codew extension install zhuiyi-jira-prd-analysis --yes
-codew extension install zhuiyi-jira-task-breakdown --yes
-codew extension install zhuiyi-jira-issue-fix-summary --yes
-codew extension install zhuiyi-guangda-coding-spec --yes
-codew extension uninstall zhuiyi-jira-mcp --yes
-codew extension uninstall zhuiyi-jira-prd-analysis --yes
+codew extension install monitor --yes
+codew extension uninstall monitor --yes
 codew extension search jira --json
 codew extension info zhuiyi-jira-mcp --json
 codew extension install zhuiyi-jira-mcp --version 1.1.0 --yes
@@ -71,29 +64,21 @@ codew extension upgrade zhuiyi-jira-mcp --yes
 
 `init`、扩展安装和扩展卸载共享的 Workspace 操作锁配置在 Code Workspace 项目自身的 `.env` 中（不在目标 Workspace 中）。`CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` 默认值为 `5000`，`CODE_WORKSPACE_INIT_LOCK_STALE_MS` 默认值为 `30000`；进程环境变量优先于 `.env`。配置项名称见 `.env.example`。
 
-用户选择扩展名，不使用 `name@version` 位置语法。默认安装会在内置目录、已配置的 `@codew-ext` Nexus Registry 和已验证本地 Store 中选择最高的兼容、稳定、非 deprecated 版本。单目标安装可用 `--version` 指定精确 SemVer； prerelease 必须通过精确版本请求，deprecated 版本还必须加 `--allow-deprecated`。`--offline` 禁止 Registry 访问，只基于本地事实解析。`codew-workspace-guard` 是包含 Workspace Guard、`codew-add-projects` 和 `codew-resolve-branch` 的系统扩展，由 `init` 自动安装或升级，不出现在扩展选择列表中，也不能通过 `extension install/uninstall/upgrade` 手动管理。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装普通扩展；`init` 不会隐式查询 Nexus。`none` 只跳过本次普通扩展初始化，不会卸载已有制品，也不会取消系统扩展处理。
+用户选择扩展名，不使用 `name@version` 位置语法。默认安装会从已配置的 `@codew-ext` Nexus Registry 和已验证本地 Store 中选择最高的兼容、稳定、非 deprecated 版本。单目标安装可用 `--version` 指定精确 SemVer； prerelease 必须通过精确版本请求，deprecated 版本还必须加 `--allow-deprecated`。`--offline` 禁止 Registry 访问，只基于本地事实解析。`codew-workspace-guard` 是包含 Workspace Guard、`codew-add-projects` 和 `codew-resolve-branch` 的系统扩展，由 `init` 自动安装或升级，不出现在扩展选择列表中，也不能通过 `extension install/uninstall/upgrade` 手动管理。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装普通扩展；`init` 不会隐式查询 Nexus。`none` 只跳过本次普通扩展初始化，不会卸载已有制品，也不会取消系统扩展处理。
 
-`extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。Registry 已配置且默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默选择旧内置包。
+`extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。Registry 已配置且默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默选择旧包。
 
 `extension search` 和 `extension info` 是与 Workspace 无关的 Registry 读取命令。`extension upgrade` 接受一个或多个已安装普通扩展，逐个冻结默认目标，统一确认后复用安装的逐扩展事务和回滚；已是当前版本的目标返回 skipped。
 
 `extension pack` 可以从扩展包目录生成可交给 Nexus/npm 的 `codew-ext-<extension-id>-<version>.tgz`：
 
 ```bash
-code-workspace extension pack extensions/zhuiyi-jira-mcp/1.1.0 --output dist/extensions --json
+code-workspace extension pack /path/to/extension/1.1.0 --output dist/extensions --json
 ```
 
 该命令与 Workspace 无关，会在输出目录缺失时递归创建，不执行扩展入口或任何 npm 生命周期脚本；生成 tarball 后会重新读取并验证 npm envelope、manifest、入口摘要和未变化的 `packageSha256`，再原子提交。目标文件已存在时拒绝覆盖。命令本身不发布、不保存 Registry 凭证；CI 可将已验证的 tarball 交给 `npm publish --registry`。
 
-当前随包提供的内置扩展包括 `zhuiyi-jira-mcp` 和 `zhuiyi-opensvn-mcp`，分别用于为选中的 Agent 工具配置 Jira MCP 与 OpenSVN MCP 服务；它们不会创建 `openspec/` 目录，也不会安装 OpenSpec 原生命令。
-
-随包还提供 `zhuiyi-jira-prd-analysis`、`zhuiyi-jira-task-breakdown` 和 `zhuiyi-jira-issue-fix-summary` 三个 Skill 扩展，用于安装可选的 Codex 与 Claude Code Skill 文件。它们不随核心 `init` 或 `update` 安装，可以独立安装和卸载；需要 Jira 访问时另行安装 `zhuiyi-jira-mcp`。
-
-随包还提供 `zhuiyi-guangda-coding-spec` Skill 扩展，用于在光大客户项目按风险域落实研发、安全、测试与投产规范。它同样不随核心 `init` 或 `update` 安装，可以独立安装和卸载，且不依赖任何 MCP 服务。
-
-两个 MCP 的运行包不会复制到 Workspace；Workspace 只保存 MCP 配置，运行包由用户级 Extension Store 中的 launcher 按需缓存。
-
-`zhuiyi-opensvn-mcp` 使用 `opssvn.in.wezhuiyi.com` 访问 OpenSVN 静态资源。内置配置将 `SVN_OUTPUT_DIR` 设为 `.mcp-cache-opensvn`，运行时必须提供 `SVN_AUTHORIZATION`，`SVN_MAX_RESOURCES` 默认为 `200`；认证信息不会写入扩展包，应通过本地配置或运行环境注入。
+系统管理的 `codew-workspace-guard` 由 `init` 自动安装或升级，不出现在普通扩展选择列表中，也不能手动安装、升级或卸载。普通扩展包从 Nexus 下载、验证，并缓存到用户级 Extension Store。
 
 扩展入口在独立 Node 进程中运行，只向临时 staging 目录生成文件。Host 会在事务安装前拒绝未声明、缺失、符号链接、非文件、路径逃逸、目标冲突和 hash 不匹配的制品。Workspace 状态存放在 `.codew/ext-manifest.json`。扩展失败以 warning 报告，不回滚已成功的核心初始化，也不阻止后续扩展；升级失败会恢复并保留旧的已安装版本。
 
@@ -102,7 +87,7 @@ code-workspace extension pack extensions/zhuiyi-jira-mcp/1.1.0 --output dist/ext
 Workspace 合成和验证，扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行
 扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
 
-这是故障隔离，不是恶意代码安全沙箱。试验版本只信任随 Code Workspace 发布的扩展代码，或从已配置公司 Nexus 下载并通过归档、身份、manifest、入口、runtime 和 package digest 验证的扩展包。外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令和通过 `codew update` 自动更新扩展仍不支持。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/extension-development-guide.zh-CN.md`。
+这是故障隔离，不是恶意代码安全沙箱。试验版本信任随 Code Workspace 发布的系统扩展代码，以及从已配置公司 Nexus 下载并通过归档、身份、manifest、入口、runtime 和 package digest 验证的普通扩展包。外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令和通过 `codew update` 自动更新扩展仍不支持。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/extension-development-guide.zh-CN.md`。
 
 ## 注册项目
 
@@ -209,7 +194,7 @@ code-workspace language --json
 
 ## 监控
 
-监控以内置 `monitor` 扩展的形式提供。先在 Workspace 中安装扩展，再通过通用扩展运行时启动面板：
+监控以 Nexus 中的 `monitor` 扩展提供。先在 Workspace 中安装扩展，再通过通用扩展运行时启动面板：
 
 ```bash
 code-workspace extension install monitor --yes

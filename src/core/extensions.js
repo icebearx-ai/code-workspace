@@ -12,6 +12,7 @@ const { permissionTargets } = require("./permissions");
 const { createFileTransaction } = require("./transaction");
 const { directoryDigest } = require("./directory-digest");
 const { validateRuntimeDeclaration } = require("./extension-runtime-contract");
+const { SYSTEM_EXTENSION_IDS } = require("./system-extensions");
 const {
   addPackageReference,
   defaultExtensionStoreRoot,
@@ -45,7 +46,10 @@ const {
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 const EXTENSIONS_ROOT = path.join(PACKAGE_ROOT, "extensions");
-const SYSTEM_EXTENSIONS_ROOT = path.join(EXTENSIONS_ROOT, ".system");
+// System extensions are shipped with the Host package but live beside ordinary
+// extension sources. Keep the identity list explicit so a same-named Nexus
+// package can never replace a system-managed extension.
+const SYSTEM_EXTENSIONS_ROOT = EXTENSIONS_ROOT;
 const SYSTEM_EXTENSION_TARGETS = new Set([
   "AGENTS.md",
   "CLAUDE.md",
@@ -507,7 +511,11 @@ function discoverExtensionsFromRoot(extensionsRoot, options = {}) {
   const resolvedRoot = path.resolve(extensionsRoot);
   const supportedExtensionSpecVersions = Object.freeze([...(options.supportedExtensionSpecVersions || SUPPORTED_EXTENSION_SPEC_VERSIONS)]);
   if (!fs.existsSync(resolvedRoot)) return options.tolerant ? { catalog: [], invalid: [] } : [];
-  const entries = fs.readdirSync(resolvedRoot, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
+  const entries = fs.readdirSync(resolvedRoot, { withFileTypes: true }).filter((entry) => {
+    if (entry.name.startsWith(".")) return false;
+    if (typeof options.includeEntry === "function") return options.includeEntry(entry.name);
+    return true;
+  });
   const catalog = [];
   const invalid = [];
   for (const extensionEntry of entries) {
@@ -524,13 +532,24 @@ function discoverExtensionsFromRoot(extensionsRoot, options = {}) {
 }
 
 function discoverExtensions(options = {}) {
-  return discoverExtensionsFromRoot(options.extensionsRoot || EXTENSIONS_ROOT, { ...options, system: false });
+  return discoverExtensionsFromRoot(options.extensionsRoot || EXTENSIONS_ROOT, {
+    ...options,
+    system: false,
+    includeEntry: (id) => !SYSTEM_EXTENSION_IDS.has(id),
+  });
 }
 
 function discoverSystemExtensions(options = {}) {
-  const root = options.systemExtensionsRoot || path.join(path.resolve(options.extensionsRoot || EXTENSIONS_ROOT), ".system");
+  const root = options.systemExtensionsRoot || path.resolve(options.extensionsRoot || EXTENSIONS_ROOT);
   const protectedTargets = new Set([...coreManagedTargets()].filter((target) => !SYSTEM_EXTENSION_TARGETS.has(target)));
-  return discoverExtensionsFromRoot(root, { ...options, system: true, protectedTargets });
+  return discoverExtensionsFromRoot(root, {
+    ...options,
+    system: true,
+    protectedTargets,
+    includeEntry: options.systemExtensionsRoot
+      ? undefined
+      : (id) => SYSTEM_EXTENSION_IDS.has(id),
+  });
 }
 
 function isSystemExtensionId(id, options = {}) {
@@ -568,6 +587,17 @@ function resolvePlanFromStore(plan, options = {}) {
       });
     }
   } else {
+    if (plan.system !== true) {
+      throw extensionError(
+        "EXTENSION_STORE_PACKAGE_UNAVAILABLE",
+        `Ordinary extension ${plan.id}@${plan.version} must be imported from Nexus before activation.`,
+        {
+          extension: plan.id,
+          version: plan.version,
+          remediation: "Install the extension through the configured Nexus Registry, then retry.",
+        }
+      );
+    }
     const sourceAvailable = fs.existsSync(plan.sourceRoot);
     const actualSha256 = sourceAvailable ? directoryDigest(plan.sourceRoot) : null;
     if (!sourceAvailable || actualSha256 !== plan.packageSha256) {
@@ -623,8 +653,18 @@ function planExtensionStoreMigration(root, id, options = {}) {
         return Object.freeze({ id: extensionId, version, status: "current", packageSha256: stored.packageSha256, storeRoot });
       }
     } catch {
-      // Fall through to the built-in provider check for a deterministic diagnostic.
+      // Fall through to the system-source check for a deterministic diagnostic.
     }
+  }
+  if (installed.system !== true) {
+    return Object.freeze({
+      id: extensionId,
+      version,
+      status: "blocked",
+      code: "EXTENSION_STORE_PACKAGE_UNAVAILABLE",
+      message: `Ordinary extension ${extensionId}@${version} is not available in the verified Store. Reinstall it from Nexus.`,
+      storeRoot,
+    });
   }
   const extensionsRoot = path.resolve(options.extensionsRoot || EXTENSIONS_ROOT);
   const sourceRoot = path.join(extensionsRoot, extensionId, version);
@@ -846,7 +886,7 @@ function resolveExtensionPlans(catalog, requested, options = {}) {
   }
   for (const id of requested) {
     const extension = byId.get(id);
-    if (!extension) throw extensionError("EXTENSION_NOT_FOUND", `Unknown built-in extension: ${id}`, { extension: id });
+    if (!extension) throw extensionError("EXTENSION_NOT_FOUND", `Unknown extension: ${id}`, { extension: id });
     if (!extension.latestSupported) {
       throw extensionError("EXTENSION_SPEC_UNSUPPORTED", `No version of ${id} implements an Extension Spec supported by this Host`, {
         extension: id,
@@ -904,7 +944,7 @@ function prepareExtensionPlans(catalogResult, requested, options = {}) {
   const validIds = new Set(catalog.map((entry) => entry.id));
   const invalidById = new Map(invalid.filter((entry) => entry.id).map((entry) => [entry.id, entry]));
   for (const id of requested) {
-    if (!validIds.has(id) && !invalidById.has(id)) throw extensionError("EXTENSION_NOT_FOUND", "Unknown built-in extension: " + id, { extension: id });
+    if (!validIds.has(id) && !invalidById.has(id)) throw extensionError("EXTENSION_NOT_FOUND", "Unknown extension: " + id, { extension: id });
   }
   if (options.stateError) {
     for (const id of requested) failures.push({ id, version: null, status: "failed", code: options.stateError.code || "EXTENSION_STATE_INVALID", message: options.stateError.message, statePersisted: false, phase: "prepare" });
@@ -1498,6 +1538,7 @@ function applyExtensionUninstall(plan, options = {}) {
 module.exports = {
   EXTENSIONS_ROOT,
   SYSTEM_EXTENSIONS_ROOT,
+  SYSTEM_EXTENSION_IDS,
   EXTENSION_NAME_PATTERN,
   EXTENSION_STATE_FILE,
   SUPPORTED_EXTENSION_SPEC_VERSIONS,

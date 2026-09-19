@@ -3,7 +3,6 @@ const { WorkspaceError } = require("../../core/errors");
 const {
   applyExtensionUninstall,
   EXTENSION_STATE_FILE,
-  discoverExtensions,
   discoverSystemExtensions,
   inspectExtensionState,
   normalizeExtensionNames,
@@ -66,28 +65,6 @@ function formatRegistryInfoText(result) {
     "Compatibility shown here is metadata-only; the tarball and Extension package are verified before installation.",
   ];
   return lines.join("\n");
-}
-
-async function collectExtensionInstallSelection(catalog, state, options = {}) {
-  const ui = options.ui || await createInteractiveUi({
-    ...options,
-    cancelCode: "EXTENSION_INSTALL_CANCELLED",
-    cancelMessage: "Extension installation cancelled. No changes were made.",
-  });
-  const installed = new Set(Object.entries(state.extensions || {}).filter(([, value]) => value.installed).map(([id]) => id));
-  const choices = catalog.map((entry) => ({
-    value: entry.id,
-    label: formatExtensionChoice(entry, { includeId: true, installed: installed.has(entry.id) }),
-    ...(entry.latestSupported ? {} : { disabled: true }),
-  }));
-  ui.intro("Code Workspace extensions");
-  if (choices.length === 0) {
-    ui.close("No built-in extensions are available.");
-    return [];
-  }
-  const selected = await ui.multiselect("Extensions (select any)", choices, []);
-  ui.close(selected.length > 0 ? "Extension selection ready." : "No extensions selected.");
-  return normalizeExtensionNames(selected);
 }
 
 async function collectRegistryExtensionInstallSelection(choices, state, options = {}) {
@@ -198,7 +175,6 @@ async function executeExtensionInstall(invocation) {
     });
   }
 
-  const catalogResult = discoverExtensions({ tolerant: true, ...(dependencies.extensionsRoot ? { extensionsRoot: dependencies.extensionsRoot } : {}) });
   const systemCatalogResult = discoverSystemExtensions({ tolerant: true, ...(dependencies.extensionsRoot ? { extensionsRoot: dependencies.extensionsRoot } : {}) });
   const systemIds = new Set(systemCatalogResult.catalog.map((entry) => entry.id));
   const requestedSystemId = requested?.find((id) => systemIds.has(id));
@@ -217,8 +193,6 @@ async function executeExtensionInstall(invocation) {
           offline: invocation.options.offline,
         });
         requested = await dependencies.collectRegistryExtensionInstallSelection(choices, stateInspection.state, dependencies);
-      } else if (dependencies.collectExtensionInstallSelection) {
-        requested = await dependencies.collectExtensionInstallSelection(catalogResult.catalog, stateInspection.state, dependencies);
       } else {
         const choices = await listRegistryExtensionChoices({
           ...dependencies,
@@ -420,7 +394,6 @@ async function executeExtension(invocation) {
 }
 
 module.exports = {
-  collectExtensionInstallSelection,
   collectRegistryExtensionInstallSelection,
   executeExtension,
   executeExtensionInstall,

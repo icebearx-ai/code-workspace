@@ -1,6 +1,6 @@
 const path = require("node:path");
 
-const { inspectExtensionPackageDirectory } = require("./extensions");
+const { inspectExtensionPackageDirectory, SYSTEM_EXTENSION_IDS } = require("./extensions");
 
 function providerError(code, message, details = {}) {
   return new (require("./errors").WorkspaceError)(code, message, details);
@@ -12,6 +12,13 @@ function createBuiltinExtensionPackageProvider(options = {}) {
     kind: "builtin",
     providerId: "builtin",
     async getPackageCandidate(id, version) {
+      if (!SYSTEM_EXTENSION_IDS.has(String(id || ""))) {
+        throw providerError(
+          "EXTENSION_BUILTIN_SOURCE_UNSUPPORTED",
+          `Ordinary extension ${id} is not available from the built-in provider.`,
+          { extension: id, remediation: "Use the configured Nexus Registry." }
+        );
+      }
       const inspected = inspectExtensionPackageDirectory(path.join(extensionsRoot, id, version), {
         expectedId: id,
         expectedVersion: version,

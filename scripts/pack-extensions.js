@@ -74,8 +74,6 @@ async function main() {
       }));
     }
   }
-  if (packages.length === 0) throw new Error("No supported ordinary extensions were found");
-
   const manifest = {
     schemaVersion: 1,
     npmScope: "@codew-ext",
@@ -84,7 +82,9 @@ async function main() {
     skipped: Object.freeze(skipped),
   };
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  process.stdout.write(`Packed ${packages.length} extension tarballs into ${output}\n`);
+  process.stdout.write(packages.length > 0
+    ? `Packed ${packages.length} extension tarballs into ${output}\n`
+    : `No ordinary extensions to publish; wrote an empty package manifest to ${manifestPath}\n`);
 }
 
 main().catch((error) => {

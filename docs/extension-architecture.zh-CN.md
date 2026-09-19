@@ -30,7 +30,7 @@ Host 不理解 Jira、npm、tar.gz 或某个具体 Agent 的业务含义，但�
 
 - 不执行来自任意第三方的不可信扩展。
 - 不提供安全沙箱、容器或操作系统级文件和网络隔离。
-- 不提供扩展市场、动态安装扩展包或远程扩展发现。
+- 普通扩展通过配置的 Nexus Registry 发现和安装；系统扩展仍随 Host 发布。
 - 不提供任意 Workspace 外部副作用及其补偿机制。
 - 不允许扩展自定义卸载脚本。
 - 不负责管理扩展运行后产生的业务数据，例如 Jira 附件。
@@ -62,7 +62,7 @@ Host 是 Code Workspace 中负责扩展生命周期治理的核心实现。Host 
 
 ### 4.2 扩展仓库
 
-扩展仓库是 Code Workspace 发布包中用于保存内置扩展的目录集合。基础版不从网络发现或安装扩展定义。
+扩展仓库是 Code Workspace 发布包中用于保存系统扩展的目录集合。普通扩展不从该目录发现，而是通过配置的 Nexus Registry 和已验证 Extension Store 获取。
 
 扩展还可以通过 manifest 的 `hooks` 声明抽象 Workspace Hook。Hook 声明由 Host 通过
 Codex/Claude adaptor 转换为原生配置，并随扩展安装、升级和卸载动态插拔；扩展不得把
