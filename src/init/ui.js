@@ -1,4 +1,5 @@
 const { styleText } = require("node:util");
+const { runExtensionPicker } = require("./extension-picker");
 
 function formatExtensionChoice(entry, options = {}) {
   const title = options.includeId ? `${entry.id} · ${entry.name}` : entry.name;
@@ -54,6 +55,9 @@ async function createInteractiveUi(options = {}) {
         required: false,
       }));
     },
+    async extensionPicker(options = {}) {
+      return runExtensionPicker({ input, output, ...options });
+    },
     async confirm(label, initial = true) {
       return unwrap(await clack.confirm({ ...common, message: label, initialValue: initial }));
     },
@@ -66,4 +70,4 @@ async function createInteractiveUi(options = {}) {
   };
 }
 
-module.exports = { createInteractiveUi, formatExtensionChoice };
+module.exports = { createInteractiveUi, formatExtensionChoice, runExtensionPicker };
