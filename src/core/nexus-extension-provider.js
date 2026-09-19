@@ -415,13 +415,13 @@ async function resolveNexusExtensionPackageCandidate(provider, id, version, opti
   return packageVersionCandidate(provider.configuration, packageName, versionValue, value);
 }
 
-async function getNexusExtensionPackageMetadata(provider, id) {
+async function getNexusExtensionPackageMetadata(provider, id, options = {}) {
   const extensionId = String(id || "");
   const packageName = extensionNpmPackageName(extensionId);
   const response = await provider.requestJson(packumentUrl(provider.configuration, packageName), {
     expectedPath: "registry",
     context: `${packageName} metadata`,
-  });
+  }, options);
   const packument = await readJsonResponse(response, provider.configuration, provider.limits);
   if (!packument || typeof packument !== "object" || Array.isArray(packument) || packument.name !== packageName) {
     throw nexusError("EXTENSION_REGISTRY_METADATA_INVALID", "Nexus packument name is invalid", { packageName });
@@ -515,7 +515,7 @@ async function searchNexusExtensionPackages(provider, options = {}) {
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw nexusError("EXTENSION_REGISTRY_SEARCH_INVALID", "Search maxPages must be a positive integer");
   const seen = new Set();
   const items = [];
-  let continuationToken = null;
+  let continuationToken = options.continuationToken ? String(options.continuationToken) : null;
   let pages = 0;
   do {
     const response = await provider.requestJson(searchUrl(provider.configuration, continuationToken, options.query || ""), {
@@ -732,6 +732,9 @@ async function createNexusExtensionPackageProvider(options = {}) {
     },
     async search(searchOptions = {}) {
       return searchNexusExtensionPackages(provider, searchOptions);
+    },
+    async searchPage(searchOptions = {}) {
+      return searchNexusExtensionPackages(provider, { ...searchOptions, maxPages: 1 });
     },
     async health(healthOptions = {}) {
       return checkNexusExtensionRegistryHealth(provider, healthOptions);

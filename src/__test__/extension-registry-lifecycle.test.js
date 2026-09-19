@@ -16,6 +16,7 @@ const {
   loadStoreRegistry,
 } = require("../core/extension-store");
 const {
+  createRegistryExtensionBrowseSession,
   getRegistryExtensionInfo,
   listRegistryExtensionChoices,
   prepareRegistryExtensionPlans,
@@ -156,6 +157,57 @@ function createFakeProvider(packages, options = {}) {
   };
 }
 
+function createBrowseProvider(options = {}) {
+  const calls = [];
+  const active = { current: 0, max: 0 };
+  const metadata = options.metadata || {};
+  const pages = options.pages || {};
+  const provider = {
+    configuration: { registryOrigin: "https://nexus.example.com", repository: "extensions" },
+    limits: { totalTimeoutMs: 1000 },
+    calls,
+    active,
+    errors: { ...(options.errors || {}) },
+    async search(searchOptions = {}) {
+      calls.push({ operation: "search", ...searchOptions });
+      if (options.searchError) throw options.searchError;
+      const page = pages[searchOptions.continuationToken || "first"];
+      if (!page) throw new Error(`missing page ${searchOptions.continuationToken || "first"}`);
+      return page;
+    },
+    async getPackageMetadata(id) {
+      calls.push({ operation: "metadata", id });
+      active.current += 1;
+      active.max = Math.max(active.max, active.current);
+      try {
+        const delay = options.delays?.[id] || 0;
+        if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+        if (provider.errors[id]) throw provider.errors[id];
+        const value = metadata[id];
+        if (!value) throw Object.assign(new Error(`${id} metadata missing`), { code: "EXTENSION_REGISTRY_PACKAGE_NOT_FOUND" });
+        return value;
+      } finally {
+        active.current -= 1;
+      }
+    },
+  };
+  return provider;
+}
+
+function browseMetadata(id, version = "1.0.0") {
+  return {
+    packageName: `@codew-ext/${id}`,
+    extensionId: id,
+    description: `${id} summary`,
+    versions: [{
+      version,
+      extensionSpecVersion: 1,
+      transport: { codeWorkspace: { packageSha256: "a".repeat(64) } },
+      deprecated: false,
+    }],
+  };
+}
+
 function context(plan) {
   return {
     schemaVersion: 1,
@@ -181,6 +233,92 @@ function invocation(root, args, options = {}, dependencies = {}) {
     dependencies: { interactive: false, ...dependencies },
   };
 }
+
+test("paged Registry browse sessions cache pages, hide tokens, and isolate queries", async () => {
+  const provider = createBrowseProvider({
+    pages: {
+      first: {
+        items: [
+          { packageName: "@codew-ext/jira-tools", extensionId: "jira-tools" },
+          { packageName: "@codew-ext/jira-mcp", extensionId: "jira-mcp" },
+        ],
+        continuationToken: "secret-page-token",
+      },
+      "secret-page-token": {
+        items: [{ packageName: "@codew-ext/jira-extra", extensionId: "jira-extra" }],
+        continuationToken: null,
+      },
+    },
+    metadata: {
+      "jira-tools": browseMetadata("jira-tools"),
+      "jira-mcp": browseMetadata("jira-mcp"),
+      "jira-extra": browseMetadata("jira-extra"),
+    },
+  });
+  const session = await createRegistryExtensionBrowseSession({ provider, query: "jira" });
+  const first = await session.next();
+  assert.equal(first.pageIndex, 0);
+  assert.equal(first.hasNext, true);
+  assert.deepEqual(first.items.map((entry) => entry.extensionId), ["jira-mcp", "jira-tools"]);
+  assert.doesNotMatch(JSON.stringify(first), /secret-page-token|continuationToken/);
+
+  const second = await session.next();
+  assert.equal(second.pageIndex, 1);
+  assert.equal(second.hasNext, false);
+  assert.equal(provider.calls.filter((call) => call.operation === "search").length, 2);
+  assert.equal(provider.calls.filter((call) => call.operation === "search")[1].continuationToken, "secret-page-token");
+  const previous = await session.previous();
+  assert.equal(previous.pageIndex, 0);
+  assert.equal(provider.calls.filter((call) => call.operation === "search").length, 2);
+
+  const otherProvider = createBrowseProvider({
+    pages: { first: { items: [{ packageName: "@codew-ext/mcp", extensionId: "mcp" }], continuationToken: null } },
+    metadata: { mcp: browseMetadata("mcp") },
+  });
+  const other = await createRegistryExtensionBrowseSession({ provider: otherProvider, query: "mcp" });
+  const otherPage = await other.next();
+  assert.equal(otherPage.pageIndex, 0);
+  assert.deepEqual(otherPage.items.map((entry) => entry.extensionId), ["mcp"]);
+  session.close();
+  assert.throws(() => session.current(), (error) => error.code === "EXTENSION_REGISTRY_BROWSE_SESSION_CLOSED");
+});
+
+test("paged Registry browse uses bounded metadata workers, partial diagnostics, and retry", async () => {
+  const timeout = Object.assign(new Error("metadata Authorization: Bearer super-secret timed out"), { code: "EXTENSION_REGISTRY_TIMEOUT" });
+  const provider = createBrowseProvider({
+    pages: {
+      first: {
+        items: ["one", "two", "three", "four", "five"].map((id) => ({ packageName: `@codew-ext/${id}`, extensionId: id })),
+        continuationToken: null,
+      },
+    },
+    metadata: Object.fromEntries(["one", "two", "three", "four", "five"].map((id) => [id, browseMetadata(id)])),
+    delays: { five: 30 },
+    errors: { three: timeout },
+  });
+  const session = await createRegistryExtensionBrowseSession({ provider, metadataConcurrency: 2, metadataTimeoutMs: 100 });
+  const page = await session.next();
+  assert.equal(provider.active.max <= 2, true);
+  assert.equal(page.partial, true);
+  assert.equal(page.items.length, 4);
+  assert.equal(page.diagnostics[0].extension, "three");
+  assert.equal(page.diagnostics[0].retryable, true);
+  assert.doesNotMatch(JSON.stringify(page), /super-secret|Authorization: Bearer/);
+  delete provider.errors.three;
+  const retried = await session.retry();
+  assert.equal(retried.items.length, 5);
+});
+
+test("paged Registry browse keeps the current page when the next token fails", async () => {
+  const provider = createBrowseProvider({
+    pages: { first: { items: [{ packageName: "@codew-ext/one", extensionId: "one" }], continuationToken: "invalid-token" } },
+    metadata: { one: browseMetadata("one") },
+  });
+  const session = await createRegistryExtensionBrowseSession({ provider });
+  const first = await session.next();
+  await assert.rejects(() => session.next(), (error) => error.code === "EXTENSION_REGISTRY_BROWSE_PAGE_FAILED" && error.details.retryable === true);
+  assert.equal(session.current().pageIndex, first.pageIndex);
+});
 
 test("Registry search and info convert metadata without secrets or raw payloads", async () => {
   const source = temporaryRoot();

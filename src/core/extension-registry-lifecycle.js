@@ -21,6 +21,8 @@ const {
 } = require("./nexus-extension-provider");
 
 const DEFAULT_SEARCH_LIMIT = 50;
+const DEFAULT_BROWSE_METADATA_CONCURRENCY = 4;
+const DEFAULT_BROWSE_METADATA_TIMEOUT_MS = 10_000;
 
 function lifecycleError(code, message, details = {}) {
   return new WorkspaceError(code, message, details);
@@ -152,6 +154,216 @@ async function searchRegistryExtensions(options = {}) {
     complete: page.continuationToken === null && !truncatedByIdentity,
     diagnostics: Object.freeze(warnings),
   });
+}
+
+function sanitizeBrowseMessage(value) {
+  return String(value || "Registry request failed")
+    .replace(/authorization\s*[:=]\s*bearer\s+[^\s,;]+/gi, "authorization: [redacted]")
+    .replace(/authorization\s*[:=]\s*[^\s,;]+/gi, "authorization: [redacted]")
+    .replace(/bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/(token|password|passwd|_authToken)\s*[:=]\s*[^\s,;]+/gi, "$1: [redacted]")
+    .replace(/([?&](?:token|password|passwd|auth|authorization)=[^&#\s]*)/gi, "$1".replace(/=.*/, "=[redacted]"))
+    .replace(/continuationToken\s*[:=]\s*[^\s,;]+/gi, "continuationToken: [redacted]");
+}
+
+function browseDiagnostic(error, extension) {
+  return Object.freeze({
+    code: error?.code || "EXTENSION_REGISTRY_METADATA_INVALID",
+    severity: "warning",
+    retryable: true,
+    message: sanitizeBrowseMessage(error?.message),
+    ...(extension ? { extension } : {}),
+  });
+}
+
+function validateBrowsePositiveInteger(value, code, label) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw lifecycleError(code, `${label} must be a positive integer`, { [label]: value });
+  }
+  return value;
+}
+
+function withBrowseTimeout(promise, timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(lifecycleError("EXTENSION_REGISTRY_METADATA_TIMEOUT", "Extension metadata request timed out", { timeoutMs })), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function mapBrowseWorkers(values, worker, concurrency) {
+  const results = new Array(values.length);
+  let cursor = 0;
+  async function run() {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= values.length) return;
+      results[index] = await worker(values[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => run()));
+  return results;
+}
+
+function browseRegistrySummary(provider) {
+  return Object.freeze({
+    scope: NPM_SCOPE,
+    origin: provider.configuration?.registryOrigin || null,
+    repository: provider.configuration?.repository || null,
+  });
+}
+
+function browseIdentityMatches(identity, query) {
+  const tokens = String(query || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const text = `${identity.packageName} ${identity.extensionId}`.toLowerCase();
+  return tokens.every((token) => text.includes(token));
+}
+
+async function createRegistryExtensionBrowseSession(options = {}) {
+  const provider = options.provider || await createNexusExtensionPackageProvider(options);
+  const query = String(options.query || "").trim();
+  const metadataConcurrency = validateBrowsePositiveInteger(
+    options.metadataConcurrency === undefined ? DEFAULT_BROWSE_METADATA_CONCURRENCY : options.metadataConcurrency,
+    "EXTENSION_REGISTRY_BROWSE_CONCURRENCY_INVALID",
+    "metadataConcurrency"
+  );
+  const metadataTimeoutMs = options.metadataTimeoutMs === undefined
+    ? (provider.limits?.totalTimeoutMs || DEFAULT_BROWSE_METADATA_TIMEOUT_MS)
+    : validateBrowsePositiveInteger(options.metadataTimeoutMs, "EXTENSION_REGISTRY_BROWSE_TIMEOUT_INVALID", "metadataTimeoutMs");
+  const pages = [];
+  const metadataCache = new Map();
+  const seenIdentities = new Set();
+  let currentIndex = -1;
+  let closed = false;
+
+  function assertOpen() {
+    if (closed) throw lifecycleError("EXTENSION_REGISTRY_BROWSE_SESSION_CLOSED", "Extension Registry browse session is closed");
+  }
+
+  async function getMetadata(identity, force = false) {
+    if (!force && metadataCache.has(identity.extensionId)) return metadataCache.get(identity.extensionId);
+    const request = withBrowseTimeout(
+      provider.getPackageMetadata(identity.extensionId, { totalTimeoutMs: metadataTimeoutMs }),
+      metadataTimeoutMs
+    ).then((metadata) => {
+      const versions = metadata.versions.map(metadataVersionModel);
+      return Object.freeze({
+        packageName: identity.packageName,
+        extensionId: identity.extensionId,
+        name: metadata.description,
+        description: metadata.description,
+        latestCandidate: defaultMetadataCandidate(versions),
+        versionCount: versions.length,
+      });
+    });
+    metadataCache.set(identity.extensionId, request);
+    try {
+      return await request;
+    } catch (error) {
+      metadataCache.delete(identity.extensionId);
+      throw error;
+    }
+  }
+
+  async function materializePage(index, identities, continuationToken, forceMetadata = false) {
+    const diagnostics = [];
+    const results = await mapBrowseWorkers(identities, async (identity) => {
+      try {
+        return { item: await getMetadata(identity, forceMetadata) };
+      } catch (error) {
+        diagnostics.push(browseDiagnostic(error, identity.extensionId));
+        return { item: null };
+      }
+    }, metadataConcurrency);
+    const items = results.filter((result) => result.item).map((result) => result.item);
+    items.sort((left, right) => left.extensionId.localeCompare(right.extensionId));
+    const publicPage = Object.freeze({
+      schemaVersion: 1,
+      query,
+      pageIndex: index,
+      items: Object.freeze(items),
+      hasNext: continuationToken !== null,
+      complete: continuationToken === null,
+      partial: diagnostics.length > 0,
+      registry: browseRegistrySummary(provider),
+      diagnostics: Object.freeze(diagnostics.sort((left, right) => (left.extension || "").localeCompare(right.extension || ""))),
+    });
+    return { publicPage, continuationToken, identities };
+  }
+
+  async function fetchPage(index, continuationToken) {
+    let searchPage;
+    try {
+      const search = provider.searchPage || provider.search;
+      searchPage = await search.call(provider, {
+        query,
+        maxPages: 1,
+        ...(continuationToken ? { continuationToken } : {}),
+      });
+    } catch (error) {
+      throw lifecycleError("EXTENSION_REGISTRY_BROWSE_PAGE_FAILED", sanitizeBrowseMessage(error.message), {
+        query,
+        pageIndex: index,
+        retryable: true,
+        ...(error.code ? { causeCode: error.code } : {}),
+      });
+    }
+    const identities = [];
+    for (const identity of searchPage.items || []) {
+      if (!browseIdentityMatches(identity, query) || seenIdentities.has(identity.extensionId)) continue;
+      seenIdentities.add(identity.extensionId);
+      identities.push(Object.freeze({ packageName: identity.packageName, extensionId: identity.extensionId }));
+    }
+    return materializePage(index, identities, searchPage.continuationToken || null);
+  }
+
+  async function next() {
+    assertOpen();
+    if (currentIndex + 1 < pages.length) {
+      currentIndex += 1;
+      return pages[currentIndex].publicPage;
+    }
+    const index = pages.length;
+    const continuationToken = index === 0 ? null : pages[index - 1].continuationToken;
+    if (index > 0 && continuationToken === null) return pages[currentIndex].publicPage;
+    const page = await fetchPage(index, continuationToken);
+    pages.push(page);
+    currentIndex = index;
+    return page.publicPage;
+  }
+
+  async function previous() {
+    assertOpen();
+    if (currentIndex > 0) currentIndex -= 1;
+    return currentIndex >= 0 ? pages[currentIndex].publicPage : null;
+  }
+
+  async function retry() {
+    assertOpen();
+    if (currentIndex < 0) return next();
+    const current = pages[currentIndex];
+    const page = await materializePage(currentIndex, current.identities, current.continuationToken, true);
+    pages[currentIndex] = page;
+    return page.publicPage;
+  }
+
+  function current() {
+    assertOpen();
+    return currentIndex >= 0 ? pages[currentIndex].publicPage : null;
+  }
+
+  function close() {
+    if (closed) return;
+    closed = true;
+    pages.length = 0;
+    metadataCache.clear();
+    seenIdentities.clear();
+  }
+
+  return Object.freeze({ query, next, previous, retry, current, close });
 }
 
 async function getRegistryExtensionInfo(options = {}) {
@@ -574,7 +786,11 @@ async function prepareRegistryExtensionPlans(options = {}) {
 }
 
 module.exports = {
+  DEFAULT_BROWSE_METADATA_CONCURRENCY,
+  DEFAULT_BROWSE_METADATA_TIMEOUT_MS,
   DEFAULT_SEARCH_LIMIT,
+  createExtensionBrowseSession: createRegistryExtensionBrowseSession,
+  createRegistryExtensionBrowseSession,
   getRegistryExtensionInfo,
   listRegistryExtensionChoices,
   prepareRegistryExtensionPlans,
