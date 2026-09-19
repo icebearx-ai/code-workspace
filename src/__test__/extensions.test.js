@@ -163,7 +163,7 @@ const GUANGDA_SKILL_ARCHIVE = [
 ];
 
 test("strict SemVer comparison is used only for extension version ordering", () => {
-  assert.equal(compareSemver("1.0.0-beta.3", "1.0.0-beta.21"), -1);
+  assert.equal(compareSemver("1.0.0-beta.3", "1.0.0-beta.31"), -1);
   assert.equal(compareSemver("1.0.0", "1.0.0-rc.1"), 1);
   assert.equal(compareSemver("1.0.0+build.1", "1.0.0+build.2"), 0);
   assert.equal(supportsExtensionSpec(1), true);
