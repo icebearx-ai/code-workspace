@@ -27,6 +27,7 @@ const {
 } = require("../core/extensions");
 const {
   createNexusExtensionPackageProvider,
+  DEFAULT_NEXUS_REGISTRY,
   resolveNexusProviderConfiguration,
   validateRegistryUrl,
 } = require("../core/nexus-extension-provider");
@@ -227,6 +228,14 @@ test("Nexus registry configuration allows HTTPS and explicit loopback fixtures o
   assert.equal(configuration.hasCredentials, true);
   assert.equal(configuration.credentials.forUrl("https://nexus.example.com/repository/extensions/@codew-ext%2Fexample", "registry"), "Bearer nexus-token");
   assert.equal(configuration.credentials.forUrl("https://evil.example.com/repository/extensions/@codew-ext%2Fexample", "registry"), null);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test("fresh users can use the built-in company Registry when npm scope config is absent", async () => {
+  const home = temporaryRoot();
+  const configuration = await resolveNexusProviderConfiguration({ home, defaultRegistryUrl: DEFAULT_NEXUS_REGISTRY });
+  assert.equal(configuration.registryUrl, DEFAULT_NEXUS_REGISTRY);
+  assert.equal(configuration.repository, "codew-extensions");
   fs.rmSync(home, { recursive: true, force: true });
 });
 

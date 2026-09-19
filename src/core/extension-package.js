@@ -46,16 +46,24 @@ function normalizeLimits(limits = {}) {
   return Object.freeze(merged);
 }
 
-function extensionNpmPackageName(extensionId) {
+function normalizeNpmScope(scope = NPM_EXTENSION_SCOPE) {
+  const value = String(scope || "").trim();
+  if (!/^@[a-z0-9][a-z0-9._-]*$/.test(value)) {
+    throw packageError("EXTENSION_SCOPE_INVALID", `Invalid extension npm scope: ${value || "<missing>"}`, { scope: value || null });
+  }
+  return value;
+}
+
+function extensionNpmPackageName(extensionId, scope = NPM_EXTENSION_SCOPE) {
   const id = String(extensionId || "");
   if (!EXTENSION_NAME_PATTERN.test(id)) {
     throw packageError("EXTENSION_NAME_INVALID", `Invalid extension name: ${id || "<missing>"}`, { extension: id || null });
   }
-  return `${NPM_EXTENSION_SCOPE}/${id}`;
+  return `${normalizeNpmScope(scope)}/${id}`;
 }
 
-function extensionNpmTarballFilename(extensionId, version) {
-  return `${NPM_EXTENSION_SCOPE.slice(1)}-${extensionId}-${version}.tgz`;
+function extensionNpmTarballFilename(extensionId, version, scope = NPM_EXTENSION_SCOPE) {
+  return `${normalizeNpmScope(scope).slice(1)}-${extensionId}-${version}.tgz`;
 }
 
 function assertSafeRelativePath(value, code = "EXTENSION_PACKAGE_PATH_INVALID") {
@@ -124,9 +132,9 @@ function collectPackageFiles(root, limits = DEFAULT_PACKAGE_LIMITS, directory = 
   return files;
 }
 
-function buildExtensionTransportEnvelope(inspected) {
+function buildExtensionTransportEnvelope(inspected, options = {}) {
   return Object.freeze({
-    name: extensionNpmPackageName(inspected.id),
+    name: extensionNpmPackageName(inspected.id, options.scope),
     version: inspected.version,
     description: inspected.manifest.description,
     keywords: Object.freeze(["code-workspace-extension"]),
@@ -207,7 +215,7 @@ function validateExtensionTransportEnvelope(value, options = {}) {
     expected,
     actual: actual ?? null,
   });
-  if (value.name !== extensionNpmPackageName(expectedId)) throw identity("name", value.name, extensionNpmPackageName(expectedId));
+  if (value.name !== extensionNpmPackageName(expectedId, options.expectedScope)) throw identity("name", value.name, extensionNpmPackageName(expectedId, options.expectedScope));
   if (value.version !== expectedVersion) throw identity("version", value.version, expectedVersion);
   if (extensionId !== expectedId) throw identity("extensionId", extensionId, expectedId);
   if (extensionSpecVersion !== expectedSpec) throw identity("extensionSpecVersion", extensionSpecVersion, expectedSpec);
@@ -379,6 +387,7 @@ async function inspectExtensionTransportTarball(file, options = {}) {
   if (rawManifest.extensionSpecVersion !== envelope.codeWorkspace.extensionSpecVersion) throw identity("extensionSpecVersion", rawManifest.extensionSpecVersion, envelope.codeWorkspace.extensionSpecVersion);
   const manifest = validateManifest(rawManifest, {
     expectedId: envelope.codeWorkspace.extensionId,
+    ...(options.expectedScope ? { expectedScope: options.expectedScope } : {}),
     expectedVersion: envelope.version,
     supportedExtensionSpecVersions: options.supportedExtensionSpecVersions || SUPPORTED_EXTENSION_SPEC_VERSIONS,
     ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}),
@@ -603,9 +612,9 @@ async function packExtensionToDirectory(source, outputDirectory, options = {}) {
   if (!outputStat.isDirectory() || outputStat.isSymbolicLink()) {
     throw packageError("EXTENSION_PACK_OUTPUT_INVALID", `Output must be a regular directory: ${outputRoot}`, { path: outputRoot });
   }
-  const envelope = buildExtensionTransportEnvelope(inspected);
+  const envelope = buildExtensionTransportEnvelope(inspected, options);
   const envelopeBytes = serializeExtensionTransportEnvelope(envelope);
-  const filename = extensionNpmTarballFilename(inspected.id, inspected.version);
+  const filename = extensionNpmTarballFilename(inspected.id, inspected.version, options.scope);
   const target = path.join(outputRoot, filename);
   let targetExists = false;
   try {
@@ -647,6 +656,7 @@ async function packExtensionToDirectory(source, outputDirectory, options = {}) {
         expectedVersion: inspected.version,
         expectedExtensionSpecVersion: inspected.extensionSpecVersion,
         expectedPackageSha256: inspected.packageSha256,
+        ...(options.scope ? { expectedScope: options.scope } : {}),
         expectedFiles: files,
         ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}),
         limits,
@@ -720,6 +730,7 @@ module.exports = {
   collectPackageFiles,
   extensionNpmPackageName,
   extensionNpmTarballFilename,
+  normalizeNpmScope,
   extractExtensionTransportTarball,
   inspectExtensionTransportTarball,
   packExtensionToDirectory,

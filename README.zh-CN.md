@@ -47,7 +47,7 @@ code-workspace init . \
 
 ### 试验性扩展
 
-普通扩展发布到配置的 `@codew-ext` Nexus Registry，并安装到经过验证的本地 Extension Store。`init` 和独立安装命令从 Nexus/Store 选择普通扩展；npm 包内的 `extensions/` 目录只保留系统扩展 `codew-workspace-guard`。交互选择按 ESC 可无修改退出：
+普通扩展发布到配置的 `@codew-ext` Nexus Registry，并安装到经过验证的本地 Extension Store。`init` 和独立安装命令使用基于 `@clack/prompts` 的 Nexus 选择器：先提交搜索词，再在当前页多选扩展，然后通过页面操作菜单执行上一页、下一页、重新搜索、完成、重试或取消；npm 包内的 `extensions/` 目录只保留系统扩展 `codew-workspace-guard`。交互选择按 ESC 可无修改退出：
 
 ```bash
 codew init . --extensions monitor --yes
@@ -64,7 +64,20 @@ codew extension upgrade zhuiyi-jira-mcp --yes
 
 `init`、扩展安装和扩展卸载共享的 Workspace 操作锁配置在 Code Workspace 项目自身的 `.env` 中（不在目标 Workspace 中）。`CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` 默认值为 `5000`，`CODE_WORKSPACE_INIT_LOCK_STALE_MS` 默认值为 `30000`；进程环境变量优先于 `.env`。配置项名称见 `.env.example`。
 
-用户选择扩展名，不使用 `name@version` 位置语法。默认安装会从已配置的 `@codew-ext` Nexus Registry 和已验证本地 Store 中选择最高的兼容、稳定、非 deprecated 版本。单目标安装可用 `--version` 指定精确 SemVer； prerelease 必须通过精确版本请求，deprecated 版本还必须加 `--allow-deprecated`。`--offline` 禁止 Registry 访问，只基于本地事实解析。`codew-workspace-guard` 是包含 Workspace Guard、`codew-add-projects` 和 `codew-resolve-branch` 的系统扩展，由 `init` 自动安装或升级，不出现在扩展选择列表中，也不能通过 `extension install/uninstall/upgrade` 手动管理。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装普通扩展；`init` 不会隐式查询 Nexus。`none` 只跳过本次普通扩展初始化，不会卸载已有制品，也不会取消系统扩展处理。
+用户选择扩展名，不使用 `name@version` 位置语法。默认安装会从公司 `@codew-ext` Nexus Registry（也支持 `CODE_WORKSPACE_NEXUS_REGISTRY` 或用户级 npm 配置覆盖）和已验证本地 Store 中选择最高的兼容、稳定、非 deprecated 版本。新用户无需先执行 `npm config set` 才能发现扩展；如果 Nexus 要求认证，仍需使用用户级 npm token 或支持的环境变量。单目标安装可用 `--version` 指定精确 SemVer； prerelease 必须通过精确版本请求，deprecated 版本还必须加 `--allow-deprecated`。`--offline` 禁止 Registry 访问，只基于本地事实解析。`codew-workspace-guard` 是包含 Workspace Guard、`codew-add-projects` 和 `codew-resolve-branch` 的系统扩展，由 `init` 自动安装或升级，不出现在扩展选择列表中，也不能通过 `extension install/uninstall/upgrade` 手动管理。新 Workspace 非交互初始化时，未传 `--extensions` 就不安装普通扩展；`init` 不会隐式查询 Nexus。`none` 只跳过本次普通扩展初始化，不会卸载已有制品，也不会取消系统扩展处理。
+
+扩展连接配置保存在用户级配置中，不依赖 Workspace，使用方式类似 `npm config`：
+
+```bash
+codew config list
+codew config get extensions.registry
+codew config set extensions.registry https://pkg.in.wezhuiyi.com/repository/codew-extensions/
+codew config set extensions.scope @codew-ext
+codew config set extensions.auth-type legacy
+codew config delete extensions.registry
+```
+
+配置文件默认保存到用户 Home 目录下的 `~/.code-workspace/config.json`；Windows 为 `%USERPROFILE%\\.code-workspace\\config.json`。也可以通过 `CODE_WORKSPACE_CONFIG` 指定路径。`CODE_WORKSPACE_NEXUS_REGISTRY`、`CODE_WORKSPACE_NEXUS_SCOPE` 和 `CODE_WORKSPACE_NEXUS_AUTH_TYPE` 优先级高于用户配置，其后依次是匹配的用户级 npm scope 配置和内置默认值。配置命令永远不会保存 token。
 
 `extension install` 不会重新执行 Workspace 核心初始化。在 JSON、非 TTY 或 `--yes` 模式下，必须至少提供一个扩展名。多个名称按顺序安装，只确认一次且各自使用独立事务；任一扩展失败会使安装命令失败，但后续扩展仍会继续执行。Registry 已配置且默认解析无法取得远端 metadata 时，安装会在 Workspace 写入前失败，不会静默选择旧包。
 
@@ -87,7 +100,7 @@ code-workspace extension pack /path/to/extension/1.1.0 --output dist/extensions 
 Workspace 合成和验证，扩展不会直接 patch 真实 Workspace。卸载只使用已安装状态，不执行
 扩展代码；扩展所有的文件或贡献存在未知修改时会拒绝覆盖或删除。
 
-这是故障隔离，不是恶意代码安全沙箱。试验版本信任随 Code Workspace 发布的系统扩展代码，以及从已配置公司 Nexus 下载并通过归档、身份、manifest、入口、runtime 和 package digest 验证的普通扩展包。外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令和通过 `codew update` 自动更新扩展仍不支持。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/extension-development-guide.zh-CN.md`。
+这是故障隔离，不是恶意代码安全沙箱。试验版本信任随 Code Workspace 发布的系统扩展代码，以及从公司 Nexus 下载并通过归档、身份、manifest、入口、runtime 和 package digest 验证的普通扩展包。外部扩展目录、扩展依赖、任意 patch、强制卸载、禁用命令和通过 `codew update` 自动更新扩展仍不支持。开发契约见 `docs/extensions.zh-CN.md`；从目录结构到打包发布的完整流程见 `docs/extension-development/extension-development-guide.zh-CN.md`。
 
 ## 注册项目
 

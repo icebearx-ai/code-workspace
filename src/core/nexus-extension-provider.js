@@ -12,6 +12,14 @@ const fetchLibrary = require("make-fetch-happen");
 const ssri = require("ssri");
 
 const { WorkspaceError } = require("./errors");
+const {
+  DEFAULT_EXTENSION_AUTH_TYPE,
+  DEFAULT_EXTENSION_REGISTRY,
+  DEFAULT_EXTENSION_SCOPE,
+  normalizeScope,
+  resolveExtensionSettings,
+  validateRegistryUrl,
+} = require("./extension-settings");
 const { inspectExtensionPackageDirectory, parseSemver } = require("./extensions");
 const {
   DEFAULT_PACKAGE_LIMITS,
@@ -21,7 +29,8 @@ const {
 } = require("./extension-package");
 const { ensureStoredExtensionPackage } = require("./extension-store");
 
-const NPM_SCOPE = "@codew-ext";
+const NPM_SCOPE = DEFAULT_EXTENSION_SCOPE;
+const DEFAULT_NEXUS_REGISTRY = DEFAULT_EXTENSION_REGISTRY;
 const SEARCH_PATH = "/service/rest/v1/search";
 const DEFAULT_REQUEST_LIMITS = Object.freeze({
   connectTimeoutMs: 10_000,
@@ -33,39 +42,6 @@ const DEFAULT_REQUEST_LIMITS = Object.freeze({
 
 function nexusError(code, message, details = {}) {
   return new WorkspaceError(code, message, details);
-}
-
-function isLoopbackHostname(hostname) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
-}
-
-function validateRegistryUrl(value, options = {}) {
-  let url;
-  try {
-    url = new URL(String(value || ""));
-  } catch {
-    throw nexusError("EXTENSION_REGISTRY_URL_INVALID", "Nexus Registry URL is invalid", { registry: String(value || "") || null });
-  }
-  if (url.username || url.password || url.search || url.hash) {
-    throw nexusError("EXTENSION_REGISTRY_URL_INVALID", "Nexus Registry URL must not contain credentials, query, or fragment", { registryOrigin: url.origin });
-  }
-  if (url.protocol !== "https:" && !(options.allowLoopback === true && isLoopbackHostname(url.hostname))) {
-    throw nexusError("EXTENSION_REGISTRY_URL_INVALID", "Nexus Registry must use HTTPS", { registryOrigin: url.origin });
-  }
-  const match = url.pathname.match(/^\/repository\/([A-Za-z0-9][A-Za-z0-9._-]*)\/?$/);
-  if (!match) {
-    throw nexusError("EXTENSION_REGISTRY_URL_INVALID", "Nexus Registry URL must point to /repository/<name>/", {
-      registryOrigin: url.origin,
-      actualPath: url.pathname,
-    });
-  }
-  url.pathname = `/repository/${match[1]}/`;
-  return Object.freeze({
-    url,
-    registryUrl: url.toString(),
-    registryOrigin: url.origin,
-    repository: match[1],
-  });
 }
 
 function safeUserConfigDirectory() {
@@ -132,6 +108,8 @@ function createNexusCredentialAdapter({ registryUrl, explicitAuthorization }) {
 
 async function resolveNexusProviderConfiguration(options = {}) {
   const environment = options.environment || process.env;
+  const extensionSettings = resolveExtensionSettings(options);
+  const scope = normalizeScope(options.scope || environment.CODE_WORKSPACE_NEXUS_SCOPE || extensionSettings.values.scope);
   const explicitRegistry = options.registryUrl || environment.CODE_WORKSPACE_NEXUS_REGISTRY;
   const explicitToken = options.bearerToken || environment.CODE_WORKSPACE_NEXUS_AUTH_TOKEN;
   const explicitBasic = options.basicAuthorization || environment.CODE_WORKSPACE_NEXUS_BASIC_AUTH;
@@ -142,11 +120,14 @@ async function resolveNexusProviderConfiguration(options = {}) {
   if (explicitRegistry) {
     registry = validateRegistryUrl(explicitRegistry, options);
   } else {
-    const configured = rawConfig[`${NPM_SCOPE}:registry`];
+    const configured = extensionSettings.configured.registry
+      ? extensionSettings.values.registry
+      : rawConfig[`${scope}:registry`]
+        || (Object.prototype.hasOwnProperty.call(options, "defaultRegistryUrl") ? options.defaultRegistryUrl : null);
     if (!configured) {
-      throw nexusError("EXTENSION_REGISTRY_NOT_CONFIGURED", `No npm registry is configured for ${NPM_SCOPE}`, {
-        scope: NPM_SCOPE,
-        remediation: `Run npm config set ${NPM_SCOPE}:registry <https://nexus.example.com/repository/codew-extensions/>`,
+      throw nexusError("EXTENSION_REGISTRY_NOT_CONFIGURED", `No npm registry is configured for ${scope}`, {
+        scope,
+        remediation: `Run codew config set extensions.registry ${DEFAULT_NEXUS_REGISTRY}`,
       });
     }
     registry = validateRegistryUrl(configured, options);
@@ -157,6 +138,8 @@ async function resolveNexusProviderConfiguration(options = {}) {
   const authorization = explicitAuthorization || authorizationFromNpmrc(rawConfig, registry.registryUrl);
   return Object.freeze({
     ...registry,
+    scope,
+    authType: environment.CODE_WORKSPACE_NEXUS_AUTH_TYPE || (extensionSettings.configured.authType ? extensionSettings.values.authType : DEFAULT_EXTENSION_AUTH_TYPE),
     credentials: createNexusCredentialAdapter({ registryUrl: registry.registryUrl, explicitAuthorization: authorization }),
     hasCredentials: Boolean(authorization),
   });
@@ -207,7 +190,7 @@ function statusError(response, configuration, context) {
   if (response.status === 401) {
     return nexusError("EXTENSION_REGISTRY_UNAUTHENTICATED", "Nexus requires authentication for the configured extension Registry", {
       ...details,
-      remediation: "Run npm login against the exact Nexus repository URL and verify the user-level npm credentials.",
+      remediation: `Run npm login --auth-type=${configuration.authType || DEFAULT_EXTENSION_AUTH_TYPE} against the exact Nexus repository URL and verify the user-level npm credentials.`,
     });
   }
   if (response.status === 403) {
@@ -356,7 +339,7 @@ function packageVersionMetadata(configuration, packageName, version, value) {
     throw nexusError("EXTENSION_NPM_IDENTITY_MISMATCH", "Nexus package version does not match the requested version", { expected: version, actual: value.version ?? null });
   }
   const metadataEnvelope = value.codeWorkspace;
-  const extensionId = packageName.slice(NPM_SCOPE.length + 1);
+  const extensionId = packageName.slice(configuration.scope.length + 1);
   const envelope = validateExtensionTransportEnvelope({
     name: packageName,
     version,
@@ -367,6 +350,7 @@ function packageVersionMetadata(configuration, packageName, version, value) {
   }, {
     expectedId: extensionId,
     expectedVersion: version,
+    expectedScope: configuration.scope,
   });
   const dist = value.dist && typeof value.dist === "object" && !Array.isArray(value.dist) ? value.dist : {};
   const tarball = assertRegistryUrl(dist.tarball, configuration);
@@ -402,7 +386,7 @@ function packageVersionCandidate(configuration, packageName, version, value, opt
 async function resolveNexusExtensionPackageCandidate(provider, id, version, options = {}) {
   const extensionId = String(id || "");
   const versionValue = parseSemver(version).raw;
-  const packageName = extensionNpmPackageName(extensionId);
+  const packageName = extensionNpmPackageName(extensionId, provider.configuration.scope);
   const url = packumentUrl(provider.configuration, packageName);
   const response = await provider.requestJson(url, { expectedPath: "registry", context: `${packageName} metadata` }, options);
   const packument = await readJsonResponse(response, provider.configuration, provider.limits);
@@ -417,7 +401,7 @@ async function resolveNexusExtensionPackageCandidate(provider, id, version, opti
 
 async function getNexusExtensionPackageMetadata(provider, id, options = {}) {
   const extensionId = String(id || "");
-  const packageName = extensionNpmPackageName(extensionId);
+  const packageName = extensionNpmPackageName(extensionId, provider.configuration.scope);
   const response = await provider.requestJson(packumentUrl(provider.configuration, packageName), {
     expectedPath: "registry",
     context: `${packageName} metadata`,
@@ -467,12 +451,12 @@ function comparePrereleaseIdentifiers(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function packageNameFromSearchItem(item) {
+function packageNameFromSearchItem(item, scope) {
   if (typeof item?.name !== "string" || !item.name) return null;
-  if (item.name.startsWith(`${NPM_SCOPE}/`)) return item.name;
+  if (item.name.startsWith(`${scope}/`)) return item.name;
   const group = typeof item.group === "string" ? item.group.replace(/^@/, "") : item.group;
-  const scope = NPM_SCOPE.slice(1);
-  if (group === scope) return `${NPM_SCOPE}/${item.name}`;
+  const scopeName = scope.slice(1);
+  if (group === scopeName) return `${scope}/${item.name}`;
   return null;
 }
 
@@ -496,12 +480,12 @@ function normalizeSearchResponse(value, configuration, packageNameSeen) {
   for (const entry of value.items) {
     if (entry?.repository !== undefined && entry.repository !== configuration.repository) continue;
     if (entry?.format !== undefined && String(entry.format).toLowerCase() !== "npm") continue;
-    const packageName = packageNameFromSearchItem(entry);
+    const packageName = packageNameFromSearchItem(entry, configuration.scope);
     if (!packageName || packageNameSeen.has(packageName)) continue;
     packageNameSeen.add(packageName);
     items.push(Object.freeze({
       packageName,
-      extensionId: packageName.slice(NPM_SCOPE.length + 1),
+      extensionId: packageName.slice(configuration.scope.length + 1),
     }));
   }
   const continuationToken = value.continuationToken === undefined || value.continuationToken === null || value.continuationToken === ""
@@ -627,6 +611,7 @@ async function downloadNexusExtensionPackage(provider, candidate, options = {}) 
       expectedVersion: candidate.version,
       expectedExtensionSpecVersion: candidate.extensionSpecVersion,
       expectedPackageSha256: candidate.transport.codeWorkspace.packageSha256,
+      expectedScope: provider.configuration.scope,
     });
     const inspected = inspectExtensionPackageDirectory(extracted.sourceRoot, {
       expectedId: candidate.extensionId,
@@ -688,7 +673,7 @@ async function checkNexusExtensionRegistryHealth(provider, options = {}) {
   checks.push(Object.freeze({ id: "configuration", ok: true, registryOrigin: provider.configuration.registryOrigin, repository: provider.configuration.repository }));
   let metadataOk = false;
   try {
-    const packageName = options.healthPackageName || `${NPM_SCOPE}/monitor`;
+    const packageName = options.healthPackageName || `${provider.configuration.scope}/monitor`;
     const response = await provider.requestJson(packumentUrl(provider.configuration, packageName), { expectedPath: "registry", context: `${packageName} metadata` }, options);
     const packument = await readJsonResponse(response, provider.configuration, provider.limits);
     if (packument?.name !== packageName) throw nexusError("EXTENSION_REGISTRY_METADATA_INVALID", "Health check packument name mismatch");
@@ -786,6 +771,7 @@ async function createNexusExtensionPackageProvider(options = {}) {
 }
 
 module.exports = {
+  DEFAULT_NEXUS_REGISTRY,
   DEFAULT_REQUEST_LIMITS,
   NPM_SCOPE,
   checkNexusExtensionRegistryHealth,

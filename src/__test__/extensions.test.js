@@ -1127,7 +1127,7 @@ test("extension install requires explicit names non-interactively and confirmati
     args: ["example-extension"],
     options: { json: true },
     config: loadConfigProjection(root, ["identity", "language"]),
-    dependencies: { interactive: false, home: temporaryRoot() },
+    dependencies: { interactive: false, home: temporaryRoot(), defaultRegistryUrl: null },
   });
   assert.equal(unavailable.ok, false);
   assert.equal(unavailable.data.results[0].code, "EXTENSION_NOT_FOUND");

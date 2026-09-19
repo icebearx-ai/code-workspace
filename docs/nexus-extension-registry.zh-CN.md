@@ -191,9 +191,9 @@ npm login \
   --registry=https://nexus.example.com/repository/codew-extensions/
 ```
 
-Code Workspace 复用用户级 npm 配置中与该 Registry URL 精确匹配的凭证；不得读取目标 Workspace 内的 `.npmrc` 作为可信凭证来源。CI 使用独立服务账号或 Nexus 提供的服务账号 Token。
+Code Workspace 默认使用公司的 `https://pkg.in.wezhuiyi.com/repository/codew-extensions/` hosted Registry；也可以用 `codew config set extensions.registry <url>`、`CODE_WORKSPACE_NEXUS_REGISTRY` 或用户级 `@codew-ext:registry` 覆盖。scope 和 npm 登录模式也可通过 `codew config set extensions.scope <scope>`、`codew config set extensions.auth-type <legacy|web>` 管理。优先级为进程环境变量、Code Workspace 用户配置、匹配的用户级 npm scope 配置、内置默认值。凭证仍复用用户级 npm 配置中与该 Registry URL 精确匹配的 token；不得读取目标 Workspace 内的 `.npmrc` 作为可信凭证来源。CI 使用独立服务账号或 Nexus 提供的服务账号 Token。
 
-phase-07 的 core Provider 读取固定 scope：
+默认配置下 core Provider 使用 `@codew-ext` scope；如果部署到其他 hosted repository，可以通过用户级配置修改 scope：
 
 ```ini
 @codew-ext:registry=https://nexus.example.com/repository/codew-extensions/

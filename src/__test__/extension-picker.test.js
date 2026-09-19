@@ -37,6 +37,15 @@ test("picker reducer switches focus, edits search, moves, and toggles only enabl
   assert.equal(state.submitted, true);
 });
 
+test("picker treats the real TTY Enter key name (`return`) as submit", () => {
+  let state = createPickerState({ page: page(0, [{ id: "fresh", status: "not-installed" }]) });
+  state = pickerReducer(state, { type: "key", key: "tab" }).state;
+  state = pickerReducer(state, { type: "key", key: "space" }).state;
+  const reduced = pickerReducer(state, { type: "key", key: "return" });
+  assert.equal(reduced.state.submitted, true);
+  assert.equal(reduced.effect, "submit");
+});
+
 test("picker reducer maps list left/right to bounded page effects and blocks them while loading", () => {
   let state = createPickerState({ page: page(0, [{ id: "one" }], true) });
   state = pickerReducer(state, { type: "key", key: "tab" }).state;

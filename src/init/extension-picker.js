@@ -116,6 +116,9 @@ function toggleSelection(state) {
 
 function applyPage(state, page) {
   const normalized = normalizePickerPage(page);
+  const hasSelectableItem = normalized.items.some((item) => !item.disabled);
+  const hasCurrentItem = normalized.items.some((item) => item.status === "installed-current");
+  const hasUnavailableItem = normalized.items.some((item) => item.status === "unavailable");
   return withState(state, {
     pageIndex: normalized.pageIndex,
     items: normalized.items,
@@ -126,7 +129,13 @@ function applyPage(state, page) {
     cursor: clampCursor(normalized.items, state.cursor),
     loading: false,
     error: null,
-    statusMessage: normalized.partial ? "Some extension metadata could not be loaded; press r to retry." : "",
+    statusMessage: normalized.partial
+      ? "Some extension metadata could not be loaded; press r to retry."
+      : hasSelectableItem
+        ? ""
+        : hasCurrentItem && !hasUnavailableItem
+          ? "All extensions on this page are already installed at the latest version; type a search or use ←/→ to browse."
+          : "No selectable extensions on this page; type a search or use ←/→ to browse.",
   });
 }
 
@@ -138,7 +147,12 @@ function pickerReducer(state, event = {}) {
   if (event.type === "submit") return { state: withState(state, { submitted: true, loading: false }), effect: "submit" };
   if (event.type !== "key" || state.loading || state.cancelled || state.submitted) return { state, effect: null };
 
-  const key = String(event.key || "").toLowerCase();
+  // Node's readline keypress event names the Enter key as `return` (while
+  // injected/test events commonly use `enter`). Normalize both spellings so
+  // the same picker works in a real TTY and in deterministic callers.
+  const key = String(event.key || "").toLowerCase() === "return"
+    ? "enter"
+    : String(event.key || "").toLowerCase();
   if (key === "escape" || key === "esc" || key === "ctrl-c") return pickerReducer(state, { type: "cancel" });
   if (key === "tab") return { state: withState(state, { focus: state.focus === FOCUS_SEARCH ? FOCUS_LIST : FOCUS_SEARCH, statusMessage: state.focus === FOCUS_SEARCH ? "List focus: ↑↓ move, Space select, ← previous, → next, Enter submit" : "Search focus: type to filter, Tab switches focus" }), effect: null };
 
@@ -190,11 +204,14 @@ function renderPickerState(state) {
   return {
     lines: [
       `Extension picker · ${state.focus === FOCUS_SEARCH ? "search focus" : "list focus"}`,
-      `Search: ${state.query}`,
+      `Search: ${state.query.slice(0, state.queryCursor)}▏${state.query.slice(state.queryCursor)}`,
       page,
       state.focus === FOCUS_SEARCH
         ? "Type to search · Tab list · Enter list · Esc cancel"
         : "↑↓ move · Space select · ← previous · → next · Enter submit · Esc cancel",
+      ...(state.focus === FOCUS_LIST
+        ? [`← ${state.pageIndex > 0 ? "previous page" : "first page"} · → ${state.hasNext ? "next page" : "last page"}`]
+        : []),
       ...(state.loading ? ["Loading…"] : []),
       ...(state.error ? [`Error: ${state.error.message || "Unable to load extensions."} · press r to retry`] : []),
       ...items,
@@ -209,8 +226,10 @@ async function* keypressEvents(input) {
   readline.emitKeypressEvents(input);
   const hadRawMode = typeof input.isRaw === "boolean" ? input.isRaw : false;
   if (typeof input.setRawMode === "function") input.setRawMode(true);
+  if (typeof input.resume === "function") input.resume();
   const queue = [];
   let wake;
+  let ended = false;
   const onKey = (sequence, key = {}) => {
     queue.push(key.ctrl && key.name === "c" ? "ctrl-c" : key.name || sequence);
     if (wake) {
@@ -219,14 +238,28 @@ async function* keypressEvents(input) {
       resolve();
     }
   };
+  const onEnd = () => {
+    ended = true;
+    if (wake) {
+      const resolve = wake;
+      wake = null;
+      resolve();
+    }
+  };
   input.on("keypress", onKey);
+  input.once("end", onEnd);
   try {
     while (true) {
-      if (queue.length === 0) await new Promise((resolve) => { wake = resolve; });
+      if (queue.length === 0) {
+        if (ended) return;
+        await new Promise((resolve) => { wake = resolve; });
+        if (ended && queue.length === 0) return;
+      }
       while (queue.length > 0) yield queue.shift();
     }
   } finally {
     input.off("keypress", onKey);
+    input.off("end", onEnd);
     if (typeof input.setRawMode === "function") input.setRawMode(hadRawMode);
   }
 }
@@ -239,8 +272,16 @@ function resolvePageProvider(pageProvider, query) {
 
 async function runExtensionPicker(options = {}) {
   const pageProvider = options.pageProvider;
+  let renderedLines = 0;
   const render = options.render || ((state) => {
-    if (options.output?.write) options.output.write(`\u001b[2J\u001b[H${renderPickerState(state).lines.join("\n")}\n`);
+    if (!options.output?.write) return;
+    const lines = renderPickerState(state).lines;
+    // Redraw only the picker frame. This follows the same cursor/erase model
+    // used by @clack/prompts and avoids clearing the entire terminal, which is
+    // not honored by some IDE and captured-terminal implementations.
+    const rewind = renderedLines > 0 ? `\u001b[${renderedLines}A\u001b[1G\u001b[0J` : "";
+    options.output.write(`${rewind}${lines.join("\n")}\n`);
+    renderedLines = lines.length + 1;
   });
   const events = options.events || keypressEvents(options.input || process.stdin);
   let state = createPickerState({ query: options.query || "", selectedIds: options.selectedIds, selectionActions: options.selectionActions });

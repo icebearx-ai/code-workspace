@@ -14,6 +14,8 @@ const { loadInitManifest } = require("../../core/init");
 const { acquireInitLock } = require("../../core/init-lock");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { packExtensionToDirectory } = require("../../core/extension-package");
+const { resolveExtensionSettings } = require("../../core/extension-settings");
+const { DEFAULT_NEXUS_REGISTRY } = require("../../core/nexus-extension-provider");
 const {
   getRegistryExtensionInfo,
   listRegistryExtensionChoices,
@@ -25,6 +27,11 @@ const { createInteractiveUi, formatExtensionChoice } = require("../../init/ui");
 const { createRegistryExtensionPicker } = require("../../init/registry-picker");
 const { confirm } = require("../confirmation");
 const { selectionResult, success } = require("../result");
+
+function registryDependencies(dependencies = {}) {
+  if (Object.prototype.hasOwnProperty.call(dependencies, "defaultRegistryUrl")) return dependencies;
+  return { ...dependencies, defaultRegistryUrl: DEFAULT_NEXUS_REGISTRY };
+}
 
 function formatUninstallPlan(plan) {
   if (plan.action === "skip") return `Extension ${plan.id} is not installed.`;
@@ -170,7 +177,7 @@ function decorateBatchResults(batch, plans, options) {
 
 async function executeExtensionInstall(invocation) {
   const command = "extension.install";
-  const dependencies = invocation.dependencies || {};
+  const dependencies = registryDependencies(invocation.dependencies || {});
   validateInstallOptions(invocation);
   const interactive = dependencies.interactive ?? (!invocation.options.json && invocation.options.yes !== true && process.stdin.isTTY && process.stdout.isTTY);
   let requested = invocation.args.length > 0 ? normalizeExtensionNames(invocation.args) : null;
@@ -278,7 +285,7 @@ async function executeExtensionInstall(invocation) {
 }
 
 async function executeExtensionSearch(invocation) {
-  const dependencies = invocation.dependencies || {};
+  const dependencies = registryDependencies(invocation.dependencies || {});
   const interactive = dependencies.interactive ?? (!invocation.options.json && invocation.options.yes !== true && process.stdin.isTTY && process.stdout.isTTY);
   if (!interactive) {
     const result = await searchRegistryExtensions({
@@ -386,14 +393,14 @@ async function executeExtensionSearch(invocation) {
 async function executeExtensionInfo(invocation) {
   const result = await getRegistryExtensionInfo({
     name: invocation.args[0],
-    ...(invocation.dependencies || {}),
+    ...registryDependencies(invocation.dependencies || {}),
   });
   return success("extension.info", result, formatRegistryInfoText(result));
 }
 
 async function executeExtensionUpgrade(invocation) {
   const command = "extension.upgrade";
-  const dependencies = invocation.dependencies || {};
+  const dependencies = registryDependencies(invocation.dependencies || {});
   const requested = normalizeExtensionNames(invocation.args);
   const stateInspection = inspectExtensionState(invocation.root);
   const systemIds = new Set(discoverSystemExtensions({ tolerant: true, ...(dependencies.extensionsRoot ? { extensionsRoot: dependencies.extensionsRoot } : {}) }).catalog.map((entry) => entry.id));
@@ -472,7 +479,12 @@ async function executeExtensionUninstall(invocation) {
 
 async function executeExtensionPack(invocation) {
   const command = "extension.pack";
-  const result = await packExtensionToDirectory(invocation.args[0], invocation.options.output, invocation.dependencies || {});
+  const dependencies = invocation.dependencies || {};
+  const settings = resolveExtensionSettings(dependencies);
+  const result = await packExtensionToDirectory(invocation.args[0], invocation.options.output, {
+    ...dependencies,
+    scope: dependencies.scope || settings.values.scope,
+  });
   return success(
     command,
     result,

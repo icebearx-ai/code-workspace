@@ -15,10 +15,7 @@ const {
   packageRoot,
   listPackageReferences,
 } = require("./extension-store");
-const {
-  NPM_SCOPE,
-  createNexusExtensionPackageProvider,
-} = require("./nexus-extension-provider");
+const { NPM_SCOPE, createNexusExtensionPackageProvider } = require("./nexus-extension-provider");
 
 const DEFAULT_SEARCH_LIMIT = 50;
 const DEFAULT_BROWSE_METADATA_CONCURRENCY = 4;
@@ -144,7 +141,7 @@ async function searchRegistryExtensions(options = {}) {
     schemaVersion: 1,
     query,
     registry: Object.freeze({
-      scope: NPM_SCOPE,
+      scope: provider.configuration.scope || NPM_SCOPE,
       origin: provider.configuration.registryOrigin,
       repository: provider.configuration.repository,
     }),
@@ -209,7 +206,7 @@ async function mapBrowseWorkers(values, worker, concurrency) {
 
 function browseRegistrySummary(provider) {
   return Object.freeze({
-    scope: NPM_SCOPE,
+    scope: provider.configuration.scope || NPM_SCOPE,
     origin: provider.configuration?.registryOrigin || null,
     repository: provider.configuration?.repository || null,
   });
@@ -377,7 +374,7 @@ async function getRegistryExtensionInfo(options = {}) {
     extensionId,
     description: metadata.description,
     registry: Object.freeze({
-      scope: NPM_SCOPE,
+    scope: provider.configuration?.scope || NPM_SCOPE,
       origin: provider.configuration.registryOrigin,
       repository: provider.configuration.repository,
     }),

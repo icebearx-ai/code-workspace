@@ -12,6 +12,7 @@ const {
   runExtensionBatch,
 } = require("../../core/extensions");
 const { prepareRegistryExtensionPlans } = require("../../core/extension-registry-lifecycle");
+const { DEFAULT_NEXUS_REGISTRY } = require("../../core/nexus-extension-provider");
 const { compareVersions, loadInitManifest, minimumFromRange, runCommand } = require("../../core/init");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { initializeWorkspace } = require("../../core/initializer");
@@ -65,7 +66,9 @@ async function executeInit(invocation) {
 
 async function executeInitUnlocked(invocation, root) {
   const { options } = invocation;
-  const dependencies = invocation.dependencies || {};
+  const dependencies = invocation.dependencies && Object.prototype.hasOwnProperty.call(invocation.dependencies, "defaultRegistryUrl")
+    ? invocation.dependencies
+    : { ...(invocation.dependencies || {}), defaultRegistryUrl: DEFAULT_NEXUS_REGISTRY };
   if (options.json && options.yes !== true) {
     throw new WorkspaceError("CLI_CONFIRMATION_REQUIRED", "Workspace initialization requires explicit confirmation in JSON mode.", {
       remediation: "Re-run with --yes.",

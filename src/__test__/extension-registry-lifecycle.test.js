@@ -708,11 +708,11 @@ test("search and info handlers use shared results and fail when Registry is unco
   const home = temporaryRoot();
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   await assert.rejects(
-    () => executeExtensionSearch({ args: [], options: { json: true }, dependencies: { home } }),
+    () => executeExtensionSearch({ args: [], options: { json: true }, dependencies: { home, defaultRegistryUrl: null } }),
     (error) => error.code === "EXTENSION_REGISTRY_NOT_CONFIGURED"
   );
   await assert.rejects(
-    () => executeExtensionInfo({ args: ["example"], options: { json: true }, dependencies: { home } }),
+    () => executeExtensionInfo({ args: ["example"], options: { json: true }, dependencies: { home, defaultRegistryUrl: null } }),
     (error) => error.code === "EXTENSION_REGISTRY_NOT_CONFIGURED"
   );
 });

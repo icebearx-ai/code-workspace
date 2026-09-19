@@ -29,9 +29,17 @@ const COMMAND_SUMMARIES = {
   ext: "Run an extension runtime",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
+  "config get": "Read a user-level Code Workspace setting",
+  "config list": "List user-level Code Workspace settings",
+  "config set": "Set a user-level Code Workspace setting",
+  "config delete": "Reset a user-level Code Workspace setting",
 };
 
 const COMMANDS = [
+  { path: ["config", "get"], args: [{ name: "key", required: false }], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },
+  { path: ["config", "list"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },
+  { path: ["config", "set"], args: [{ name: "key", required: true }, { name: "value", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: {} },
+  { path: ["config", "delete"], args: [{ name: "key", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: {} },
   { path: ["init"], args: [{ name: "path", required: false }], workspace: "target", config: [], interaction: "optional", effects: "planned-write", options: {
     tools: { type: "string" }, extensions: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" },
     yes: { type: "boolean" }, force: { type: "boolean" },

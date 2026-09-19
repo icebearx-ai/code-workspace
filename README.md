@@ -47,7 +47,7 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 
 ### Experimental extensions
 
-Ordinary extensions are published to the configured `@codew-ext` Nexus Registry and installed into the verified local Extension Store. Interactive `init` opens the shared Nexus picker: type in the search field, press Tab or Enter to focus the list, use Space to select, ←/→ to move between the visible pages, and press Enter to confirm (ESC cancels without changes). The picker marks installed latest versions as disabled and offers installed older versions as updates. If Nexus is unavailable or a page request fails, the ordinary-extension step can be skipped while core initialization continues. The package-local `extensions/` directory contains only the system-managed `codew-workspace-guard`:
+Ordinary extensions are published to the configured `@codew-ext` Nexus Registry and installed into the verified local Extension Store. Interactive `init` opens the shared Clack-based Nexus picker: submit a search term, use autocomplete multi-select to choose extensions on the current page, then use the page-actions prompt to move to the next/previous page, search again, finish, retry, or cancel. The picker marks installed latest versions as disabled and offers installed older versions as updates. If Nexus is unavailable or a page request fails, the ordinary-extension step can be skipped while core initialization continues. The package-local `extensions/` directory contains only the system-managed `codew-workspace-guard`:
 
 ```bash
 codew init . --extensions monitor --yes
@@ -64,7 +64,20 @@ codew extension upgrade zhuiyi-jira-mcp --yes
 
 The Workspace operation lock shared by init, extension install, and extension uninstall is configured in the Code Workspace project's `.env` (not in the target Workspace). `CODE_WORKSPACE_INIT_LOCK_UPDATE_MS` defaults to `5000`, and `CODE_WORKSPACE_INIT_LOCK_STALE_MS` defaults to `30000`; process environment variables take precedence. See `.env.example` for the project configuration names.
 
-Users select names, not `name@version` positions. A default install resolves the highest compatible stable, non-deprecated version from the configured `@codew-ext` Nexus Registry and the verified local Store. A single-target install may instead pass an exact SemVer with `--version`; prereleases require that exact form, and a deprecated version additionally requires `--allow-deprecated`. `--offline` disables Registry access and resolves only local facts. `codew-workspace-guard` is the system extension containing the Workspace Guard, `codew-add-projects`, and `codew-resolve-branch`: `init` installs or upgrades it automatically, it is hidden from extension selection, and it cannot be managed through `extension install/uninstall/upgrade`. A new non-interactive Workspace installs no ordinary extensions unless `--extensions` is provided; `init` does not implicitly query Nexus. `none` skips ordinary extension work and does not uninstall existing artifacts or disable system extension processing.
+Users select names, not `name@version` positions. A default install resolves the highest compatible stable, non-deprecated version from the company `@codew-ext` Nexus Registry (or an explicit `CODE_WORKSPACE_NEXUS_REGISTRY`/user npm override) and the verified local Store. Fresh users do not need to run `npm config set` just to discover extensions; authentication, when required by Nexus, still comes from a user-level npm token or the supported environment variables. A single-target install may instead pass an exact SemVer with `--version`; prereleases require that exact form, and a deprecated version additionally requires `--allow-deprecated`. `--offline` disables Registry access and resolves only local facts. `codew-workspace-guard` is the system extension containing the Workspace Guard, `codew-add-projects`, and `codew-resolve-branch`: `init` installs or upgrades it automatically, it is hidden from extension selection, and it cannot be managed through `extension install/uninstall/upgrade`. A new non-interactive Workspace installs no ordinary extensions unless `--extensions` is provided; `init` does not implicitly query Nexus. `none` skips ordinary extension work and does not uninstall existing artifacts or disable system extension processing.
+
+Extension connection settings are user-level and can be managed without entering a Workspace, similar to `npm config`:
+
+```bash
+codew config list
+codew config get extensions.registry
+codew config set extensions.registry https://pkg.in.wezhuiyi.com/repository/codew-extensions/
+codew config set extensions.scope @codew-ext
+codew config set extensions.auth-type legacy
+codew config delete extensions.registry
+```
+
+The settings file is stored at `~/.code-workspace/config.json` under the user's home directory (`%USERPROFILE%\\.code-workspace\\config.json` on Windows). `CODE_WORKSPACE_CONFIG` can override its path. `CODE_WORKSPACE_NEXUS_REGISTRY`, `CODE_WORKSPACE_NEXUS_SCOPE`, and `CODE_WORKSPACE_NEXUS_AUTH_TYPE` take precedence over the user file, followed by a matching user npm scope registry and finally the built-in defaults. The config commands never store tokens.
 
 `extension install` does not rerun core Workspace initialization. In JSON, non-TTY, or `--yes` mode, at least one extension name is required. Multiple names are installed in order with one confirmation boundary and independent transactions; any failure makes the install command fail while later extensions still run. When the Registry is configured and a default resolution cannot obtain the remote metadata, installation fails before Workspace writes instead of silently using an older package.
 
@@ -89,7 +102,7 @@ verified by Code Workspace; extensions never patch the real Workspace directly. 
 recorded installed state and does not execute extension code. Unknown changes to extension-owned
 files or contributions stop the operation instead of being overwritten.
 
-This is fault isolation, not a malicious-code security sandbox. The experimental release trusts system extension code shipped with Code Workspace and ordinary extension code downloaded from the configured company Nexus after archive, identity, manifest, entry, runtime, and package-digest verification. External extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`; a step-by-step guide is in `docs/extension-development/extension-development-guide.zh-CN.md`.
+This is fault isolation, not a malicious-code security sandbox. The experimental release trusts system extension code shipped with Code Workspace and ordinary extension code downloaded from the company Nexus after archive, identity, manifest, entry, runtime, and package-digest verification. External extension directories, dependencies, arbitrary patches, force uninstall, disable commands, and automatic extension updates through `codew update` are not supported. The developer contract is in `docs/extensions.md`; a step-by-step guide is in `docs/extension-development/extension-development-guide.zh-CN.md`.
 
 ## Register projects
 

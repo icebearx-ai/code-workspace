@@ -1,5 +1,6 @@
 const { styleText } = require("node:util");
 const { runExtensionPicker } = require("./extension-picker");
+const { runClackExtensionPicker } = require("./clack-extension-picker");
 
 function formatExtensionChoice(entry, options = {}) {
   const title = options.includeId ? `${entry.id} · ${entry.name}` : entry.name;
@@ -56,7 +57,19 @@ async function createInteractiveUi(options = {}) {
       }));
     },
     async extensionPicker(options = {}) {
-      return runExtensionPicker({ input, output, ...options });
+      return runClackExtensionPicker({
+        input,
+        output,
+        ...options,
+        prompts: {
+          isCancel: clack.isCancel,
+          text: (promptOptions) => clack.text({ ...common, ...promptOptions }),
+          autocompleteMultiselect: (promptOptions) => clack.autocompleteMultiselect({ ...common, ...promptOptions }),
+          select: (promptOptions) => clack.select({ ...common, ...promptOptions }),
+          spinner: () => clack.spinner({ output }),
+          note: (title, lines) => clack.note(lines.join("\n"), title, common),
+        },
+      });
     },
     async confirm(label, initial = true) {
       return unwrap(await clack.confirm({ ...common, message: label, initialValue: initial }));
@@ -70,4 +83,4 @@ async function createInteractiveUi(options = {}) {
   };
 }
 
-module.exports = { createInteractiveUi, formatExtensionChoice, runExtensionPicker };
+module.exports = { createInteractiveUi, formatExtensionChoice, runExtensionPicker, runClackExtensionPicker };
