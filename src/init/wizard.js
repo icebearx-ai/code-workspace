@@ -9,6 +9,61 @@ const { createInteractiveUi, formatExtensionChoice } = require("./ui");
 const { formatPermissionPlan, planPermissionChanges } = require("../core/permissions");
 const { resolveExtensionPlans } = require("../core/extensions");
 
+function normalizePickerSelections(value) {
+  if (value && !Array.isArray(value) && Array.isArray(value.selections)) value = value.selections;
+  return Array.from(value || [], (entry) => {
+    if (typeof entry === "string") return { id: entry, action: "install" };
+    return { id: entry.id, action: entry.action || "install" };
+  }).filter((entry) => entry.id);
+}
+
+async function collectExtensionPlans(options, ui, tools) {
+  if (options.extensions !== undefined) {
+    const selected = normalizePickerSelections(options.extensions);
+    if (typeof options.prepareExtensions === "function") return options.prepareExtensions(selected, tools);
+    const catalog = options.extensionCatalog || [];
+    return resolveExtensionPlans(catalog, selected.map((entry) => entry.id), {
+      tools,
+      state: options.extensionState,
+    });
+  }
+
+  if (typeof options.extensionPicker === "function") {
+    try {
+      const selected = normalizePickerSelections(await options.extensionPicker({
+        ui,
+        selectedIds: options.initialExtensions || [],
+        query: options.extensionQuery || "",
+      }));
+      if (typeof options.prepareExtensions === "function") return options.prepareExtensions(selected, tools);
+      return selected;
+    } catch (error) {
+      ui.note("Extensions unavailable", [
+        error.message || "The Nexus extension Registry could not be reached.",
+        "Ordinary extensions will be skipped; core Workspace initialization can continue.",
+      ]);
+      return [];
+    }
+  }
+
+  // Kept for direct callers that inject a catalog (production init no longer does).
+  const extensionCatalog = options.extensionCatalog || [];
+  const supportedExtensions = extensionCatalog.filter((entry) => entry.latestSupported);
+  if (supportedExtensions.length === 0) return [];
+  const extensionNames = await ui.multiselect(
+    "Extensions (experimental, select any)",
+    supportedExtensions.map((entry) => ({
+      value: entry.id,
+      label: formatExtensionChoice(entry),
+    })),
+    options.initialExtensions !== undefined ? options.initialExtensions : []
+  );
+  return resolveExtensionPlans(extensionCatalog, extensionNames, {
+    tools,
+    state: options.extensionState,
+  });
+}
+
 async function collectInitPlan(root, manifest, options = {}) {
   const ui = options.ui || await createInteractiveUi(options);
   ui.intro();
@@ -43,24 +98,13 @@ async function collectInitPlan(root, manifest, options = {}) {
     toolChoices,
     options.initialTools || ["claude", "codex"]
   );
-  const extensionCatalog = options.extensionCatalog || [];
-  const supportedExtensions = extensionCatalog.filter((entry) => entry.latestSupported);
-  const extensionNames = options.extensions !== undefined
-    ? options.extensions
-    : supportedExtensions.length > 0
-      ? await ui.multiselect(
-        "Extensions (experimental, select any)",
-        supportedExtensions.map((entry) => ({
-          value: entry.id,
-          label: formatExtensionChoice(entry),
-        })),
-        options.initialExtensions !== undefined ? options.initialExtensions : []
-      )
-      : [];
-  const extensions = resolveExtensionPlans(extensionCatalog, extensionNames, {
-    tools,
-    state: options.extensionState,
-  });
+  const systemExtensions = typeof options.prepareSystemExtensions === "function"
+    ? await options.prepareSystemExtensions(tools)
+    : (options.systemExtensions || []);
+  const extensions = [
+    ...systemExtensions,
+    ...(await collectExtensionPlans(options, ui, tools)),
+  ];
   const workspace = existing?.workspace || { name, uuid: randomUUID() };
   const plan = createInitPlan({ root, workspace, tools, language, extensions });
   ui.note("Ready to initialize", [

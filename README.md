@@ -47,7 +47,7 @@ It does not create `openspec/`, install native `/opsx` commands, or install nati
 
 ### Experimental extensions
 
-Ordinary extensions are published to the configured `@codew-ext` Nexus Registry and installed into the verified local Extension Store. `init` and the dedicated install command select ordinary extensions from Nexus/Store; the package-local `extensions/` directory contains only the system-managed `codew-workspace-guard`. Interactive selection can be cancelled with ESC without changes:
+Ordinary extensions are published to the configured `@codew-ext` Nexus Registry and installed into the verified local Extension Store. Interactive `init` opens the shared Nexus picker: type in the search field, press Tab or Enter to focus the list, use Space to select, ←/→ to move between the visible pages, and press Enter to confirm (ESC cancels without changes). The picker marks installed latest versions as disabled and offers installed older versions as updates. If Nexus is unavailable or a page request fails, the ordinary-extension step can be skipped while core initialization continues. The package-local `extensions/` directory contains only the system-managed `codew-workspace-guard`:
 
 ```bash
 codew init . --extensions monitor --yes

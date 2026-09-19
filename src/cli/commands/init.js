@@ -10,13 +10,89 @@ const {
   parseExtensionSelection,
   prepareExtensionPlans,
   runExtensionBatch,
+  compareSemver,
 } = require("../../core/extensions");
+const {
+  createRegistryExtensionBrowseSession,
+  prepareRegistryExtensionPlans,
+} = require("../../core/extension-registry-lifecycle");
 const { compareVersions, loadInitManifest, minimumFromRange, runCommand } = require("../../core/init");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
 const { initializeWorkspace } = require("../../core/initializer");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { collectInitPlan } = require("../../init/wizard");
 const { success } = require("../result");
+
+function stateWithPlans(state, plans) {
+  const next = structuredClone(state || emptyExtensionState());
+  for (const plan of plans || []) {
+    next.extensions[plan.id] = {
+      installed: {
+        system: plan.system === true,
+        artifacts: plan.artifacts.map((artifact) => ({
+          id: artifact.id,
+          kind: artifact.kind,
+          ownership: artifact.ownership,
+          target: artifact.target,
+          ...(artifact.selector ? { selector: artifact.selector } : {}),
+        })),
+        hooks: plan.hooks.map((hook) => ({ ...hook })),
+      },
+    };
+  }
+  return next;
+}
+
+function mapPickerPage(page, state = emptyExtensionState(), systemIds = new Set()) {
+  const items = (page.items || [])
+    .filter((item) => !systemIds.has(item.extensionId))
+    .map((item) => {
+      const candidate = item.latestCandidate;
+      const installed = state.extensions[item.extensionId]?.installed;
+      let status = "not-installed";
+      if (!candidate) status = "unavailable";
+      else if (installed) {
+        const same = installed.version === candidate.version && installed.packageSha256 === candidate.packageSha256;
+        status = same || compareSemver(candidate.version, installed.version) < 0 ? "installed-current" : "installed-outdated";
+      }
+      return {
+        id: item.extensionId,
+        name: item.name || item.extensionId,
+        description: item.description || "",
+        version: candidate?.version || null,
+        packageSha256: candidate?.packageSha256 || null,
+        status,
+        disabled: status === "installed-current" || status === "unavailable",
+      };
+    });
+  return { ...page, items };
+}
+
+function createInitExtensionPicker({ dependencies, state, systemIds }) {
+  const createSession = dependencies.createRegistryExtensionBrowseSession || createRegistryExtensionBrowseSession;
+  return async ({ ui, query = "", selectedIds = [] }) => ui.extensionPicker({
+    query,
+    selectedIds,
+    pageProvider: async (pageQuery) => {
+      const session = await createSession({
+        ...dependencies,
+        query: pageQuery,
+        provider: dependencies.nexusProvider,
+      });
+      const map = async (method) => mapPickerPage(await session[method](), state, systemIds);
+      return {
+        next: () => map("next"),
+        previous: () => map("previous"),
+        retry: () => map("retry"),
+        current: () => {
+          const page = session.current();
+          return page ? mapPickerPage(page, state, systemIds) : null;
+        },
+        close: () => session.close(),
+      };
+    },
+  }).then((result) => result.status === "submitted" ? result.selections : []);
+}
 
 function migrationData(plan) {
   if (!plan) return null;
@@ -43,6 +119,7 @@ async function executeInit(invocation) {
 
 async function executeInitUnlocked(invocation, root) {
   const { options } = invocation;
+  const dependencies = invocation.dependencies || {};
   if (options.json && options.yes !== true) {
     throw new WorkspaceError("CLI_CONFIRMATION_REQUIRED", "Workspace initialization requires explicit confirmation in JSON mode.", {
       remediation: "Re-run with --yes.",
@@ -66,32 +143,38 @@ async function executeInitUnlocked(invocation, root) {
     state: existingState,
     manifestTools: manifest.tools,
   });
-  const interactive = !options.json && !options.yes && process.stdin.isTTY && process.stdout.isTTY;
+  const interactive = dependencies.interactive ?? (!options.json && !options.yes && process.stdin.isTTY && process.stdout.isTTY);
   const inspectExtensions = true;
   const extensionStateInspection = inspectExtensions ? inspectExtensionState(root) : { state: emptyExtensionState(), error: null };
   const extensionState = extensionStateInspection.state;
-  // Ordinary extensions are resolved from Nexus/Store by the registry picker.
-  // This phase deliberately removes the package-local ordinary catalog from init;
-  // only the system catalog remains here until the shared picker is wired in.
-  const defaultExtensions = [];
-  const extensionCatalogResult = { catalog: [], invalid: [] };
   const systemCatalogResult = inspectExtensions ? discoverSystemExtensions({ tolerant: true }) : { catalog: [], invalid: [] };
-  const combinedCatalogResult = {
-    catalog: [...extensionCatalogResult.catalog, ...systemCatalogResult.catalog],
-    invalid: [...extensionCatalogResult.invalid, ...systemCatalogResult.invalid],
+  const systemRequestedExtensions = systemCatalogResult.catalog.filter((entry) => entry.latestSupported).map((entry) => entry.id);
+  let systemPreparation = { plans: [], failures: [], diagnostics: [] };
+  let planningState = extensionState;
+  const prepareSystemForTools = (tools) => {
+    systemPreparation = prepareExtensionPlans(systemCatalogResult, systemRequestedExtensions, {
+      tools,
+      state: extensionState,
+      stateError: extensionStateInspection.error,
+    });
+    planningState = stateWithPlans(extensionState, systemPreparation.plans);
+    return systemPreparation.plans;
   };
-  const duplicateIds = new Set();
-  for (const entry of combinedCatalogResult.catalog) {
-    if (duplicateIds.has(entry.id)) throw new WorkspaceError("EXTENSION_ID_CONFLICT", `Extension id is declared by both ordinary and system repositories: ${entry.id}`, { extension: entry.id });
-    duplicateIds.add(entry.id);
-  }
-  const extensionCatalog = extensionStateInspection.error && interactive ? [] : extensionCatalogResult.catalog;
-  if (interactive && explicitExtensions !== null) {
-    prepareExtensionPlans(combinedCatalogResult, explicitExtensions, { tools: resolvedTools.tools, state: extensionState, stateError: extensionStateInspection.error });
-  }
-  const interactiveExplicitExtensions = explicitExtensions === null
-    ? undefined
-    : explicitExtensions.filter((id) => extensionCatalog.some((entry) => entry.id === id && entry.latestSupported));
+  if (!interactive) prepareSystemForTools(resolvedTools.tools);
+  let interactiveOrdinaryPreparation = { plans: [], failures: [], diagnostics: [] };
+  const prepareOrdinaryExtensions = async (selected, selectedTools) => {
+    interactiveOrdinaryPreparation = await prepareRegistryExtensionPlans({
+      ...dependencies,
+      requested: selected.map((entry) => entry.id),
+      tools: selectedTools || resolvedTools.tools,
+      state: planningState,
+      stateError: extensionStateInspection.error,
+      extensionsRoot: dependencies.extensionsRoot,
+      extensionStoreRoot: options.extensionStoreRoot || dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+      provider: dependencies.nexusProvider,
+    });
+    return interactiveOrdinaryPreparation.plans;
+  };
   let plan = null;
   if (interactive) {
     try {
@@ -101,10 +184,12 @@ async function executeInitUnlocked(invocation, root) {
         initialTools: resolvedTools.tools,
         workspaceName: options["workspace-name"],
         language: options.language,
-        extensionCatalog,
         extensionState,
-        extensions: interactiveExplicitExtensions,
-        initialExtensions: explicitExtensions === null ? undefined : interactiveExplicitExtensions,
+        extensions: explicitExtensions === null ? undefined : explicitExtensions,
+        initialExtensions: explicitExtensions === null ? undefined : explicitExtensions,
+        prepareSystemExtensions: prepareSystemForTools,
+        prepareExtensions: prepareOrdinaryExtensions,
+        extensionPicker: createInitExtensionPicker({ dependencies, state: extensionState, systemIds: new Set(systemRequestedExtensions) }),
       });
     } catch (error) {
       if (error.code === "INIT_CANCELLED") {
@@ -116,10 +201,33 @@ async function executeInitUnlocked(invocation, root) {
   const tools = plan?.tools || resolvedTools.tools;
   const ordinaryRequestedExtensions = explicitExtensions !== null
     ? explicitExtensions
-    : plan ? plan.extensions.map((entry) => entry.id) : defaultExtensions;
-  const systemRequestedExtensions = systemCatalogResult.catalog.filter((entry) => entry.latestSupported).map((entry) => entry.id);
+    : plan ? plan.extensions.filter((entry) => entry.system !== true).map((entry) => entry.id) : [];
   const requestedExtensions = [...new Set([...ordinaryRequestedExtensions, ...systemRequestedExtensions])];
-  const extensionPreparation = prepareExtensionPlans(combinedCatalogResult, requestedExtensions, { tools, state: extensionState, stateError: extensionStateInspection.error });
+  const extensionPreparation = { plans: [], failures: [], diagnostics: [] };
+  if (interactive) {
+    extensionPreparation.plans = [...systemPreparation.plans, ...interactiveOrdinaryPreparation.plans];
+    extensionPreparation.failures = [...systemPreparation.failures, ...interactiveOrdinaryPreparation.failures];
+    extensionPreparation.diagnostics = [...systemPreparation.diagnostics, ...interactiveOrdinaryPreparation.diagnostics];
+  }
+  if (!interactive && explicitExtensions !== null && explicitExtensions.length > 0) {
+    const ordinary = await prepareRegistryExtensionPlans({
+      ...dependencies,
+      requested: explicitExtensions,
+      tools,
+      state: planningState,
+      stateError: extensionStateInspection.error,
+      extensionsRoot: dependencies.extensionsRoot,
+      extensionStoreRoot: options.extensionStoreRoot || dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+      provider: dependencies.nexusProvider,
+    });
+    extensionPreparation.plans = [...systemPreparation.plans, ...ordinary.plans];
+    extensionPreparation.failures = [...systemPreparation.failures, ...ordinary.failures];
+    extensionPreparation.diagnostics = [...systemPreparation.diagnostics, ...ordinary.diagnostics];
+  } else if (!interactive) {
+    extensionPreparation.plans = systemPreparation.plans;
+    extensionPreparation.failures = systemPreparation.failures;
+    extensionPreparation.diagnostics = systemPreparation.diagnostics;
+  }
   const extensionPlans = extensionPreparation.plans;
   const toolSelection = { tools, source: plan ? (options.tools !== undefined ? "cli" : "interactive") : resolvedTools.source };
   const result = await initializeWorkspace(root, {
@@ -207,4 +315,4 @@ async function executeInitUnlocked(invocation, root) {
   return success("init", data, lines.join("\n"), extensionDiagnostics);
 }
 
-module.exports = { executeInit, migrationData };
+module.exports = { createInitExtensionPicker, executeInit, mapPickerPage, migrationData, stateWithPlans };
