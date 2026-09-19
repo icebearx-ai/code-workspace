@@ -1,9 +1,0 @@
-[mcp_servers.zhuiyi-opensvn]
-command = "node"
-args = [".codew/extensions/zhuiyi-opensvn-mcp/0.1.0/dist/index.js"]
-
-[mcp_servers.zhuiyi-opensvn.env]
-SVN_AUTHORIZATION = ""
-SVN_OUTPUT_DIR = ".mcp-cache-opensvn"
-SVN_MAX_RESOURCES = "200"
-SVN_ALLOWED_HOSTS = "opssvn.in.wezhuiyi.com"
