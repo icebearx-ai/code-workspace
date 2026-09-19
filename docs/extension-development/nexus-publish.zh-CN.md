@@ -37,9 +37,7 @@ npm config set @codew-ext:registry "$NEXUS"
 登录：
 
 ```bash
-npm login \
-  --auth-type=legacy \
-  --registry="$NEXUS"
+npm login --auth-type=legacy --registry="$NEXUS"
 ```
 
 确认登录状态：
