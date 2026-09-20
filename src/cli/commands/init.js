@@ -44,6 +44,24 @@ function stateWithPlans(state, plans) {
   return next;
 }
 
+function sameUninstallTarget(expected, current) {
+  return expected.id === current.id
+    && expected.version === current.version
+    && (expected.packageSha256 || null) === (current.packageSha256 || null)
+    && JSON.stringify(expected.targets || []) === JSON.stringify(current.targets || []);
+}
+
+function refreshUninstallPlan(root, frozenPlan) {
+  const currentPlan = planExtensionUninstall(root, frozenPlan.id);
+  if (currentPlan.action !== frozenPlan.action || !sameUninstallTarget(frozenPlan, currentPlan)) {
+    throw new WorkspaceError("EXTENSION_STATE_CONFLICT", `Extension ${frozenPlan.id} changed after confirmation.`, {
+      extension: frozenPlan.id,
+      remediation: "Re-run init and review the current extension selection.",
+    });
+  }
+  return currentPlan;
+}
+
 function migrationData(plan) {
   if (!plan) return null;
   return {
@@ -258,8 +276,9 @@ async function executeInitUnlocked(invocation, root) {
   const ordinaryRemovalResults = [];
   const ordinaryRemovalDiagnostics = [];
   for (const removalPlan of ordinaryRemovalPlans) {
-    const planToApply = typeof removalPlan === "string" ? planExtensionUninstall(root, removalPlan) : removalPlan;
+    const frozenPlan = typeof removalPlan === "string" ? planExtensionUninstall(root, removalPlan) : removalPlan;
     try {
+      const planToApply = refreshUninstallPlan(root, frozenPlan);
       const removal = applyExtensionUninstall(planToApply, {
         extensionStoreRoot: options.extensionStoreRoot || dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
       });

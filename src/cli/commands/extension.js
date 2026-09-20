@@ -159,6 +159,24 @@ function uninstallResultEntry(entry) {
   };
 }
 
+function sameUninstallTarget(expected, current) {
+  return expected.id === current.id
+    && expected.version === current.version
+    && (expected.packageSha256 || null) === (current.packageSha256 || null)
+    && JSON.stringify(expected.targets || []) === JSON.stringify(current.targets || []);
+}
+
+function refreshUninstallPlan(root, frozenPlan) {
+  const currentPlan = planExtensionUninstall(root, frozenPlan.id);
+  if (currentPlan.action !== frozenPlan.action || !sameUninstallTarget(frozenPlan, currentPlan)) {
+    throw new WorkspaceError("EXTENSION_STATE_CONFLICT", `Extension ${frozenPlan.id} changed after confirmation.`, {
+      extension: frozenPlan.id,
+      remediation: "Re-run extension search and review the current extension selection.",
+    });
+  }
+  return currentPlan;
+}
+
 function validateInstallOptions(invocation) {
   if (invocation.options.version) {
     if (invocation.args.length !== 1) {
@@ -382,7 +400,8 @@ async function executeExtensionSearch(invocation) {
   const uninstallResults = [];
   for (const plan of effectiveUninstallPlans) {
     try {
-      uninstallResults.push({ ...applyExtensionUninstall(plan, {
+      const currentPlan = refreshUninstallPlan(invocation.root, plan);
+      uninstallResults.push({ ...applyExtensionUninstall(currentPlan, {
         ...(dependencies || {}),
         extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
       }), action: "uninstall" });
