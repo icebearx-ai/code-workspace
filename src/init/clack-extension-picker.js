@@ -50,8 +50,13 @@ function mergePageSelections(selected, page, values) {
   }
 }
 
-function selectedResult(selected) {
-  return [...selected.entries()].map(([id, action]) => ({ id, action }));
+function selectedResult(selected, installedIds = []) {
+  const result = [...selected.entries()].map(([id, action]) => ({ id, action }));
+  const selectedIds = new Set(selected.keys());
+  for (const id of installedIds) {
+    if (!selectedIds.has(id)) result.push({ id, action: "uninstall" });
+  }
+  return result;
 }
 
 function pageOptions(page) {
@@ -140,7 +145,9 @@ async function runClackExtensionPicker(options = {}) {
   }
 
   const selected = new Map();
-  for (const id of options.selectedIds || []) selected.set(String(id), "install");
+  const selectionActions = options.selectionActions || {};
+  for (const id of options.selectedIds || []) selected.set(String(id), selectionActions[id] || "install");
+  const installedIds = [...new Set((options.installedIds || []).map(String))];
   let query = String(options.query || "");
   let session = null;
   let page = null;
@@ -203,7 +210,7 @@ async function runClackExtensionPicker(options = {}) {
       }
       if (action === "done") {
         closeSession();
-        return { status: "submitted", selections: selectedResult(selected) };
+        return { status: "submitted", selections: selectedResult(selected, installedIds) };
       }
       if (action === "search") {
         promptForQuery = true;
@@ -255,7 +262,7 @@ async function runClackExtensionPicker(options = {}) {
         closeSession();
         return {
           status: "submitted",
-          selections: selectedResult(selected),
+          selections: selectedResult(selected, installedIds),
         };
       }
       if (action === "search") {
@@ -284,7 +291,7 @@ async function runClackExtensionPicker(options = {}) {
           closeSession();
           return {
             status: "submitted",
-            selections: selectedResult(selected),
+            selections: selectedResult(selected, installedIds),
           };
         }
         if (retryAction === "retry") {

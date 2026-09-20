@@ -21,6 +21,7 @@ const { initializeWorkspace } = require("../../core/initializer");
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { collectInitPlan } = require("../../init/wizard");
 const { createRegistryExtensionPicker, mapPickerPage } = require("../../init/registry-picker");
+const { formatExtensionChanges } = require("../../init/extension-summary");
 const { success } = require("../result");
 
 function stateWithPlans(state, plans) {
@@ -133,17 +134,27 @@ async function executeInitUnlocked(invocation, root) {
   if (!interactive) prepareSystemForTools(resolvedTools.tools);
   let interactiveOrdinaryPreparation = { plans: [], failures: [], diagnostics: [] };
   const prepareOrdinaryExtensions = async (selected, selectedTools) => {
+    const installSelections = selected.filter((entry) => entry.action !== "uninstall" && entry.action !== "keep");
+    const uninstallSelections = selected.filter((entry) => entry.action === "uninstall");
+    const uninstallPlans = uninstallSelections.map((entry) => planExtensionUninstall(root, entry.id));
+    const installState = structuredClone(planningState);
+    for (const entry of uninstallSelections) delete installState.extensions[entry.id];
     interactiveOrdinaryPreparation = await prepareRegistryExtensionPlans({
       ...dependencies,
-      requested: selected.map((entry) => entry.id),
+      requested: installSelections.map((entry) => entry.id),
       tools: selectedTools || resolvedTools.tools,
-      state: planningState,
+      state: installState,
       stateError: extensionStateInspection.error,
       extensionsRoot: dependencies.extensionsRoot,
       extensionStoreRoot: options.extensionStoreRoot || dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
       provider: dependencies.nexusProvider,
     });
-    return interactiveOrdinaryPreparation.plans;
+    interactiveOrdinaryPreparation.plans = interactiveOrdinaryPreparation.plans.map((plan) => ({
+      ...plan,
+      action: selected.find((entry) => entry.id === plan.id)?.action || "install",
+    }));
+    interactiveOrdinaryPreparation.uninstallPlans = uninstallPlans;
+    return interactiveOrdinaryPreparation;
   };
   let plan = null;
   if (interactive) {
@@ -160,6 +171,7 @@ async function executeInitUnlocked(invocation, root) {
         prepareSystemExtensions: prepareSystemForTools,
         prepareExtensions: prepareOrdinaryExtensions,
         extensionPicker: createRegistryExtensionPicker({ dependencies, state: extensionState, systemIds: new Set(systemExtensionIds) }),
+        formatExtensionChanges,
       });
     } catch (error) {
       if (error.code === "INIT_CANCELLED") {
@@ -172,7 +184,12 @@ async function executeInitUnlocked(invocation, root) {
   const ordinaryRequestedExtensions = explicitExtensions !== null
     ? explicitExtensions
     : plan ? plan.extensions.filter((entry) => entry.system !== true).map((entry) => entry.id) : [];
-  const requestedExtensions = [...new Set([...ordinaryRequestedExtensions, ...systemRequestedExtensions])];
+  const ordinaryRemovalPlans = plan?.extensionRemovals || [];
+  const requestedExtensions = [...new Set([
+    ...ordinaryRequestedExtensions,
+    ...ordinaryRemovalPlans.map((entry) => typeof entry === "string" ? entry : entry.id),
+    ...systemRequestedExtensions,
+  ])];
   const extensionPreparation = { plans: [], failures: [], diagnostics: [] };
   if (interactive) {
     extensionPreparation.plans = [...systemPreparation.plans, ...interactiveOrdinaryPreparation.plans];
@@ -238,7 +255,21 @@ async function executeInitUnlocked(invocation, root) {
       });
     }
   }
-  const extensionResult = runExtensionBatch(root, extensionPlans, (extension) => ({
+  const ordinaryRemovalResults = [];
+  const ordinaryRemovalDiagnostics = [];
+  for (const removalPlan of ordinaryRemovalPlans) {
+    const planToApply = typeof removalPlan === "string" ? planExtensionUninstall(root, removalPlan) : removalPlan;
+    try {
+      const removal = applyExtensionUninstall(planToApply, {
+        extensionStoreRoot: options.extensionStoreRoot || dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+      });
+      ordinaryRemovalResults.push({ ...removal, action: removal.status === "skipped" ? "skip" : "uninstall" });
+    } catch (error) {
+      ordinaryRemovalResults.push({ id: planToApply.id, version: planToApply.version || null, status: "failed", action: "uninstall", code: error.code || "EXTENSION_UNINSTALL_FAILED", message: error.message });
+      ordinaryRemovalDiagnostics.push({ code: error.code || "EXTENSION_UNINSTALL_FAILED", severity: "warning", message: `Extension ${planToApply.id} failed to uninstall: ${error.message}`, extension: planToApply.id });
+    }
+  }
+  const extensionBatch = runExtensionBatch(root, extensionPlans, (extension) => ({
     schemaVersion: 1,
     extensionSpecVersion: extension.extensionSpecVersion,
     extension: { id: extension.id, version: extension.version },
@@ -249,11 +280,22 @@ async function executeInitUnlocked(invocation, root) {
     },
     tools,
   }), {
-    requested: requestedExtensions,
+    requested: [...new Set([...ordinaryRequestedExtensions, ...systemRequestedExtensions])],
     preFailures: extensionPreparation.failures,
     useExtensionStore: true,
     extensionStoreRoot: options.extensionStoreRoot || defaultExtensionStoreRoot(),
   });
+  const extensionResultEntries = [...ordinaryRemovalResults, ...extensionBatch.results];
+  const extensionResult = {
+    requested: requestedExtensions,
+    results: extensionResultEntries,
+    summary: {
+      installed: extensionResultEntries.filter((entry) => entry.status === "installed").length,
+      uninstalled: extensionResultEntries.filter((entry) => entry.status === "uninstalled").length,
+      skipped: extensionResultEntries.filter((entry) => entry.status === "skipped").length,
+      failed: extensionResultEntries.filter((entry) => entry.status === "failed").length,
+    },
+  };
   const extensionDiagnostics = [
     ...(dev === false && extensionStateInspection.error ? [{
       code: "SYSTEM_EXTENSION_DISABLE_SKIPPED",
@@ -262,6 +304,7 @@ async function executeInitUnlocked(invocation, root) {
       causeCode: extensionStateInspection.error.code || null,
     }] : []),
     ...systemRemovalDiagnostics,
+    ...ordinaryRemovalDiagnostics,
     ...extensionPreparation.diagnostics,
     ...extensionResult.results
     .filter((entry) => entry.status === "failed")
@@ -313,7 +356,7 @@ async function executeInitUnlocked(invocation, root) {
     `Workspace: ${result.workspaceConfig.workspace.name} (${result.workspaceConfig.workspace.uuid})`,
     `Language: ${result.language}`,
     `Tools: ${tools.length ? tools.join(", ") : "none"} (${toolSelection.source})`,
-    `Extensions: ${extensionResult.summary.installed} installed, ${extensionResult.summary.skipped} skipped, ${extensionResult.summary.failed} failed`,
+    `Extensions: ${extensionResult.summary.installed} installed, ${extensionResult.summary.uninstalled || 0} uninstalled, ${extensionResult.summary.skipped} skipped, ${extensionResult.summary.failed} failed`,
   ];
   if (result.workspaceConfig.workspace.dev !== false && (result.localConfig.action === "write" || result.permissions.action === "skip")) {
     lines.push(tools.length > 0

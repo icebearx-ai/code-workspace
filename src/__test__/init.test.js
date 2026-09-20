@@ -146,7 +146,7 @@ test("init picker mapping hides system extensions and exposes current/update sta
     },
   }, new Set(["codew-workspace-guard"]));
   assert.deepEqual(page.items.map((entry) => [entry.id, entry.status, entry.disabled]), [
-    ["current", "installed-current", true],
+    ["current", "installed-current", false],
     ["outdated", "installed-outdated", false],
   ]);
 });

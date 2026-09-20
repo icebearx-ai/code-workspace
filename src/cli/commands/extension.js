@@ -25,6 +25,7 @@ const {
 const { resolveWorkspaceTools } = require("../../core/tools");
 const { createInteractiveUi, formatExtensionChoice } = require("../../init/ui");
 const { createRegistryExtensionPicker } = require("../../init/registry-picker");
+const { formatExtensionChanges } = require("../../init/extension-summary");
 const { confirm } = require("../confirmation");
 const { selectionResult, success } = require("../result");
 
@@ -43,18 +44,11 @@ function formatUninstallPlan(plan) {
 }
 
 function formatInstallPlan(plans, options = {}) {
-  const actionFor = options.actionFor || (() => "install");
-  const title = options.title || `Install ${plans.length} extension${plans.length === 1 ? "" : "s"}:`;
-  return [
-    title,
-    ...plans.flatMap((plan) => [
-      `  ${actionFor(plan) === "update" ? "Update" : "Install"} ${plan.id}@${plan.version} [${plan.source || "local"}] [Extension Spec ${plan.extensionSpecVersion}]`,
-      `    PACKAGE ${plan.packageSha256}`,
-      ...(plan.capabilities.networkHosts || []).map((host) => `    NETWORK https://${host}`),
-      ...plan.artifacts.map((artifact) => `    WRITE ${artifact.target} (${artifact.kind})`),
-      ...(plan.hooks || []).map((hook) => `    HOOK ${hook.id} (${hook.event}${hook.tools?.length ? ` · ${hook.tools.join(",")}` : ""}) -> ${hook.command}`),
-    ]),
-  ].join("\n");
+  return formatExtensionChanges(plans.map((plan) => ({ ...plan, source: plan.source || "local" })), [], {
+    title: options.title,
+    actionFor: options.actionFor,
+    action: options.action,
+  });
 }
 
 function formatRegistrySearchText(result) {
@@ -136,16 +130,33 @@ function lifecycleResultEntry(entry, action) {
 function lifecycleResultText(results, action) {
   const actionFor = typeof action === "function" ? action : () => action;
   const lines = results.map((entry) => entry.status === "installed"
-    ? `${actionFor(entry) === "upgrade" || actionFor(entry) === "update" ? "Updated" : "Installed"} ${entry.id}@${entry.version}.`
-    : entry.status === "skipped"
-      ? `Skipped ${entry.id}@${entry.version}: already current.`
-      : `Failed ${entry.id}${entry.version ? `@${entry.version}` : ""}: ${entry.message}`);
+    ? `${actionFor(entry) === "upgrade" || actionFor(entry) === "update" ? "Updated" : "Installed"} ${entry.name || entry.id}@${entry.version}.`
+    : entry.status === "uninstalled"
+      ? `Uninstalled ${entry.name || entry.id}${entry.version ? `@${entry.version}` : ""}.`
+      : entry.status === "skipped"
+      ? `Skipped ${entry.name || entry.id}${entry.version ? `@${entry.version}` : ""}: already current.`
+      : `Failed ${entry.name || entry.id}${entry.version ? `@${entry.version}` : ""}: ${entry.message}`);
   const installed = results.filter((entry) => entry.status === "installed").length;
+  const uninstalled = results.filter((entry) => entry.status === "uninstalled").length;
   const skipped = results.filter((entry) => entry.status === "skipped").length;
   const failed = results.filter((entry) => entry.status === "failed").length;
   const hasUpdate = results.some((entry) => actionFor(entry) === "upgrade" || actionFor(entry) === "update");
-  lines.push(`Extensions: ${installed} ${hasUpdate ? "applied" : "installed"}, ${skipped} skipped, ${failed} failed.`);
+  lines.push(`Extensions: ${installed} ${hasUpdate ? "applied" : "installed"}, ${uninstalled} uninstalled, ${skipped} skipped, ${failed} failed.`);
   return lines.join("\n");
+}
+
+function uninstallResultEntry(entry) {
+  return {
+    name: entry.id,
+    ok: entry.status !== "failed",
+    action: entry.status === "skipped" ? "skip" : "uninstall",
+    status: entry.status,
+    version: entry.version || null,
+    ...(entry.reason ? { reason: entry.reason } : {}),
+    ...(entry.removed ? { removed: entry.removed } : {}),
+    ...(entry.code ? { code: entry.code } : {}),
+    ...(entry.message ? { message: entry.message } : {}),
+  };
 }
 
 function validateInstallOptions(invocation) {
@@ -331,25 +342,52 @@ async function executeExtensionSearch(invocation) {
     }, "No extensions selected. No changes were made.");
   }
   const requested = normalizeExtensionNames(selected.map((entry) => entry.id));
-  const actionById = new Map(selected.map((entry) => [entry.id, entry.action === "update" ? "update" : "install"]));
+  const actionById = new Map(selected.map((entry) => [entry.id, entry.action || "install"]));
+  const installSelections = selected.filter((entry) => entry.action !== "uninstall" && entry.action !== "keep");
+  const uninstallSelections = selected.filter((entry) => entry.action === "uninstall");
+  const planningState = structuredClone(stateInspection.state);
+  for (const entry of uninstallSelections) delete planningState.extensions[entry.id];
   const tools = resolveWorkspaceTools({ state: loadState(invocation.root), manifestTools: loadInitManifest().tools }).tools;
-  const preparation = await prepareRegistryExtensionPlans({
-    ...dependencies,
-    requested,
-    tools,
-    state: stateInspection.state,
-    stateError: stateInspection.error,
-    extensionsRoot: dependencies.extensionsRoot,
-    extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
-    provider: dependencies.nexusProvider,
-  });
-  if (preparation.plans.length > 0) {
-    const planText = formatInstallPlan(preparation.plans, {
-      title: `Apply ${preparation.plans.length} extension${preparation.plans.length === 1 ? "" : "s"}:`,
+  const preparation = installSelections.length > 0
+    ? await prepareRegistryExtensionPlans({
+      ...dependencies,
+      requested: installSelections.map((entry) => entry.id),
+      tools,
+      state: planningState,
+      stateError: stateInspection.error,
+      extensionsRoot: dependencies.extensionsRoot,
+      extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+      provider: dependencies.nexusProvider,
+    })
+    : { plans: [], failures: [], diagnostics: [] };
+  preparation.plans = preparation.plans.map((plan) => ({ ...plan, action: actionById.get(plan.id) || "install" }));
+  const uninstallPlans = [];
+  const uninstallPreparationFailures = [];
+  for (const entry of uninstallSelections) {
+    try {
+      uninstallPlans.push(planExtensionUninstall(invocation.root, entry.id));
+    } catch (error) {
+      uninstallPreparationFailures.push({ id: entry.id, version: null, status: "failed", code: error.code || "EXTENSION_UNINSTALL_FAILED", message: error.message, statePersisted: false, phase: "prepare" });
+    }
+  }
+  const effectiveUninstallPlans = uninstallPlans.filter((plan) => plan.action !== "skip");
+  if (preparation.plans.length > 0 || effectiveUninstallPlans.length > 0) {
+    const planText = formatExtensionChanges(preparation.plans, effectiveUninstallPlans, {
       actionFor: (plan) => actionById.get(plan.id) || "install",
     });
     if (!(await (dependencies.confirm || confirm)(`${planText}\nContinue?`, invocation.options))) {
       throw new WorkspaceError("CLI_CANCELLED", "Extension search selection cancelled.");
+    }
+  }
+  const uninstallResults = [];
+  for (const plan of effectiveUninstallPlans) {
+    try {
+      uninstallResults.push({ ...applyExtensionUninstall(plan, {
+        ...(dependencies || {}),
+        extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+      }), action: "uninstall" });
+    } catch (error) {
+      uninstallResults.push({ id: plan.id, version: plan.version, status: "failed", action: "uninstall", code: error.code || "EXTENSION_UNINSTALL_FAILED", message: error.message });
     }
   }
   const batch = runExtensionBatch(invocation.root, preparation.plans, (extension) => ({
@@ -359,8 +397,8 @@ async function executeExtensionSearch(invocation) {
     workspace: { name: workspace.name, uuid: workspace.uuid, language: workspace.language },
     tools,
   }), {
-    requested,
-    preFailures: preparation.failures,
+    requested: installSelections.map((entry) => entry.id),
+    preFailures: [...preparation.failures, ...uninstallPreparationFailures],
     useExtensionStore: true,
     extensionStoreRoot: dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
   });
@@ -381,12 +419,32 @@ async function executeExtensionSearch(invocation) {
       extension: entry.id,
       version: entry.version,
     }))),
+    ...uninstallResults.filter((entry) => entry.status === "failed").map((entry) => ({
+      code: entry.code || "EXTENSION_UNINSTALL_FAILED",
+      severity: "error",
+      message: entry.message || `Extension ${entry.id} failed to uninstall.`,
+      extension: entry.id,
+      version: entry.version,
+    })),
   ];
-  const results = decorateBatchResults(batch, preparation.plans, invocation.options);
+  const installedResults = decorateBatchResults(batch, preparation.plans, invocation.options);
+  const resultById = new Map([
+    ...installedResults.map((entry) => [entry.id, entry]),
+    ...uninstallResults.map((entry) => [entry.id, entry]),
+    ...uninstallPreparationFailures.map((entry) => [entry.id, entry]),
+  ]);
+  const rawResults = selected.map((selection) => {
+    if (selection.action === "keep") {
+      return { id: selection.id, version: stateInspection.state.extensions[selection.id]?.installed?.version || null, status: "skipped", reason: "already-installed", action: "skip" };
+    }
+    const entry = resultById.get(selection.id);
+    return entry || { id: selection.id, status: "failed", message: "Extension operation did not run." };
+  });
+  const results = rawResults.map((entry) => lifecycleResultEntry(entry, entry.action || actionById.get(entry.id) || "install"));
   ui.close?.("Extension selection applied.");
-  return selectionResult("extension.search", requested, results.map((entry) => lifecycleResultEntry(entry, actionById.get(entry.id) || "install")), {
+  return selectionResult("extension.search", requested, results, {
     diagnostics,
-    text: lifecycleResultText(results, (entry) => actionById.get(entry.id) || "install"),
+    text: lifecycleResultText(results, (entry) => entry.action || actionById.get(entry.id) || "install"),
   });
 }
 

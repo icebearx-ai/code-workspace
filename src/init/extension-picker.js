@@ -23,8 +23,8 @@ function normalizePickerItem(value) {
   const status = PICKER_STATUSES.includes(item.status)
     ? item.status
     : item.available === false ? "unavailable" : "not-installed";
-  const disabled = item.disabled === true || status === "installed-current" || status === "unavailable";
-  const action = disabled ? "none" : status === "installed-outdated" ? "update" : "install";
+  const disabled = item.disabled === true || status === "unavailable" || (status === "installed-current" && item.allowUninstall !== true);
+  const action = disabled ? "none" : item.action || (status === "installed-outdated" ? "update" : status === "installed-current" ? "keep" : "install");
   return Object.freeze({
     ...item,
     id,
@@ -69,6 +69,7 @@ function createPickerState(options = {}) {
     error: null,
     selectedIds: Object.freeze([...(options.selectedIds || [])]),
     selectionActions: Object.freeze({ ...(options.selectionActions || {}) }),
+    installedIds: Object.freeze([...(options.installedIds || [])]),
     cancelled: false,
     submitted: false,
     statusMessage: "",
@@ -80,7 +81,12 @@ function withState(state, changes) {
 }
 
 function selectedResult(state) {
-  return state.selectedIds.map((id) => ({ id, action: state.selectionActions[id] || "install" }));
+  const selected = new Set(state.selectedIds);
+  const result = state.selectedIds.map((id) => ({ id, action: state.selectionActions[id] || "install" }));
+  for (const id of state.installedIds || []) {
+    if (!selected.has(id)) result.push({ id, action: "uninstall" });
+  }
+  return result;
 }
 
 function currentItem(state) {
@@ -284,7 +290,7 @@ async function runExtensionPicker(options = {}) {
     renderedLines = lines.length + 1;
   });
   const events = options.events || keypressEvents(options.input || process.stdin);
-  let state = createPickerState({ query: options.query || "", selectedIds: options.selectedIds, selectionActions: options.selectionActions });
+  let state = createPickerState({ query: options.query || "", selectedIds: options.selectedIds, selectionActions: options.selectionActions, installedIds: options.installedIds });
   let session = await resolvePageProvider(pageProvider, state.query);
 
   async function load(method, event = "load-start") {

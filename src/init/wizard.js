@@ -17,15 +17,25 @@ function normalizePickerSelections(value) {
   }).filter((entry) => entry.id);
 }
 
+function normalizePreparedExtensions(value, selected = []) {
+  const prepared = Array.isArray(value) ? { plans: value } : (value || {});
+  return {
+    plans: Array.from(prepared.plans || []),
+    uninstallPlans: Array.isArray(prepared.uninstallPlans)
+      ? Array.from(prepared.uninstallPlans)
+      : selected.filter((entry) => entry.action === "uninstall").map((entry) => entry.id),
+  };
+}
+
 async function collectExtensionPlans(options, ui, tools) {
   if (options.extensions !== undefined) {
     const selected = normalizePickerSelections(options.extensions);
-    if (typeof options.prepareExtensions === "function") return options.prepareExtensions(selected, tools);
+    if (typeof options.prepareExtensions === "function") return normalizePreparedExtensions(await options.prepareExtensions(selected, tools), selected);
     const catalog = options.extensionCatalog || [];
-    return resolveExtensionPlans(catalog, selected.map((entry) => entry.id), {
+    return { plans: resolveExtensionPlans(catalog, selected.filter((entry) => entry.action !== "uninstall" && entry.action !== "keep").map((entry) => entry.id), {
       tools,
       state: options.extensionState,
-    });
+    }), uninstallPlans: [] };
   }
 
   if (typeof options.extensionPicker === "function") {
@@ -35,21 +45,21 @@ async function collectExtensionPlans(options, ui, tools) {
         selectedIds: options.initialExtensions || [],
         query: options.extensionQuery || "",
       }));
-      if (typeof options.prepareExtensions === "function") return options.prepareExtensions(selected, tools);
-      return selected;
+      if (typeof options.prepareExtensions === "function") return normalizePreparedExtensions(await options.prepareExtensions(selected, tools), selected);
+      return { plans: selected.filter((entry) => entry.action !== "uninstall" && entry.action !== "keep"), uninstallPlans: selected.filter((entry) => entry.action === "uninstall").map((entry) => entry.id) };
     } catch (error) {
       ui.note("Extensions unavailable", [
         error.message || "The Nexus extension Registry could not be reached.",
         "Ordinary extensions will be skipped; core Workspace initialization can continue.",
       ]);
-      return [];
+      return { plans: [], uninstallPlans: [] };
     }
   }
 
   // Kept for direct callers that inject a catalog (production init no longer does).
   const extensionCatalog = options.extensionCatalog || [];
   const supportedExtensions = extensionCatalog.filter((entry) => entry.latestSupported);
-  if (supportedExtensions.length === 0) return [];
+  if (supportedExtensions.length === 0) return { plans: [], uninstallPlans: [] };
   const extensionNames = await ui.multiselect(
     "Extensions (experimental, select any)",
     supportedExtensions.map((entry) => ({
@@ -58,10 +68,10 @@ async function collectExtensionPlans(options, ui, tools) {
     })),
     options.initialExtensions !== undefined ? options.initialExtensions : []
   );
-  return resolveExtensionPlans(extensionCatalog, extensionNames, {
+  return { plans: resolveExtensionPlans(extensionCatalog, extensionNames, {
     tools,
     state: options.extensionState,
-  });
+  }), uninstallPlans: [] };
 }
 
 async function collectInitPlan(root, manifest, options = {}) {
@@ -101,18 +111,31 @@ async function collectInitPlan(root, manifest, options = {}) {
   const systemExtensions = typeof options.prepareSystemExtensions === "function"
     ? await options.prepareSystemExtensions(tools)
     : (options.systemExtensions || []);
+  const ordinary = await collectExtensionPlans(options, ui, tools);
   const extensions = [
     ...systemExtensions,
-    ...(await collectExtensionPlans(options, ui, tools)),
+    ...ordinary.plans,
   ];
   const workspace = existing?.workspace || { name, uuid: randomUUID() };
-  const plan = createInitPlan({ root, workspace, tools, language, extensions });
+  const extensionRemovals = ordinary.uninstallPlans || [];
+  const plan = createInitPlan({ root, workspace, tools, language, extensions, extensionRemovals });
+  const extensionChanges = [
+    ...extensions.map((entry) => `${entry.action === "update" ? "Update" : "Install"} ${entry.id}@${entry.version}`),
+    ...extensionRemovals.map((entry) => typeof entry === "string" ? `Uninstall ${entry}` : `Uninstall ${entry.id}@${entry.version}`),
+  ];
   ui.note("Ready to initialize", [
     `Workspace  ${workspace.name}`,
     `Language   ${language}`,
     `Tools      ${tools.length ? tools.join(", ") : "none"}`,
     `Extensions ${extensions.length ? extensions.map((entry) => `${entry.id}@${entry.version} [Spec ${entry.extensionSpecVersion}] (${entry.manifestSha256})`).join(", ") : "none"}`,
+    `Changes    ${extensionChanges.length ? extensionChanges.join(", ") : "none"}`,
   ]);
+  if (extensionChanges.length) {
+    const formatted = typeof options.formatExtensionChanges === "function"
+      ? options.formatExtensionChanges(extensions, extensionRemovals)
+      : extensionChanges.join("\n");
+    ui.note("Extension changes", formatted.split("\n"));
+  }
   if (existing?.projects?.length) {
     const permissionPlan = planPermissionChanges({
       root,

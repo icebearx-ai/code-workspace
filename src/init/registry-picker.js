@@ -23,7 +23,9 @@ function mapPickerPage(page, state = emptyExtensionState(), systemIds = new Set(
         version: candidate?.version || null,
         packageSha256: candidate?.packageSha256 || null,
         status,
-        disabled: status === "installed-current" || status === "unavailable",
+        disabled: status === "unavailable",
+        allowUninstall: Boolean(installed),
+        action: status === "installed-outdated" ? "update" : status === "installed-current" ? "keep" : "install",
       };
     });
   return { ...page, items };
@@ -31,9 +33,15 @@ function mapPickerPage(page, state = emptyExtensionState(), systemIds = new Set(
 
 function createRegistryExtensionPicker({ dependencies = {}, state = emptyExtensionState(), systemIds = new Set() }) {
   const createSession = dependencies.createRegistryExtensionBrowseSession || createRegistryExtensionBrowseSession;
+  const installedIds = Object.entries(state.extensions || {})
+    .filter(([id, entry]) => entry?.installed && entry.installed.system !== true && !systemIds.has(id))
+    .map(([id]) => id);
+  const installedSelectionActions = Object.fromEntries(installedIds.map((id) => [id, "keep"]));
   return async ({ ui, query = "", selectedIds = [] }) => ui.extensionPicker({
     query,
-    selectedIds,
+    selectedIds: selectedIds.length > 0 ? selectedIds : installedIds,
+    selectionActions: installedSelectionActions,
+    installedIds,
     pageProvider: async (pageQuery) => {
       const session = await createSession({
         ...dependencies,
