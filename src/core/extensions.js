@@ -1453,14 +1453,15 @@ function runExtensionBatch(root, plans, context, options = {}) {
   };
 }
 
-function planExtensionUninstall(root, id) {
+function planExtensionUninstall(root, id, options = {}) {
   const extensionId = validateExtensionName(id);
-  if (isSystemExtensionId(extensionId)) {
+  const systemManaged = options.systemManaged === true;
+  if (!systemManaged && isSystemExtensionId(extensionId)) {
     throw extensionError("EXTENSION_SYSTEM_MANAGED", `System extension cannot be manually uninstalled: ${extensionId}`, { extension: extensionId });
   }
   const state = loadExtensionState(root);
   const installed = state.extensions[extensionId]?.installed || null;
-  if (installed?.system === true) {
+  if (!systemManaged && installed?.system === true) {
     throw extensionError("EXTENSION_SYSTEM_MANAGED", `System extension cannot be manually uninstalled: ${extensionId}`, { extension: extensionId });
   }
   if (!installed) return Object.freeze({ root: path.resolve(root), id: extensionId, action: "skip", reason: "not-installed", targets: [] });
@@ -1473,6 +1474,7 @@ function planExtensionUninstall(root, id) {
   return Object.freeze({
     root: path.resolve(root),
     id: extensionId,
+    system: installed.system === true,
     action: "remove",
     version: installed.version,
     packageSha256: installed.packageSha256 || null,
@@ -1485,7 +1487,7 @@ function planExtensionUninstall(root, id) {
 }
 
 function applyExtensionUninstall(plan, options = {}) {
-  if (plan.system === true || isSystemExtensionId(plan.id)) {
+  if (options.systemManaged !== true && (plan.system === true || isSystemExtensionId(plan.id))) {
     throw extensionError("EXTENSION_SYSTEM_MANAGED", `System extension cannot be manually uninstalled: ${plan.id}`, { extension: plan.id });
   }
   if (plan.action === "skip") return { id: plan.id, status: "skipped", reason: plan.reason, removed: [] };

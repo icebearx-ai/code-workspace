@@ -35,6 +35,8 @@ codew init . \
   --yes
 ```
 
+如果这个 Workspace 主要作为扩展容器使用，可以传 `--dev false`；该模式会跳过 Workspace 依赖安装、停用系统开发扩展并省略项目引导提示。需要恢复开发模式时执行 `codew init . --dev true --yes`。新 Workspace 默认值为 `true`；已有 Workspace 省略该参数时沿用已保存的值。
+
 可用 `--tools claude`、`--tools codex` 或 `--tools none` 覆盖默认工具选择。监控不会隐式启用；请通过 `--extensions monitor` 或交互式扩展选择安装 `monitor` 扩展。
 
 初始化只写入 Workspace 自有状态和集成：

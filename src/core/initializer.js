@@ -50,11 +50,16 @@ async function collectWorkspaceSetup(root, options = {}) {
   const file = configPath(root);
   if (fs.existsSync(file)) {
     const current = loadConfig(root, { defaultLanguage: language });
+    const workspace = {
+      ...current.workspace,
+      dev: options.dev ?? current.workspace.dev ?? true,
+    };
     return normalizeConfig({
       ...current,
-      workspace: current.workspace || {
+      workspace: current.workspace ? workspace : {
         name: options.workspaceName || DEFAULT_WORKSPACE_NAME,
         uuid: randomUUID(),
+        dev: options.dev ?? true,
       },
     });
   }
@@ -71,7 +76,7 @@ async function collectWorkspaceSetup(root, options = {}) {
   }
   return normalizeConfig({
     schemaVersion: 2,
-    workspace: { name: name || DEFAULT_WORKSPACE_NAME, uuid: options.workspaceUuid || randomUUID(), language },
+    workspace: { name: name || DEFAULT_WORKSPACE_NAME, uuid: options.workspaceUuid || randomUUID(), language, dev: options.dev ?? true },
     projects: [],
   });
 }
@@ -106,7 +111,9 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   }
 
   const dependencies = await stage("Install workspace dependencies", () =>
-    installWorkspaceDependencies(root, { run })
+    workspaceConfig.workspace.dev === false
+      ? { action: "skip", reason: "development mode disabled" }
+      : installWorkspaceDependencies(root, { run })
   );
   if (dependencies.action === "install") {
     options.transaction?.recordExternalEffect({

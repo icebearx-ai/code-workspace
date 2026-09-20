@@ -39,6 +39,22 @@ function statePath(root) {
   return path.join(root, LOCAL_DIRECTORY, STATE_FILE);
 }
 
+function resolveWorkspaceDev(root, explicit) {
+  if (explicit !== undefined) return explicit;
+  if (!fs.existsSync(configPath(root))) return true;
+  const document = readConfigDocument(root);
+  const dev = document.value.workspace?.dev;
+  if (dev === undefined) return true;
+  if (typeof dev !== "boolean") {
+    throw new WorkspaceError("WORKSPACE_DEV_INVALID", "workspace.dev must be a boolean", {
+      actual: dev,
+      supported: [true, false],
+      file: document.file,
+    });
+  }
+  return dev;
+}
+
 function findWorkspaceRoot(start = process.cwd()) {
   let current = path.resolve(start);
   while (true) {
@@ -91,7 +107,18 @@ function normalizeWorkspaceLanguage(value, options = {}) {
 function normalizeWorkspace(value, options = {}) {
   const identity = normalizeWorkspaceIdentity(value);
   if (!identity) return null;
-  return { ...identity, language: normalizeWorkspaceLanguage(value.language, options) };
+  const dev = value.dev;
+  if (dev !== undefined && typeof dev !== "boolean") {
+    throw new WorkspaceError("WORKSPACE_DEV_INVALID", "workspace.dev must be a boolean", {
+      actual: dev,
+      supported: [true, false],
+    });
+  }
+  return {
+    ...identity,
+    language: normalizeWorkspaceLanguage(value.language, options),
+    ...(dev === undefined ? {} : { dev }),
+  };
 }
 
 function normalizeProjects(value) {
@@ -508,6 +535,7 @@ module.exports = {
   renderProjectConfig,
   resolveProjectConfigPath,
   resolveProjectConfigReference,
+  resolveWorkspaceDev,
   requireWorkspaceRoot,
   saveConfig,
   saveProjectConfig,

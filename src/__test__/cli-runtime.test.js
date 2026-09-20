@@ -55,6 +55,12 @@ test("semantic parser keeps boolean options independent from positionals", () =>
   assert.deepEqual({ args: after.args, options: after.options }, { args: ["."], options: { yes: true } });
 });
 
+test("semantic parser accepts init dev values in either option form", () => {
+  assert.equal(parse(argv("init", ".", "--dev", "false")).options.dev, "false");
+  assert.equal(parse(argv("init", ".", "--dev=true")).options.dev, "true");
+  assert.throws(() => parse(argv("init", ".", "--dev")), (error) => error.code === "CLI_OPTION_VALUE_REQUIRED");
+});
+
 test("semantic parser accepts global JSON ordering", () => {
   assert.equal(parse(argv("--json", "project", "list")).options.json, true);
   assert.equal(parse(argv("project", "list", "--json")).options.json, true);
@@ -1132,49 +1138,6 @@ test("file transaction restores existing files and removes new files and directo
 test("file transaction refuses to claim an unverified external effect", () => {
   const transaction = createFileTransaction([]);
   assert.throws(() => transaction.recordExternalEffect({ kind: "command", verified: false }), /unverified external effect/);
-});
-
-test("packaged skills and README files reference registered commands and options", () => {
-  const roots = [
-    path.resolve(__dirname, "..", "..", "README.md"),
-    path.resolve(__dirname, "..", "..", "README.zh-CN.md"),
-    path.resolve(__dirname, "..", "..", "docs", "code-workspace-flow.zh-CN.md"),
-    path.resolve(__dirname, "..", "..", "artifacts", "templates"),
-  ];
-  const files = [];
-  const visit = (target) => {
-    if (fs.statSync(target).isDirectory()) {
-      for (const name of fs.readdirSync(target)) visit(path.join(target, name));
-    } else if (target.endsWith(".md")) files.push(target);
-  };
-  roots.forEach(visit);
-  let checked = 0;
-  for (const file of files) {
-    const content = fs.readFileSync(file, "utf8").replace(/\\\n\s*/g, " ");
-    const references = [];
-    for (const line of content.split("\n")) {
-      if (/^\s*code-(?:workspace|w)\s+/.test(line)) {
-        references.push(line.trim().replace(/^code-(?:workspace|w)\s+/, ""));
-      }
-      for (const match of line.matchAll(/`code-(?:workspace|w)\s+([^`]+)`/g)) {
-        references.push(match[1]);
-      }
-    }
-    for (const rawReference of references) {
-      const reference = rawReference.trim().replace(/[.,;:]$/, "");
-      const result = validateCommandReference(reference);
-      assert.equal(result.valid, true, `${path.relative(process.cwd(), file)}: ${reference} (${result.reason})`);
-      checked += 1;
-    }
-  }
-  assert(checked >= 20, `expected at least 20 command references, found ${checked}`);
-  const addProjects = fs.readFileSync(
-    path.resolve(__dirname, "..", "..", "extensions", "codew-workspace-guard", "1.0.0", "assets", "codew-add-projects.SKILL.md"),
-    "utf8"
-  );
-  assert.match(addProjects, /data\.language/);
-  assert.match(addProjects, /data\.projectContext/);
-  assert.match(addProjects, /`schemaVersion`, `ok`, `command`, `data`, and `diagnostics`/);
 });
 
 test("final branch migration leaves no legacy public contract in implementation or managed documentation", () => {

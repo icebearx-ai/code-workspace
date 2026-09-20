@@ -41,7 +41,7 @@ const COMMANDS = [
   { path: ["config", "set"], args: [{ name: "key", required: true }, { name: "value", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: {} },
   { path: ["config", "delete"], args: [{ name: "key", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: {} },
   { path: ["init"], args: [{ name: "path", required: false }], workspace: "target", config: [], interaction: "optional", effects: "planned-write", options: {
-    tools: { type: "string" }, extensions: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" },
+    tools: { type: "string" }, extensions: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" }, dev: { type: "string" },
     yes: { type: "boolean" }, force: { type: "boolean" },
   } },
   { path: ["update"], args: [], workspace: "required", config: [], interaction: "optional", effects: "planned-write", options: {

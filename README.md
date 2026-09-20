@@ -36,6 +36,8 @@ codew init .code-workspace \
   --yes
 ```
 
+Use `--dev false` for an extension-container Workspace; this skips Workspace dependency installation, disables the system development extension, and omits the project onboarding prompt. Run `codew init .code-workspace --dev true --yes` to enable development mode again. The default for a new Workspace is `true`, and an existing Workspace keeps its saved value when the option is omitted.
+
 Use `--tools claude`, `--tools codex`, or `--tools none` to override the default tool selection. Monitoring is not enabled implicitly; install the `monitor` extension with `--extensions monitor` or through the interactive extension picker.
 
 Initialization writes only Workspace-owned state and integrations:

@@ -222,6 +222,66 @@ test("init defaults its target path to the current directory", () => {
   assert(fs.existsSync(path.join(root, ".codew", "config.yaml")));
 });
 
+test("init --dev false skips workspace dependency installation and project guidance", () => {
+  const root = temporaryRoot();
+  fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({
+    name: "code-workspace-zhuiyi",
+    dependencies: { "must-not-install": "1.0.0" },
+  }));
+
+  const disabled = run(root, ["init", ".", "--tools", "none", "--dev", "false", "--yes", "--json"]);
+  assert.equal(disabled.status, 0, disabled.stderr);
+  const disabledData = jsonData(disabled);
+  assert.equal(disabledData.dev, false);
+  assert.deepEqual(disabledData.dependencies, { action: "skip", reason: "development mode disabled" });
+  assert.equal(loadWorkspaceYaml(root).workspace.dev, false);
+  assert.equal(fs.existsSync(path.join(root, "node_modules")), false);
+  assert.doesNotMatch(disabled.stdout, /Add local projects with/);
+
+  const preserved = run(root, ["init", ".", "--tools", "none", "--yes", "--json"]);
+  assert.equal(preserved.status, 0, preserved.stderr);
+  assert.equal(jsonData(preserved).dev, false);
+
+  fs.unlinkSync(path.join(root, "package.json"));
+  const enabled = run(root, ["init", ".", "--tools", "none", "--dev", "true", "--yes", "--json"]);
+  assert.equal(enabled.status, 0, enabled.stderr);
+  assert.equal(jsonData(enabled).dev, true);
+  assert.equal(loadWorkspaceYaml(root).workspace.dev, true);
+});
+
+test("init --dev false does not install or retain the system development extension", () => {
+  const root = temporaryRoot();
+  const disabled = run(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--dev", "false", "--yes", "--json"]);
+  assert.equal(disabled.status, 0, disabled.stderr);
+  const disabledData = jsonData(disabled);
+  assert.equal(disabledData.dev, false);
+  assert.equal(disabledData.systemExtensions.enabled, false);
+  assert.deepEqual(disabledData.systemExtensions.results, []);
+  assert.equal(fs.existsSync(path.join(root, "AGENTS.md")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codex", "skills", "codew-add-projects")), false);
+
+  const enabled = run(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--dev", "true", "--yes", "--json"]);
+  assert.equal(enabled.status, 0, enabled.stderr);
+  assert.equal(fs.existsSync(path.join(root, "AGENTS.md")), true);
+
+  const disabledAgain = run(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--dev", "false", "--yes", "--json"]);
+  assert.equal(disabledAgain.status, 0, disabledAgain.stderr);
+  const disabledAgainData = jsonData(disabledAgain);
+  assert.equal(disabledAgainData.systemExtensions.enabled, false);
+  assert.deepEqual(disabledAgainData.systemExtensions.results.map((entry) => entry.status), ["uninstalled"]);
+  assert.equal(fs.existsSync(path.join(root, "AGENTS.md")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codex", "skills", "codew-add-projects")), false);
+});
+
+test("init rejects invalid dev values before writing the target", () => {
+  const root = temporaryRoot();
+  const result = run(root, ["init", ".", "--dev", "maybe", "--yes", "--json"]);
+  assert.equal(result.status, 1);
+  const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.diagnostics[0].code, "CLI_INVALID_OPTION_VALUE");
+  assert.equal(fs.existsSync(path.join(root, ".codew")), false);
+});
+
 test("update changes workspace language and its derived managed artifacts", () => {
   const root = temporaryRoot();
   assert.equal(run(root, ["init", ".", "--tools", "none", "--language", "zh-CN", "--yes", "--json"]).status, 0);

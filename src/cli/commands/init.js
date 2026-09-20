@@ -1,13 +1,15 @@
 const path = require("node:path");
 
-const { loadState } = require("../../core/config");
+const { loadState, resolveWorkspaceDev } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const { acquireInitLock } = require("../../core/init-lock");
 const {
+  applyExtensionUninstall,
   discoverSystemExtensions,
   emptyExtensionState,
   inspectExtensionState,
   parseExtensionSelection,
+  planExtensionUninstall,
   prepareExtensionPlans,
   runExtensionBatch,
 } = require("../../core/extensions");
@@ -54,6 +56,17 @@ function migrationData(plan) {
   };
 }
 
+function parseDevOption(value) {
+  if (value === undefined) return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new WorkspaceError("CLI_INVALID_OPTION_VALUE", "--dev requires true or false", {
+    option: "dev",
+    value,
+    allowed: ["true", "false"],
+  });
+}
+
 async function executeInit(invocation) {
   const root = path.resolve(invocation.args[0] || ".");
   const releaseInitLock = await acquireInitLock(root);
@@ -66,6 +79,8 @@ async function executeInit(invocation) {
 
 async function executeInitUnlocked(invocation, root) {
   const { options } = invocation;
+  const requestedDev = parseDevOption(options.dev);
+  const dev = resolveWorkspaceDev(root, requestedDev);
   const dependencies = invocation.dependencies && Object.prototype.hasOwnProperty.call(invocation.dependencies, "defaultRegistryUrl")
     ? invocation.dependencies
     : { ...(invocation.dependencies || {}), defaultRegistryUrl: DEFAULT_NEXUS_REGISTRY };
@@ -97,7 +112,13 @@ async function executeInitUnlocked(invocation, root) {
   const extensionStateInspection = inspectExtensions ? inspectExtensionState(root) : { state: emptyExtensionState(), error: null };
   const extensionState = extensionStateInspection.state;
   const systemCatalogResult = inspectExtensions ? discoverSystemExtensions({ tolerant: true }) : { catalog: [], invalid: [] };
-  const systemRequestedExtensions = systemCatalogResult.catalog.filter((entry) => entry.latestSupported).map((entry) => entry.id);
+  const systemExtensionIds = systemCatalogResult.catalog.filter((entry) => entry.latestSupported).map((entry) => entry.id);
+  const systemRequestedExtensions = dev ? systemExtensionIds : [];
+  const systemRemovalPlans = dev || extensionStateInspection.error
+    ? []
+    : Object.entries(extensionState.extensions)
+      .filter(([id, entry]) => entry.installed?.system === true || systemExtensionIds.includes(id))
+      .map(([id]) => planExtensionUninstall(root, id, { systemManaged: true }));
   let systemPreparation = { plans: [], failures: [], diagnostics: [] };
   let planningState = extensionState;
   const prepareSystemForTools = (tools) => {
@@ -138,7 +159,7 @@ async function executeInitUnlocked(invocation, root) {
         initialExtensions: explicitExtensions === null ? undefined : explicitExtensions,
         prepareSystemExtensions: prepareSystemForTools,
         prepareExtensions: prepareOrdinaryExtensions,
-        extensionPicker: createRegistryExtensionPicker({ dependencies, state: extensionState, systemIds: new Set(systemRequestedExtensions) }),
+        extensionPicker: createRegistryExtensionPicker({ dependencies, state: extensionState, systemIds: new Set(systemExtensionIds) }),
       });
     } catch (error) {
       if (error.code === "INIT_CANCELLED") {
@@ -182,6 +203,7 @@ async function executeInitUnlocked(invocation, root) {
   const result = await initializeWorkspace(root, {
     run,
     tools,
+    dev,
     force: options.force === true,
     yes: plan ? true : options.yes === true,
     workspaceName: plan?.workspace.name || options["workspace-name"],
@@ -191,6 +213,31 @@ async function executeInitUnlocked(invocation, root) {
     initPlan: plan,
     onStage: null,
   });
+  const systemRemovalResults = [];
+  const systemRemovalDiagnostics = [];
+  for (const removalPlan of systemRemovalPlans) {
+    try {
+      systemRemovalResults.push(applyExtensionUninstall(removalPlan, {
+        systemManaged: true,
+        extensionStoreRoot: options.extensionStoreRoot || dependencies.extensionStoreRoot || defaultExtensionStoreRoot(),
+      }));
+    } catch (error) {
+      systemRemovalResults.push({
+        id: removalPlan.id,
+        version: removalPlan.version,
+        status: "failed",
+        code: error.code || "SYSTEM_EXTENSION_DISABLE_FAILED",
+        message: error.message,
+      });
+      systemRemovalDiagnostics.push({
+        code: "SYSTEM_EXTENSION_DISABLE_FAILED",
+        severity: "warning",
+        message: `System extension ${removalPlan.id} could not be disabled: ${error.message}`,
+        extension: removalPlan.id,
+        causeCode: error.code || null,
+      });
+    }
+  }
   const extensionResult = runExtensionBatch(root, extensionPlans, (extension) => ({
     schemaVersion: 1,
     extensionSpecVersion: extension.extensionSpecVersion,
@@ -208,6 +255,13 @@ async function executeInitUnlocked(invocation, root) {
     extensionStoreRoot: options.extensionStoreRoot || defaultExtensionStoreRoot(),
   });
   const extensionDiagnostics = [
+    ...(dev === false && extensionStateInspection.error ? [{
+      code: "SYSTEM_EXTENSION_DISABLE_SKIPPED",
+      severity: "warning",
+      message: `System extension cleanup was skipped because extension state could not be read: ${extensionStateInspection.error.message}`,
+      causeCode: extensionStateInspection.error.code || null,
+    }] : []),
+    ...systemRemovalDiagnostics,
     ...extensionPreparation.diagnostics,
     ...extensionResult.results
     .filter((entry) => entry.status === "failed")
@@ -240,6 +294,7 @@ async function executeInitUnlocked(invocation, root) {
     managedFiles: result.managedFiles,
     localConfig: result.localConfig,
     workspace: result.workspaceConfig.workspace,
+    dev: result.workspaceConfig.workspace.dev,
     language: result.language,
     tools: toolSelection,
     migration: migrationData(result.migration),
@@ -247,6 +302,10 @@ async function executeInitUnlocked(invocation, root) {
     verification: result.verification,
     plan: result.initPlan,
     stages: result.stages.map((stage) => stage.name),
+    systemExtensions: {
+      enabled: dev,
+      results: systemRemovalResults,
+    },
     extensions: extensionResult,
   };
   const lines = [
@@ -256,7 +315,7 @@ async function executeInitUnlocked(invocation, root) {
     `Tools: ${tools.length ? tools.join(", ") : "none"} (${toolSelection.source})`,
     `Extensions: ${extensionResult.summary.installed} installed, ${extensionResult.summary.skipped} skipped, ${extensionResult.summary.failed} failed`,
   ];
-  if (result.localConfig.action === "write" || result.permissions.action === "skip") {
+  if (result.workspaceConfig.workspace.dev !== false && (result.localConfig.action === "write" || result.permissions.action === "skip")) {
     lines.push(tools.length > 0
       ? "Add local projects with the `codew-add-projects` skill."
       : "Add local projects with `code-workspace project inspect`, then register a complete project record.");
@@ -264,4 +323,4 @@ async function executeInitUnlocked(invocation, root) {
   return success("init", data, lines.join("\n"), extensionDiagnostics);
 }
 
-module.exports = { createRegistryExtensionPicker, executeInit, mapPickerPage, migrationData, stateWithPlans };
+module.exports = { createRegistryExtensionPicker, executeInit, mapPickerPage, migrationData, parseDevOption, stateWithPlans };
