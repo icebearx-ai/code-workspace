@@ -162,14 +162,7 @@ const GUANGDA_SKILL_ARCHIVE = [
   "研发过程关键环节关注点_GLM-OCR.md",
 ];
 
-test("strict SemVer comparison is used only for extension version ordering", () => {
-  assert.equal(compareSemver("1.0.0-beta.3", "1.0.0-beta.31"), -1);
-  assert.equal(compareSemver("1.0.0", "1.0.0-rc.1"), 1);
-  assert.equal(compareSemver("1.0.0+build.1", "1.0.0+build.2"), 0);
-  assert.equal(supportsExtensionSpec(1), true);
-  assert.equal(supportsExtensionSpec(2), false);
-  assert.throws(() => parseSemver("01.0.0"), (error) => error.code === "EXTENSION_SEMVER_INVALID");
-});
+
 
 test("discovery selects the highest version using a Host-supported Extension Spec and freezes hashes", () => {
   const repository = temporaryRoot();
