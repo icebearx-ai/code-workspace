@@ -28,8 +28,10 @@ test("extension init creates a capability-neutral package shell", async () => {
     assert.equal(created.status, 0);
     assert.equal(created.envelope.command, "extension.init");
     assert.equal(created.envelope.data.action, "created");
-    assert.deepEqual(["package.json", "extension/manifest.json", "extension/init.js"].sort(), created.envelope.data.files);
-    assert.deepEqual(fs.readdirSync(source).sort(), ["extension", "package.json"]);
+    assert.deepEqual([".gitignore", "README.md", "package.json", "extension/manifest.json", "extension/init.js"].sort(), created.envelope.data.files);
+    assert.deepEqual(fs.readdirSync(source).sort(), [".gitignore", "README.md", "extension", "package.json"]);
+    assert.equal(fs.readFileSync(path.join(source, "README.md")).length, 0);
+    assert.equal(fs.readFileSync(path.join(source, ".gitignore"), "utf8"), "/dist\n");
     const shellManifest = JSON.parse(fs.readFileSync(path.join(source, "extension", "manifest.json"), "utf8"));
     assert.equal(shellManifest.outputs, undefined);
     assert.equal(shellManifest.hooks, undefined);

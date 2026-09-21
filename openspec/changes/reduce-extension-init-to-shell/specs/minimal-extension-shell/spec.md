@@ -1,11 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Init creates a capability-neutral shell
-The CLI SHALL create only `package.json`, `extension/manifest.json`, and `extension/init.js` for a default extension init, without declaring outputs, hooks, or runtime capabilities.
+The CLI SHALL create a package root containing `package.json`, empty `README.md`, a `.gitignore` containing `/dist`, `extension/manifest.json`, and `extension/init.js` for a default extension init, without declaring outputs, hooks, or runtime capabilities.
 
 #### Scenario: Create an empty shell
 - **WHEN** a user runs `codew extension init ./example-extension --yes`
-- **THEN** the command creates the three shell files and does not create README, output artifacts, or target declarations.
+- **THEN** the command creates the five package files, with an empty README.md and `.gitignore` containing `/dist`, and does not create output artifacts or target declarations.
 
 #### Scenario: Collect generic metadata interactively
 - **WHEN** init runs in an interactive TTY without an explicit id, name, description, or version

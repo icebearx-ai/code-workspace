@@ -38,8 +38,25 @@ function validateScaffoldMetadata(options = {}, targetRoot) {
   return Object.freeze({ id, name, description, version });
 }
 
-function shellEntry() {
-  return "#!/usr/bin/env node\n\"use strict\";\n\n// TODO: implement the extension init protocol.\n";
+const SCAFFOLD_TEMPLATE_ROOT = path.join(__dirname, "..", "..", "artifacts", "templates", "extension-init");
+
+function readTemplateFiles(root = SCAFFOLD_TEMPLATE_ROOT, current = root, result = {}) {
+  let entries;
+  try {
+    entries = fs.readdirSync(current, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name));
+  } catch (error) {
+    throw scaffoldError("EXTENSION_TEMPLATE_INVALID", `Cannot read extension init template: ${root}`, { path: root, cause: error.code || error.message });
+  }
+  for (const entry of entries) {
+    const file = path.join(current, entry.name);
+    const relative = path.relative(root, file).split(path.sep).join("/");
+    const stat = fs.lstatSync(file);
+    if (stat.isSymbolicLink()) throw scaffoldError("EXTENSION_TEMPLATE_INVALID", `Extension init template contains a symbolic link: ${relative}`, { path: relative });
+    if (stat.isDirectory()) readTemplateFiles(root, file, result);
+    else if (stat.isFile()) result[relative === "gitignore" ? ".gitignore" : relative] = fs.readFileSync(file);
+    else throw scaffoldError("EXTENSION_TEMPLATE_INVALID", `Extension init template contains a special file: ${relative}`, { path: relative });
+  }
+  return result;
 }
 
 function validateShellManifest(raw) {
@@ -107,7 +124,9 @@ function shellEnvelope(metadata, packageSha256) {
 function scaffoldExtensionPackage(target, options = {}) {
   const targetRoot = path.resolve(target || ".");
   const metadata = validateScaffoldMetadata(options, targetRoot);
-  const entry = shellEntry();
+  const templateFiles = readTemplateFiles();
+  const entry = templateFiles["extension/init.js"];
+  if (!entry) throw scaffoldError("EXTENSION_TEMPLATE_INVALID", "Extension init template must contain extension/init.js", { path: "extension/init.js" });
   const manifest = {
     schemaVersion: 3,
     extensionSpecVersion: 1,
@@ -121,9 +140,9 @@ function scaffoldExtensionPackage(target, options = {}) {
     timeoutMs: 30000,
   };
   const files = {
+    ...templateFiles,
     "package.json": null,
     "extension/manifest.json": Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`, "utf8"),
-    "extension/init.js": Buffer.from(entry, "utf8"),
   };
   const temporary = fs.mkdtempSync(path.join(path.dirname(targetRoot), `.${path.basename(targetRoot)}-`));
   try {

@@ -13,7 +13,7 @@
 **Non-Goals:**
 
 - 不增加能力选择向导。
-- 不生成 output、target、README 或模板目录。
+- 不生成 output、target 或模板目录；根目录生成空的 README.md 和包含 `/dist` 的 .gitignore 作为 package 的基础文件。
 - 不放宽最终 package 的 outputs/hooks/runtime 要求。
 
 ## Decisions
@@ -21,6 +21,7 @@
 - 空壳 manifest 使用基础身份字段，不声明 capabilities；因此它可保存和编辑，但不能直接 pack。
 - `digest update` 使用基础 manifest 校验，不要求能力已声明，以便开发阶段修改入口后仍能维护摘要。
 - 交互字段只包含 id、name、description、version；显式 CLI 参数优先，非 TTY/JSON 使用确定性默认值。
+- 静态初始化文件放在 `artifacts/templates/extension-init/`，scaffold 服务递归读取并复制模板；只有 package envelope、manifest 和摘要由代码动态生成。
 
 ## Risks / Trade-offs
 

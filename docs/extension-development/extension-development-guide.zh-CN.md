@@ -45,11 +45,15 @@ codew extension init ./example-extension --yes
 
 ```text
 example-extension/
+├── .gitignore
+├── README.md
 ├── extension/
 │   ├── manifest.json
 │   └── init.js
 └── package.json
 ```
+
+初始化产物中的静态文件模板位于仓库的 `artifacts/templates/extension-init/`。后续调整 README、`.gitignore` 或 `extension/` 下的默认文件时，直接修改该模板目录即可；其中 `gitignore` 会在生成时映射为 `.gitignore`，以避免 npm 发布包排除点文件。`extension init` 只负责注入元数据、生成摘要并写入 package envelope。
 
 系统扩展仍使用固定版本目录：
 
