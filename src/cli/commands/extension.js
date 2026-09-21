@@ -1,3 +1,4 @@
+const path = require("node:path");
 const { LOCAL_DIRECTORY, loadState } = require("../../core/config");
 const { WorkspaceError } = require("../../core/errors");
 const {
@@ -13,7 +14,8 @@ const {
 const { loadInitManifest } = require("../../core/init");
 const { acquireInitLock } = require("../../core/init-lock");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
-const { packExtensionToDirectory } = require("../../core/extension-package");
+const { packExtensionSourceToDirectory } = require("../../core/extension-package");
+const { digestUpdate, scaffoldExtensionPackage } = require("../../core/extension-scaffold");
 const { resolveExtensionSettings } = require("../../core/extension-settings");
 const { DEFAULT_NEXUS_REGISTRY } = require("../../core/nexus-extension-provider");
 const {
@@ -558,7 +560,7 @@ async function executeExtensionPack(invocation) {
   const command = "extension.pack";
   const dependencies = invocation.dependencies || {};
   const settings = resolveExtensionSettings(dependencies);
-  const result = await packExtensionToDirectory(invocation.args[0], invocation.options.output, {
+  const result = await packExtensionSourceToDirectory(invocation.args[0], invocation.options.output, {
     ...dependencies,
     scope: dependencies.scope || settings.values.scope,
   });
@@ -569,9 +571,56 @@ async function executeExtensionPack(invocation) {
   );
 }
 
+async function collectExtensionInitOptions(invocation, target) {
+  const options = { ...invocation.options };
+  const interactive = !options.json && options.yes !== true && process.stdin.isTTY && process.stdout.isTTY;
+  if (!interactive) return options;
+  const ui = await createInteractiveUi({
+    cancelCode: "EXTENSION_INIT_CANCELLED",
+    cancelMessage: "Extension initialization cancelled. No changes were made.",
+  });
+  const defaultId = path.basename(path.resolve(target)).toLowerCase();
+  ui.intro("Create Code Workspace extension package");
+  if (options.id === undefined) options.id = await ui.text("Extension id", defaultId);
+  const defaultName = String(options.id || defaultId).split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+  if (options.name === undefined) options.name = await ui.text("Extension name", defaultName);
+  if (options.description === undefined) options.description = await ui.text("Description", "Code Workspace extension.");
+  if (options.version === undefined) options.version = await ui.text("Version", "0.1.0");
+  ui.close("Extension metadata ready.");
+  return options;
+}
+
+async function executeExtensionInit(invocation) {
+  const command = "extension.init";
+  const target = invocation.args[0] || ".";
+  const options = await collectExtensionInitOptions(invocation, target);
+  const pathText = path.resolve(target);
+  const planText = `Create extension package shell in ${pathText}:\n  CREATE package.json\n  CREATE extension/manifest.json\n  CREATE extension/init.js\nContinue?`;
+  if (!(await confirm(planText, options))) throw new WorkspaceError("CLI_CANCELLED", "Extension package initialization cancelled.");
+  const result = scaffoldExtensionPackage(target, options);
+  const text = result.action === "skip"
+    ? `Extension package is already current: ${result.path}.`
+    : `Created extension package shell in ${result.path}.\nNext: add outputs, hooks, or runtime to extension/manifest.json.`;
+  return success(command, result, text);
+}
+
+async function executeExtensionDigestUpdate(invocation) {
+  const command = "extension.digest.update";
+  const target = invocation.args[0] || ".";
+  if (!(await confirm(`Update extension digests in ${path.resolve(target)}?`, invocation.options))) {
+    throw new WorkspaceError("CLI_CANCELLED", "Extension digest update cancelled.");
+  }
+  const result = digestUpdate(target);
+  return success(command, result, result.action === "skip"
+    ? `Extension digests are already current: ${result.path}.`
+    : `Updated extension digests in ${result.path}.`);
+}
+
 async function executeExtension(invocation) {
   const command = invocation.definition.path.join(".");
   if (command === "extension.pack") return await executeExtensionPack(invocation);
+  if (command === "extension.init") return await executeExtensionInit(invocation);
+  if (command === "extension.digest.update") return await executeExtensionDigestUpdate(invocation);
   if (command === "extension.search") {
     const dependencies = invocation.dependencies || {};
     const interactive = dependencies.interactive ?? (!invocation.options.json && invocation.options.yes !== true && process.stdin.isTTY && process.stdout.isTTY);
@@ -600,6 +649,8 @@ module.exports = {
   executeExtension,
   executeExtensionInstall,
   executeExtensionPack,
+  executeExtensionInit,
+  executeExtensionDigestUpdate,
   executeExtensionSearch,
   executeExtensionInfo,
   executeExtensionUninstall,

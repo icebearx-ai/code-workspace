@@ -307,7 +307,10 @@ function validateManifest(value, options = {}) {
     throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} outputs must be an array`, { extension: id });
   }
   if ((!Array.isArray(manifest.outputs) || manifest.outputs.length === 0) && hooks.length === 0 && !runtime) {
-    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} must declare at least one output, Hook or runtime`, { extension: id });
+    throw extensionError("EXTENSION_MANIFEST_INVALID", `Extension ${id} must declare at least one output, Hook or runtime`, {
+      extension: id,
+      remediation: "Add outputs, hooks, or runtime to extension/manifest.json before packing.",
+    });
   }
   const ids = new Set();
   const declaredArtifacts = [];
@@ -435,6 +438,7 @@ function inspectExtensionPackageDirectory(source, options = {}) {
       version: manifest.version,
       expectedSha256: manifest.entrySha256,
       actualSha256: entrySha256,
+      remediation: "Run codew extension digest update <package-path> before packing.",
     });
   }
   return Object.freeze({

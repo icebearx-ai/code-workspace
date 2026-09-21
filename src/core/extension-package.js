@@ -590,6 +590,209 @@ async function hashFile(file, algorithm, encoding) {
   return hash.digest(encoding);
 }
 
+function readPackageJson(file) {
+  let value;
+  try {
+    value = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    throw packageError("EXTENSION_PACKAGE_JSON_INVALID", `Cannot parse package.json: ${error.message}`, { path: file });
+  }
+  return value;
+}
+
+function inspectExtensionSourcePackage(source, options = {}) {
+  const packageRoot = path.resolve(source);
+  let stat;
+  try {
+    stat = fs.lstatSync(packageRoot);
+  } catch (error) {
+    throw packageError("EXTENSION_PACKAGE_MISSING", `Extension package directory is missing: ${packageRoot}`, {
+      path: packageRoot,
+      cause: error.code,
+    });
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw packageError("EXTENSION_PACKAGE_INVALID", `Extension package must be a regular directory: ${packageRoot}`, { path: packageRoot });
+  }
+  const packageJsonFile = path.join(packageRoot, "package.json");
+  const extensionRoot = path.join(packageRoot, EXTENSION_PACKAGE_ROOT);
+  let packageJsonStat;
+  try { packageJsonStat = fs.lstatSync(packageJsonFile); } catch (error) {
+    throw packageError("EXTENSION_NPM_ENVELOPE_MISSING", `Extension package is missing package.json: ${packageJsonFile}`, { path: packageJsonFile, cause: error.code });
+  }
+  if (!packageJsonStat.isFile() || packageJsonStat.isSymbolicLink()) {
+    throw packageError("EXTENSION_NPM_ENVELOPE_INVALID", `package.json must be a regular file: ${packageJsonFile}`, { path: packageJsonFile });
+  }
+  let extensionStat;
+  try { extensionStat = fs.lstatSync(extensionRoot); } catch (error) {
+    throw packageError("EXTENSION_PACKAGE_LAYOUT_INVALID", `Extension package is missing extension/: ${extensionRoot}`, { path: extensionRoot, cause: error.code });
+  }
+  if (!extensionStat.isDirectory() || extensionStat.isSymbolicLink()) {
+    throw packageError("EXTENSION_PACKAGE_LAYOUT_INVALID", `Extension package root must be a regular directory: ${extensionRoot}`, { path: extensionRoot });
+  }
+  const packageJsonBytes = fs.readFileSync(packageJsonFile);
+  const rawEnvelope = readPackageJson(packageJsonFile);
+  const envelope = validateExtensionTransportEnvelope(rawEnvelope, {
+    ...(options.scope ? { expectedScope: options.scope } : {}),
+  });
+  const inspected = inspectExtensionPackageDirectory(extensionRoot, {
+    expectedId: envelope.codeWorkspace.extensionId,
+    expectedVersion: envelope.version,
+    expectedExtensionSpecVersion: envelope.codeWorkspace.extensionSpecVersion,
+    ...(options.supportedExtensionSpecVersions ? { supportedExtensionSpecVersions: options.supportedExtensionSpecVersions } : {}),
+    ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}),
+  });
+  try {
+    validateExtensionTransportEnvelope(rawEnvelope, {
+      expectedId: inspected.id,
+      expectedVersion: inspected.version,
+      expectedExtensionSpecVersion: inspected.extensionSpecVersion,
+      expectedPackageSha256: inspected.packageSha256,
+      ...(options.scope ? { expectedScope: options.scope } : {}),
+    });
+  } catch (error) {
+    if (error.code === "EXTENSION_NPM_PACKAGE_DIGEST_MISMATCH") {
+      error.details = { ...(error.details || {}), remediation: "Run codew extension digest update <package-path> before packing." };
+    }
+    throw error;
+  }
+  if (envelope.description !== inspected.manifest.description) {
+    throw packageError("EXTENSION_NPM_IDENTITY_MISMATCH", "npm transport description does not match the Extension manifest", {
+      field: "description",
+      expected: inspected.manifest.description,
+      actual: envelope.description,
+    });
+  }
+  return Object.freeze({
+    ...inspected,
+    packageRoot,
+    extensionRoot,
+    packageJsonFile,
+    packageJsonBytes,
+    envelope,
+  });
+}
+
+function assertSourcePackageUnchanged(source, inspected, files, options = {}) {
+  let current;
+  try {
+    current = inspectExtensionSourcePackage(source, options);
+  } catch (error) {
+    throw packageError("EXTENSION_PACKAGE_CHANGED", `Extension package changed while packing: ${inspected.id}@${inspected.version}`, {
+      extension: inspected.id,
+      version: inspected.version,
+      cause: error.code,
+    });
+  }
+  const currentFiles = collectPackageFiles(current.extensionRoot, options.limits);
+  const digestMatches = current.packageJsonBytes.equals(inspected.packageJsonBytes)
+    && current.packageSha256 === inspected.packageSha256
+    && current.manifestSha256 === inspected.manifestSha256
+    && current.entrySha256 === inspected.entrySha256;
+  const filesMatch = currentFiles.length === files.length && currentFiles.every((file, index) =>
+    file.relative === files[index].relative && file.size === files[index].size && file.mode === files[index].mode && file.sha256 === files[index].sha256
+  );
+  if (!digestMatches || !filesMatch) {
+    throw packageError("EXTENSION_PACKAGE_CHANGED", `Extension package changed while packing: ${inspected.id}@${inspected.version}`, {
+      extension: inspected.id,
+      version: inspected.version,
+    });
+  }
+}
+
+async function packExtensionSourceToDirectory(source, outputDirectory, options = {}) {
+  // Keep the repository's built-in legacy extension layout packable while the
+  // public authoring workflow uses a package-root envelope.
+  if (!fs.existsSync(path.join(path.resolve(source), "package.json"))) {
+    return packExtensionToDirectory(source, outputDirectory, options);
+  }
+  const limits = normalizeLimits(options.limits);
+  const outputRoot = path.resolve(outputDirectory);
+  const inspected = inspectExtensionSourcePackage(source, {
+    ...(options.scope ? { scope: options.scope } : {}),
+    ...(options.supportedExtensionSpecVersions ? { supportedExtensionSpecVersions: options.supportedExtensionSpecVersions } : {}),
+    ...(options.protectedTargets ? { protectedTargets: options.protectedTargets } : {}),
+  });
+  const files = collectPackageFiles(inspected.extensionRoot, limits);
+  try {
+    fs.mkdirSync(outputRoot, { recursive: true });
+  } catch (error) {
+    throw packageError("EXTENSION_PACK_OUTPUT_CREATE_FAILED", `Cannot create output directory: ${outputRoot}`, { path: outputRoot, cause: error.code });
+  }
+  const outputStat = fs.lstatSync(outputRoot);
+  if (!outputStat.isDirectory() || outputStat.isSymbolicLink()) {
+    throw packageError("EXTENSION_PACK_OUTPUT_INVALID", `Output must be a regular directory: ${outputRoot}`, { path: outputRoot });
+  }
+  const filename = extensionNpmTarballFilename(inspected.id, inspected.version, options.scope);
+  const target = path.join(outputRoot, filename);
+  if (fs.existsSync(target)) {
+    throw packageError("EXTENSION_PACK_OUTPUT_EXISTS", `Extension package output already exists: ${target}`, {
+      path: target,
+      remediation: "Move or remove the existing tarball, or choose another output directory.",
+    });
+  }
+  const temporaryTarget = path.join(outputRoot, `.${filename}.${process.pid}.${crypto.randomUUID()}.tmp`);
+  const fd = fs.openSync(temporaryTarget, "wx", 0o600);
+  fs.closeSync(fd);
+  let targetReserved = false;
+  try {
+    try {
+      await writeTransportTarball({
+        sourceRoot: inspected.extensionRoot,
+        files,
+        envelopeBytes: inspected.packageJsonBytes,
+        target: temporaryTarget,
+        limits,
+      });
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw error;
+      throw packageError("EXTENSION_TARBALL_CREATE_FAILED", `Cannot create extension npm tarball: ${error.message}`, { path: target, cause: error.code });
+    }
+    assertSourcePackageUnchanged(source, inspected, files, { ...options, limits });
+    let verified;
+    try {
+      verified = await inspectExtensionTransportTarball(temporaryTarget, {
+        expectedId: inspected.id,
+        expectedVersion: inspected.version,
+        expectedExtensionSpecVersion: inspected.extensionSpecVersion,
+        expectedPackageSha256: inspected.packageSha256,
+        ...(options.scope ? { expectedScope: options.scope } : {}),
+        expectedFiles: files,
+        limits,
+      });
+    } catch (error) {
+      if (error instanceof WorkspaceError) throw error;
+      throw packageError("EXTENSION_TARBALL_VERIFY_FAILED", `Cannot verify extension npm tarball: ${error.message}`, { path: target, cause: error.code });
+    }
+    if (!verified || verified.packageSha256 !== inspected.packageSha256 || verified.manifestSha256 !== inspected.manifestSha256 || verified.entrySha256 !== inspected.entrySha256) {
+      throw packageError("EXTENSION_TARBALL_VERIFY_FAILED", `Extension npm tarball verification failed: ${inspected.id}@${inspected.version}`, { extension: inspected.id, version: inspected.version });
+    }
+    const tarballBytes = fs.statSync(temporaryTarget).size;
+    const integrity = `sha512-${await hashFile(temporaryTarget, "sha512", "base64")}`;
+    const targetFd = fs.openSync(target, "wx", 0o600);
+    fs.closeSync(targetFd);
+    targetReserved = true;
+    fs.renameSync(temporaryTarget, target);
+    targetReserved = false;
+    return Object.freeze({
+      schemaVersion: 1,
+      extensionId: inspected.id,
+      version: inspected.version,
+      extensionSpecVersion: inspected.extensionSpecVersion,
+      npmName: inspected.envelope.name,
+      tarball: Object.freeze({ path: target, filename, bytes: tarballBytes, integrity, files: verified.files }),
+      manifestSha256: inspected.manifestSha256,
+      entrySha256: inspected.entrySha256,
+      packageSha256: inspected.packageSha256,
+    });
+  } finally {
+    try { fs.unlinkSync(temporaryTarget); } catch { /* cleanup is best-effort */ }
+    if (targetReserved) {
+      try { fs.unlinkSync(target); } catch { /* cleanup is best-effort */ }
+    }
+  }
+}
+
 async function packExtensionToDirectory(source, outputDirectory, options = {}) {
   const limits = normalizeLimits(options.limits);
   const outputRoot = path.resolve(outputDirectory);
@@ -733,6 +936,8 @@ module.exports = {
   normalizeNpmScope,
   extractExtensionTransportTarball,
   inspectExtensionTransportTarball,
+  inspectExtensionSourcePackage,
+  packExtensionSourceToDirectory,
   packExtensionToDirectory,
   validateExtensionTransportEnvelope,
 };

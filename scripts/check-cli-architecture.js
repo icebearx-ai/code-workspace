@@ -267,7 +267,7 @@ function validateExtensionPackContract(registry, commandSource, coreSource) {
   if (!definition || JSON.stringify(definition, Object.keys(expected)) !== JSON.stringify(expected, Object.keys(expected))) {
     problems.push(problem("EXTENSION_PACK_REGISTRY_INVALID", "extension pack must declare the Workspace-independent planned-write contract"));
   }
-  if (!/require\(["']\.\.\/\.\.\/core\/extension-package["']\)/.test(commandSource) || !/\bpackExtensionToDirectory\s*\(/.test(commandSource)) {
+  if (!/require\(["']\.\.\/\.\.\/core\/extension-package["']\)/.test(commandSource) || !/\b(?:packExtensionToDirectory|packExtensionSourceToDirectory)\s*\(/.test(commandSource)) {
     problems.push(problem("EXTENSION_PACK_COMMAND_LAYERING_INVALID", "extension pack command must orchestrate the core pack API", "src/cli/commands/extension.js"));
   }
   if (/\bfs\./.test(commandSource)) {

@@ -35,7 +35,23 @@ Host 负责确认、校验、事务提交、状态记录、升级和卸载。
 
 ## 2. 包目录
 
-系统扩展使用固定版本目录；普通扩展在独立仓库中维护并发布到 Nexus：
+系统扩展使用固定版本目录；普通扩展建议使用 `extension init` 创建最小 package 空壳，再按 Extension Spec 添加能力并发布到 Nexus：
+
+```bash
+codew extension init ./example-extension --yes
+```
+
+开发 package 的目录结构为：
+
+```text
+example-extension/
+├── extension/
+│   ├── manifest.json
+│   └── init.js
+└── package.json
+```
+
+系统扩展仍使用固定版本目录：
 
 ```text
 extensions/<extension-id>/<version>/
@@ -45,7 +61,7 @@ extensions/<extension-id>/<version>/
     └── SKILL.md
 ```
 
-外部扩展仓库可以使用任意仓库根目录，但交给 `extension pack` 的 `<source>` 必须直接指向包含 `manifest.json` 和 `init.js` 的版本目录。
+公开 CLI 的 `extension pack <source>` 要求 `<source>` 直接指向包含 `package.json` 和 `extension/` 的 package 根目录。空壳尚未声明 `outputs`、`hooks` 或 `runtime` 时不能打包。
 
 命名要求：
 
@@ -53,11 +69,18 @@ extensions/<extension-id>/<version>/
 - `version` 必须是完整 SemVer，例如 `1.0.0`；
 - 已发布版本目录不可修改；新实现创建新的版本目录。
 
-不要在扩展目录中添加运输用 `package.json`。npm 包装由 `extension pack` 生成；真实扩展目录的 `packageSha256` 是 Extension 身份的一部分。
+根目录 `package.json` 是固定格式的 transport envelope，不要添加 `dependencies`、`scripts` 或其他 npm lifecycle 字段。`extension pack` 只校验并打包这个 envelope，不会自动生成或修改它。
+
+`extension init` 只询问扩展 id、显示名称、描述和版本，不预设扩展是 Skill、MCP、Hook 还是 Runtime。完成 manifest 能力声明后，再运行：
+
+```bash
+codew extension digest update ./example-extension --yes
+codew extension pack ./example-extension --output ./dist/extensions --json
+```
 
 ## 3. manifest
 
-Spec v1 使用 manifest schema v3。最小示例：
+Spec v1 使用 manifest schema v3。下面是声明了一个 file output 的最小完整示例；`extension init` 生成的空壳会在用户添加能力前缺少 `outputs`、`hooks` 或 `runtime`：
 
 ```json
 {
@@ -89,7 +112,13 @@ Spec v1 使用 manifest schema v3。最小示例：
 node -e "process.stdout.write(require('node:crypto').createHash('sha256').update(require('node:fs').readFileSync('extensions/example-extension/1.0.0/init.js')).digest('hex'))"
 ```
 
-每次修改 `init.js` 后都必须更新 `entrySha256`。其他文件不需要手工写摘要；Host 和打包器会计算完整目录摘要。
+每次修改 `init.js` 或 `extension/` 下其他文件后，使用 CLI 同步摘要：
+
+```bash
+codew extension digest update ./example-extension --yes
+```
+
+该命令会先更新 `extension/manifest.json.entrySha256`，再更新 `package.json.codeWorkspace.packageSha256`。
 
 ### 3.1 身份与展示
 
@@ -296,10 +325,10 @@ codew extension upgrade example-extension --yes
 
 ## 6. npm/Nexus 打包
 
-打包单个版本目录：
+打包单个 package 根目录：
 
 ```bash
-code-workspace extension pack extensions/example-extension/1.0.0 --output dist/extensions --json
+code-workspace extension pack ./example-extension --output dist/extensions --json
 ```
 
 输出目录缺失时会递归创建。目标文件已存在时命令拒绝覆盖；重复打包前使用新的输出目录，或清理上一次构建产物。
@@ -331,13 +360,15 @@ npm 身份固定映射为：
 
 打包器会：
 
-- 校验 manifest、入口摘要、目录类型和 Extension Spec；
-- 生成不含 dependencies、bundled dependencies 和 scripts 的 envelope；
+- 校验 package envelope、manifest、入口摘要、目录类型和 Extension Spec；
+- 原样保留已验证的 `package.json`，不生成或修改 envelope；
 - 只归档普通文件；
 - 拒绝符号链接、硬链接、特殊文件、路径逃逸和重复路径；
 - 限制最多 1024 个文件、单文件 2 MiB、载荷总计 16 MiB、envelope 64 KiB；
 - 重新读取 tarball 并验证 envelope、manifest、入口和 package digest；
 - 使用同目录临时文件并原子提交输出。
+
+开发 package 的 README 和其他根目录文件不会进入 tarball；最终内容严格由 `package.json.files` 中的 `extension` 决定。
 
 成功 JSON 返回 npm name、扩展身份、tarball 绝对路径、tarball integrity、manifest/entry/package digest 和文件清单。
 
