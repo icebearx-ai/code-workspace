@@ -1,5 +1,7 @@
 # Code Workspace
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Code Workspace is a local multi-project registry and safety layer for Claude Code and Codex. It manages workspace identity, project locations and branches, agent instructions, writable-root permissions, validation, and optional monitoring.
 
 ## Requirements
@@ -13,10 +15,7 @@ Code Workspace is a local multi-project registry and safety layer for Claude Cod
 npm install -g code-workspace-zhuiyi@latest
 ```
 
-The package provides the `code-workspace` command and the shorter `codew` alias. The legacy `code-w` alias remains available for compatibility.
-
 ## Initialize
-
 
 Interactive initialization:
 
@@ -226,16 +225,7 @@ codew language --json
 
 `update` refreshes only Workspace-owned managed assets and never changes Agent directory authorization. Unknown local edits stop the batch before writes; review them or pass `--force` explicitly.
 
-## Monitor
-
-Monitor is an ordinary Nexus extension. Install it into a workspace and run its dashboard through the generic extension runtime:
-
-```bash
-codew extension install monitor --yes
-codew ext monitor serve --port 3211
-```
-
-The monitor binds to loopback, combines events from multiple initialized workspaces, and keeps hook reporting (`codew ext monitor report`) failure-open. Review and trust project hooks in Codex before relying on reports.
+## Completion
 
 ```bash
 codew completion --shell zsh

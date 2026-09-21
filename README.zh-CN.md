@@ -1,5 +1,7 @@
 # Code Workspace
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Code Workspace 是面向 Claude Code 与 Codex 的本地多项目注册表和安全边界层，负责工作区身份、项目路径与分支、Agent 指令、可写目录权限、校验以及可选监控。
 
 ## 环境要求
@@ -12,8 +14,6 @@ Code Workspace 是面向 Claude Code 与 Codex 的本地多项目注册表和安
 ```bash
 npm install -g code-workspace-zhuiyi@latest
 ```
-
-软件包提供 `code-workspace` 命令及短别名 `codew`。为保持兼容，旧别名 `code-w` 仍然可用。
 
 ## 初始化
 
@@ -222,17 +222,6 @@ codew language --json
 ```
 
 `update` 只刷新 Workspace 自有托管资产，绝不会修改 Agent 目录授权。遇到未知本地修改时，会在任何写入前终止批次；请先审查修改，或显式传入 `--force`。
-
-## 监控
-
-监控以 Nexus 中的 `monitor` 扩展提供。先在 Workspace 中安装扩展，再通过通用扩展运行时启动面板：
-
-```bash
-codew extension install monitor --yes
-codew ext monitor serve --port 3211
-```
-
-监控服务仅绑定 loopback，可汇总多个已初始化工作区的事件；hook 上报（`codew ext monitor report`）失败不会阻断 Agent。依赖监控前，请在 Codex 中检查并信任项目 hook。
 
 ## 命令补全
 
