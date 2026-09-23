@@ -113,6 +113,14 @@ function normalizeProvenance(value, key = "package") {
       archiveIntegrity,
     });
   }
+  if (value.kind === "local") {
+    const allowed = new Set(["kind", "archiveIntegrity"]);
+    const unknown = Object.keys(value).filter((field) => !allowed.has(field));
+    if (unknown.length > 0) throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Local Store provenance contains unsupported field ${unknown[0]} for ${key}`, { package: key, field: unknown[0] });
+    const archiveIntegrity = String(value.archiveIntegrity || "");
+    if (!SHA512_SRI_PATTERN.test(archiveIntegrity)) throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Invalid local archive integrity for ${key}`, { package: key });
+    return Object.freeze({ kind: "local", archiveIntegrity });
+  }
   throw storeError("EXTENSION_STORE_PROVENANCE_INVALID", `Unsupported Store provenance kind for ${key}: ${value.kind || "<missing>"}`, { package: key, kind: value.kind || null });
 }
 
@@ -142,7 +150,7 @@ function validatePackageRecord(key, value) {
     manifestSha256: value.manifestSha256,
     entrySha256: value.entrySha256,
     packageSha256: value.packageSha256,
-    source: provenance.kind === "builtin" ? "builtin" : "nexus",
+    source: provenance.kind === "builtin" ? "builtin" : provenance.kind === "local" ? "local" : "nexus",
     provenance,
     importedAt: value.importedAt || null,
     references: normalizeReferences(value.references),
@@ -276,7 +284,7 @@ function ensureStoredExtensionPackage(options = {}) {
         manifestSha256: copied.manifestSha256,
         entrySha256: copied.entrySha256,
         packageSha256: copied.packageSha256,
-        source: provenance.kind === "builtin" ? "builtin" : "nexus",
+        source: provenance.kind === "builtin" ? "builtin" : provenance.kind === "local" ? "local" : "nexus",
         provenance,
         importedAt: new Date().toISOString(),
         references: registry.packages[packageKey(source.id, source.version)]?.references || normalizeReferences(),

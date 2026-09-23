@@ -6,6 +6,8 @@ const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const { inspectExtensionTransportTarball } = require("../core/extension-package");
+const { importLocalExtensionTarball } = require("../core/extension-local");
+const { listPackageReferences } = require("../core/extension-store");
 const { parse } = require("../cli/parser");
 
 const cli = path.resolve(__dirname, "..", "..", "bin", "code-workspace.js");
@@ -51,6 +53,28 @@ test("extension init creates a capability-neutral package shell", async () => {
     ]);
     const verified = await inspectExtensionTransportTarball(packed.envelope.data.tarball.path);
     assert.equal(verified.envelope.name, "@codew-ext/example-extension");
+    const store = path.join(root, "store");
+    const imported = await importLocalExtensionTarball(packed.envelope.data.tarball.path, { extensionStoreRoot: store });
+    assert.equal(imported.source, "local");
+    assert.match(imported.archive.integrity, /^sha512-/);
+    assert.equal(listPackageReferences(store)[0].provenance.kind, "local");
+    const repeated = await importLocalExtensionTarball(packed.envelope.data.tarball.path, { extensionStoreRoot: store });
+    assert.equal(repeated.packageSha256, imported.packageSha256);
+    fs.appendFileSync(path.join(source, "extension", "init.js"), "\n// changed package\n");
+    assert.equal(run(["extension", "digest", "update", source, "--yes", "--json"], root).status, 0);
+    const conflicting = run(["extension", "pack", source, "--output", path.join(root, "dist-conflict"), "--json"], root);
+    assert.equal(conflicting.status, 0);
+    await assert.rejects(importLocalExtensionTarball(conflicting.envelope.data.tarball.path, { extensionStoreRoot: store }), (error) => error.code === "EXTENSION_STORE_PACKAGE_CONFLICT");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("local extension import accepts only tarballs", async () => {
+  const root = temporaryRoot();
+  try {
+    await assert.rejects(importLocalExtensionTarball(path.join(root, "package")), (error) => error.code === "EXTENSION_LOCAL_ARCHIVE_INVALID");
+    await assert.rejects(importLocalExtensionTarball(path.join(root, "missing.tgz")), (error) => error.code === "EXTENSION_LOCAL_ARCHIVE_MISSING");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -116,4 +140,7 @@ test("extension scaffold commands have workspace-independent parser contracts", 
   assert.equal(parse(argv("extension", "digest", "update", "./demo", "--yes")).command.path.join(" "), "extension digest update");
   assert.throws(() => parse(argv("extension", "digest", "update", "a", "b")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
   assert.throws(() => parse(argv("extension", "init", "./demo", "--unknown")), (error) => error.code === "CLI_UNKNOWN_OPTION");
+  assert.equal(parse(argv("extension", "install", "--local", "./demo.tgz", "--yes")).command.path.join(" "), "extension install");
+  assert.equal(parse(argv("extension", "install", "--local", "./demo.tgz", "--yes")).options.local, true);
+  assert.deepEqual(parse(argv("extension", "install", "--local", "./demo.tgz", "--yes")).args, ["./demo.tgz"]);
 });

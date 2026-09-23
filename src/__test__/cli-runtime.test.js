@@ -113,6 +113,7 @@ test("extension install is an optional variadic planned-write contract", () => {
   assert.deepEqual(definition.args, [{ name: "name", required: false, variadic: true }]);
   assert.deepEqual(definition.options, {
     yes: { type: "boolean" },
+    local: { type: "boolean" },
     version: { type: "string" },
     "allow-deprecated": { type: "boolean" },
     offline: { type: "boolean" },

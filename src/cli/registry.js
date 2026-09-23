@@ -68,7 +68,7 @@ const COMMANDS = [
     tools: { type: "string" }, yes: { type: "boolean" },
   } },
   { path: ["extension", "install"], args: [{ name: "name", required: false, variadic: true }], workspace: "required", config: ["identity", "language"], interaction: "required", effects: "planned-write", options: {
-    yes: { type: "boolean" }, version: { type: "string" }, "allow-deprecated": { type: "boolean" }, offline: { type: "boolean" },
+    yes: { type: "boolean" }, local: { type: "boolean" }, version: { type: "string" }, "allow-deprecated": { type: "boolean" }, offline: { type: "boolean" },
   } },
   { path: ["extension", "uninstall"], args: [{ name: "name", required: true }], workspace: "required", config: [], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
   { path: ["extension", "pack"], args: [{ name: "source", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: { output: { type: "string", required: true } } },

@@ -124,6 +124,15 @@ codew extension digest update ./example-extension --yes
 
 该命令会先更新 `extension/manifest.json.entrySha256`，再更新 `package.json.codeWorkspace.packageSha256`。
 
+完成开发后，可以在上传 Registry 前使用最终 tarball 在本地 Workspace 安装测试：
+
+```bash
+codew extension pack ./example-extension --output ./dist
+codew extension install --local ./dist/codew-ext-example-extension-0.1.0.tgz --yes
+```
+
+`extension install --local` 只接受 `.tgz`，会复用正式安装的完整 tarball 校验、Extension Store 导入和 Workspace 事务；不支持直接安装源码目录，也不会覆盖相同 id/version 下的不同 package digest。`--local` 模式不能与 `--version`、`--allow-deprecated` 或 `--offline` 同时使用。
+
 ### 3.1 身份与展示
 
 - `schemaVersion` 必须是 `3`；

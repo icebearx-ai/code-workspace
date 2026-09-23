@@ -717,6 +717,14 @@ function planFromPackageRecord(id, packageRecord, options = {}) {
   });
 }
 
+function planLocalExtensionPackage(packageRecord, options = {}) {
+  return planFromPackageRecord(packageRecord.id, packageRecord, {
+    ...options,
+    source: "local",
+    resolutionScope: "local",
+  });
+}
+
 async function prepareRegistryExtensionPlans(options = {}) {
   const requested = normalizeExtensionNames(options.requested || []);
   if (options.version && requested.length !== 1) {
@@ -791,6 +799,7 @@ module.exports = {
   getRegistryExtensionInfo,
   listRegistryExtensionChoices,
   prepareRegistryExtensionPlans,
+  planLocalExtensionPackage,
   resolveRegistryExtensionCandidate,
   searchRegistryExtensions,
 };

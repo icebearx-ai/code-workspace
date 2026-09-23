@@ -14,6 +14,8 @@ const {
 const { loadInitManifest } = require("../../core/init");
 const { acquireInitLock } = require("../../core/init-lock");
 const { defaultExtensionStoreRoot } = require("../../core/extension-store");
+const { planLocalExtensionPackage } = require("../../core/extension-registry-lifecycle");
+const { importLocalExtensionTarball, prepareLocalExtensionTarball } = require("../../core/extension-local");
 const { packExtensionSourceToDirectory } = require("../../core/extension-package");
 const { digestUpdate, scaffoldExtensionPackage } = require("../../core/extension-scaffold");
 const { resolveExtensionSettings } = require("../../core/extension-settings");
@@ -207,6 +209,7 @@ function decorateBatchResults(batch, plans, options) {
 }
 
 async function executeExtensionInstall(invocation) {
+  if (invocation.options.local === true) return await executeExtensionInstallLocal(invocation);
   const command = "extension.install";
   const dependencies = registryDependencies(invocation.dependencies || {});
   validateInstallOptions(invocation);
@@ -313,6 +316,59 @@ async function executeExtensionInstall(invocation) {
     diagnostics,
     text: lifecycleResultText(results, "install"),
   });
+}
+
+async function executeExtensionInstallLocal(invocation) {
+  const command = "extension.install";
+  const dependencies = invocation.dependencies || {};
+  if (invocation.args.length !== 1) {
+    throw new WorkspaceError("EXTENSION_INSTALL_MODE_CONFLICT", "--local requires exactly one tarball path and no extension names.", {
+      remediation: "Use `codew extension install --local <tarball> --yes`.",
+    });
+  }
+  if (invocation.options.version || invocation.options.allowDeprecated || invocation.options.offline) {
+    throw new WorkspaceError("EXTENSION_INSTALL_MODE_CONFLICT", "--local cannot be combined with Registry version, deprecation, or offline options.", {
+      remediation: "Remove --version, --allow-deprecated, and --offline when installing a local tarball.",
+    });
+  }
+  const storeRoot = dependencies.extensionStoreRoot || defaultExtensionStoreRoot();
+  const prepared = await prepareLocalExtensionTarball(invocation.args[0], dependencies);
+  try {
+    const stateInspection = inspectExtensionState(invocation.root);
+    const tools = resolveWorkspaceTools({ state: loadState(invocation.root), manifestTools: loadInitManifest().tools }).tools;
+    const plan = planLocalExtensionPackage(prepared.packageRecord, { tools, state: stateInspection.state });
+    const planText = formatInstallPlan([{ ...plan, source: "local" }]);
+    if (!(await (dependencies.confirm || confirm)(`${planText}\nContinue?`, invocation.options))) {
+      throw new WorkspaceError("CLI_CANCELLED", "Local extension installation cancelled.");
+    }
+    await importLocalExtensionTarball(invocation.args[0], { ...dependencies, extensionStoreRoot: storeRoot });
+    const workspace = invocation.config.workspace;
+    const batch = runExtensionBatch(invocation.root, [plan], (extension) => ({
+      schemaVersion: 1,
+      extensionSpecVersion: extension.extensionSpecVersion,
+      extension: { id: extension.id, version: extension.version },
+      workspace: { name: workspace.name, uuid: workspace.uuid, language: workspace.language },
+      tools,
+    }), {
+      requested: [plan.id],
+      useExtensionStore: true,
+      extensionStoreRoot: storeRoot,
+    });
+    const results = decorateBatchResults(batch, [plan], invocation.options);
+    const diagnostics = batch.results.filter((item) => item.status === "failed").map((item) => ({
+      code: item.code || "EXTENSION_LOCAL_INSTALL_FAILED",
+      severity: "error",
+      message: item.message || `Extension ${item.id} failed to install.`,
+      extension: item.id,
+      version: item.version,
+    }));
+    return selectionResult(command, [plan.id], results.map((item) => ({ ...lifecycleResultEntry(item, "install"), archive: prepared.archive })), {
+      diagnostics,
+      text: lifecycleResultText(results, "install"),
+    });
+  } finally {
+    prepared.cleanup();
+  }
 }
 
 async function executeExtensionSearch(invocation) {
@@ -648,6 +704,7 @@ module.exports = {
   collectRegistryExtensionInstallSelection,
   executeExtension,
   executeExtensionInstall,
+  executeExtensionInstallLocal,
   executeExtensionPack,
   executeExtensionInit,
   executeExtensionDigestUpdate,
