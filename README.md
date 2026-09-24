@@ -25,6 +25,8 @@ codew init .code-workspace
  
 `.code-workspace` is the directory name and can be determined by yourself.
 
+Interactive initialization asks for “Development mode: Yes/No”. New Workspaces default to “Yes”; existing Workspaces use their saved value as the default. Pass `--dev true` or `--dev false` to select it explicitly without prompting.
+
 Non-interactive initialization:
 
 ```bash

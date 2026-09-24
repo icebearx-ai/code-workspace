@@ -90,6 +90,17 @@ async function collectInitPlan(root, manifest, options = {}) {
   });
   const existing = fs.existsSync(configPath(root)) ? loadConfig(root, { defaultLanguage: existingLanguage }) : null;
   const name = existing?.workspace?.name || options.workspaceName || await ui.text("Workspace name", DEFAULT_WORKSPACE_NAME);
+  const initialDev = options.dev ?? existing?.workspace?.dev ?? true;
+  const dev = options.dev !== undefined
+      ? options.dev
+      : await ui.select(
+        "Development mode",
+        [
+          { value: true, label: "Yes" },
+          { value: false, label: "No" },
+        ],
+        initialDev ? 0 : 1
+      );
   const languageChoices = SUPPORTED_LANGUAGES.map((entry) => ({
     value: entry.value,
     label: `${entry.label} · ${entry.value}`,
@@ -109,14 +120,17 @@ async function collectInitPlan(root, manifest, options = {}) {
     options.initialTools || ["claude", "codex"]
   );
   const systemExtensions = typeof options.prepareSystemExtensions === "function"
-    ? await options.prepareSystemExtensions(tools)
+    ? await options.prepareSystemExtensions(tools, dev)
     : (options.systemExtensions || []);
   const ordinary = await collectExtensionPlans(options, ui, tools);
   const extensions = [
     ...systemExtensions,
     ...ordinary.plans,
   ];
-  const workspace = existing?.workspace || { name, uuid: randomUUID() };
+  const workspace = {
+    ...(existing?.workspace || { name, uuid: randomUUID() }),
+    dev,
+  };
   const extensionRemovals = ordinary.uninstallPlans || [];
   const plan = createInitPlan({ root, workspace, tools, language, extensions, extensionRemovals });
   const extensionChanges = [
@@ -125,6 +139,7 @@ async function collectInitPlan(root, manifest, options = {}) {
   ];
   ui.note("Ready to initialize", [
     `Workspace  ${workspace.name}`,
+    `Development mode  ${dev ? "Yes" : "No"}`,
     `Language   ${language}`,
     `Tools      ${tools.length ? tools.join(", ") : "none"}`,
     `Extensions ${extensions.length ? extensions.map((entry) => `${entry.id}@${entry.version} [Spec ${entry.extensionSpecVersion}] (${entry.manifestSha256})`).join(", ") : "none"}`,

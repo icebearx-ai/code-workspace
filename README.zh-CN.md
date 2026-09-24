@@ -25,6 +25,8 @@ codew init .code-workspace
 
 `.code-workspace` 是目录名，可以自定义。
 
+交互式初始化会询问“开发模式：是/否”，新 Workspace 默认选择“是”；已有 Workspace 会以已保存的值作为默认选项。也可以通过 `--dev true` 或 `--dev false` 直接指定，不进入该选择。
+
 非交互式初始化：
 
 ```bash

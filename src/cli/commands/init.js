@@ -99,7 +99,7 @@ async function executeInit(invocation) {
 async function executeInitUnlocked(invocation, root) {
   const { options } = invocation;
   const requestedDev = parseDevOption(options.dev);
-  const dev = resolveWorkspaceDev(root, requestedDev);
+  let dev = resolveWorkspaceDev(root, requestedDev);
   const dependencies = invocation.dependencies && Object.prototype.hasOwnProperty.call(invocation.dependencies, "defaultRegistryUrl")
     ? invocation.dependencies
     : { ...(invocation.dependencies || {}), defaultRegistryUrl: DEFAULT_NEXUS_REGISTRY };
@@ -132,15 +132,11 @@ async function executeInitUnlocked(invocation, root) {
   const extensionState = extensionStateInspection.state;
   const systemCatalogResult = inspectExtensions ? discoverSystemExtensions({ tolerant: true }) : { catalog: [], invalid: [] };
   const systemExtensionIds = systemCatalogResult.catalog.filter((entry) => entry.latestSupported).map((entry) => entry.id);
-  const systemRequestedExtensions = dev ? systemExtensionIds : [];
-  const systemRemovalPlans = dev || extensionStateInspection.error
-    ? []
-    : Object.entries(extensionState.extensions)
-      .filter(([id, entry]) => entry.installed?.system === true || systemExtensionIds.includes(id))
-      .map(([id]) => planExtensionUninstall(root, id, { systemManaged: true }));
+  let systemRequestedExtensions = dev ? systemExtensionIds : [];
   let systemPreparation = { plans: [], failures: [], diagnostics: [] };
   let planningState = extensionState;
-  const prepareSystemForTools = (tools) => {
+  const prepareSystemForTools = (tools, selectedDev = dev) => {
+    systemRequestedExtensions = selectedDev ? systemExtensionIds : [];
     systemPreparation = prepareExtensionPlans(systemCatalogResult, systemRequestedExtensions, {
       tools,
       state: extensionState,
@@ -183,6 +179,7 @@ async function executeInitUnlocked(invocation, root) {
         initialTools: resolvedTools.tools,
         workspaceName: options["workspace-name"],
         language: options.language,
+        dev: requestedDev,
         extensionState,
         extensions: explicitExtensions === null ? undefined : explicitExtensions,
         initialExtensions: explicitExtensions === null ? undefined : explicitExtensions,
@@ -198,6 +195,12 @@ async function executeInitUnlocked(invocation, root) {
       throw error;
     }
   }
+  if (plan?.workspace?.dev !== undefined) dev = plan.workspace.dev;
+  const systemRemovalPlans = dev || extensionStateInspection.error
+    ? []
+    : Object.entries(extensionState.extensions)
+      .filter(([id, entry]) => entry.installed?.system === true || systemExtensionIds.includes(id))
+      .map(([id]) => planExtensionUninstall(root, id, { systemManaged: true }));
   const tools = plan?.tools || resolvedTools.tools;
   const ordinaryRequestedExtensions = explicitExtensions !== null
     ? explicitExtensions

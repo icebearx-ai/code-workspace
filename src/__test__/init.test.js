@@ -47,7 +47,7 @@ test("interactive init collects and confirms a complete workspace plan before wr
   const calls = [];
   const answers = {
     text: ["payments"],
-    select: ["zh-CN"],
+    select: [true, "zh-CN"],
     multiselect: [["codex"]],
     confirm: [true, true],
   };
@@ -68,6 +68,7 @@ test("interactive init collects and confirms a complete workspace plan before wr
   };
   const plan = await collectInitPlan(root, loadInitManifest(), { ui, nodeVersion: "24.0.0" });
   assert.equal(plan.workspace.name, "payments");
+  assert.equal(plan.workspace.dev, true);
   assert.equal(plan.openspec, undefined);
   assert.equal(plan.language, "zh-CN");
   assert.deepEqual(plan.tools, ["codex"]);
@@ -98,6 +99,34 @@ test("interactive init offers independent Claude Code and Codex selections", asy
   ]);
   assert.deepEqual(offered.initialValues, ["claude", "codex"]);
   assert.deepEqual(plan.tools, ["claude", "codex"]);
+});
+
+test("interactive init can disable development mode and preserves the selected value in the plan", async () => {
+  const root = temporaryRoot();
+  const calls = [];
+  let preparedDev;
+  const ui = {
+    intro() {},
+    note(title) { calls.push(title); },
+    text: async () => "container-workspace",
+    select: async (label, choices) => {
+      if (label === "Development mode") return choices[1].value;
+      return choices[0].value;
+    },
+    multiselect: async (label) => label.startsWith("Extensions") ? [] : ["codex"],
+    confirm: async () => true,
+    close() {},
+  };
+  const plan = await collectInitPlan(root, loadInitManifest(), {
+    ui,
+    prepareSystemExtensions: (_tools, selectedDev) => {
+      preparedDev = selectedDev;
+      return [];
+    },
+  });
+  assert.equal(plan.workspace.dev, false);
+  assert.equal(preparedDev, false);
+  assert(calls.includes("Ready to initialize"));
 });
 
 test("interactive init consumes the shared picker and freezes selected plans before confirmation", async () => {
