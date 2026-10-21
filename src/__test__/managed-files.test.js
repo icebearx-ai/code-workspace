@@ -13,6 +13,7 @@ const {
   loadManagedManifest,
 } = require("../core/managed-files");
 const { workspaceGuide } = require("../core/language");
+const { applyLegacyExtensionCleanup, legacyExtensionDiagnostics, planLegacyExtensionCleanup } = require("../core/legacy-extensions");
 
 function baseline(tools = ["claude", "codex"]) {
   void tools;
@@ -23,18 +24,19 @@ test("workspace-owned templates use one idempotent managed-file mechanism", () =
   const root = baseline();
   const manifest = loadInitManifest();
   const first = installManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(first.length, 1);
-  assert.equal(first.filter((entry) => entry.action === "write").length, 1);
+  assert.equal(first.length, 10);
+  assert.equal(first.filter((entry) => entry.action === "write").length, 10);
 
   const second = installManagedFiles(root, manifest, ["claude", "codex"]);
   assert.equal(second.filter((entry) => entry.action === "write").length, 0);
   const inspected = inspectManagedFiles(root, manifest, ["claude", "codex"]);
-  assert.equal(inspected.current.length, 1);
+  assert.equal(inspected.current.length, 10);
   assert.deepEqual(inspected.managedOld, []);
   assert.deepEqual(inspected.replaceable, []);
   assert.deepEqual(inspected.unknown, []);
   assert(inspected.files.some((entry) => entry.provenance.kind === "template"));
   assert(!inspected.files.some((entry) => entry.provenance.kind === "patch"));
+  assert(inspected.files.some((entry) => entry.provenance.kind === "builtin-agent"));
 });
 
 test("managed-file planning prevents partial writes when one target is unknown", () => {
@@ -79,10 +81,10 @@ test("managed files respect selected tools while the user guide remains tool-neu
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const result = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(result.length, 1);
+  assert.equal(result.length, 6);
   assert(!result.some((entry) => entry.target.startsWith(".claude/")));
   assert(!result.some((entry) => entry.target === "CLAUDE.md"));
-  assert(!result.some((entry) => entry.target === "AGENTS.md"));
+  assert(result.some((entry) => entry.target === "AGENTS.md"));
   assert(!result.some((entry) => entry.target === "AGENT.md"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
@@ -96,7 +98,9 @@ test("changing the selected tools removes previously managed tool assets", () =>
   const manifest = loadInitManifest();
   installManagedFiles(root, manifest, ["codex"]);
   const changed = installManagedFiles(root, manifest, []);
-  assert(!changed.some((entry) => entry.target === "AGENTS.md"));
+  assert(!changed.some((entry) => entry.action !== "remove" && entry.target === "AGENTS.md"));
+  assert(changed.some((entry) => entry.action === "remove" && entry.target === "AGENTS.md"));
+  assert(!fs.existsSync(path.join(root, "AGENTS.md")));
   assert(fs.existsSync(path.join(root, "USER_GUIDE.md")));
 });
 
@@ -115,7 +119,7 @@ test("branch Skill stays static across artifact languages and keeps one ASK stru
   const installed = [];
   for (const language of ["zh-CN", "en-US"]) {
     void language;
-    const skill = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", "codew-workspace-guard", "1.0.0", "assets", "codew-resolve-branch.SKILL.md"), "utf8");
+    const skill = fs.readFileSync(path.join(__dirname, "..", "..", "artifacts", "templates", "agent", "codew-resolve-branch.SKILL.md"), "utf8");
     installed.push(skill);
     assert.doesNotMatch(skill, /\{\{WORKSPACE_LANGUAGE\}\}|branchAsk|Workspace ASK language|Requirement:|Scenario:|zh-CN|en-US/);
     assert.match(skill, /\[mismatch introduction and request for a decision\]/);
@@ -132,7 +136,7 @@ test("branch Skill stays static across artifact languages and keeps one ASK stru
 });
 
 test("branch Skill includes reusable model-behavior eval cases", () => {
-  const skill = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", "codew-workspace-guard", "1.0.0", "assets", "codew-resolve-branch.SKILL.md"), "utf8");
+  const skill = fs.readFileSync(path.join(__dirname, "..", "..", "artifacts", "templates", "agent", "codew-resolve-branch.SKILL.md"), "utf8");
   assert.match(skill, /A1 B2 C3/);
 });
 
@@ -140,16 +144,16 @@ test("core managed files no longer own Monitor hooks", () => {
   const root = baseline(["codex"]);
   const manifest = loadInitManifest();
   const disabled = installManagedFiles(root, manifest, ["codex"]);
-  assert.equal(disabled.length, 1);
+  assert.equal(disabled.length, 6);
   assert(!fs.existsSync(path.join(root, ".codex", "hooks.json")));
-  assert.equal(installManagedFiles(root, manifest, ["codex"], { capabilities: ["monitor"] }).length, 1);
+  assert.equal(installManagedFiles(root, manifest, ["codex"]).length, 6);
 });
 
 test("one canonical template renders both workspace instructions with platform-specific add commands", () => {
   const root = baseline();
   const manifest = loadInitManifest();
   installManagedFiles(root, manifest, ["claude", "codex"]);
-  const source = fs.readFileSync(path.join(__dirname, "..", "..", "extensions", "codew-workspace-guard", "1.0.0", "assets", "templates", "WORKSPACE_GUARD.md.template"), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "..", "..", "artifacts", "templates", "agent", "templates", "WORKSPACE_GUARD.md.template"), "utf8");
   const claude = source.replace("{{ADD_PROJECTS_INVOCATION}}", "/codew:add-projects /absolute/path/to/project");
   const codex = source.replace("{{ADD_PROJECTS_INVOCATION}}", "$codew-add-projects /absolute/path/to/project");
   const normalize = (content) => content
@@ -189,12 +193,13 @@ test("Claude selection installs only the Claude root instruction template", () =
   const root = baseline(["claude"]);
   const manifest = loadInitManifest();
   const result = installManagedFiles(root, manifest, ["claude"]);
-  assert(!result.some((entry) => entry.target === "CLAUDE.md"));
+  assert(result.some((entry) => entry.target === "CLAUDE.md"));
   assert(!result.some((entry) => entry.target === "AGENTS.md"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
-  assert(!fs.existsSync(path.join(root, "CLAUDE.md")));
+  assert(fs.existsSync(path.join(root, "CLAUDE.md")));
   assert(!fs.existsSync(path.join(root, "AGENTS.md")));
+  assert(fs.existsSync(path.join(root, ".claude", "skills", "codew-resolve-branch", "SKILL.md")));
 });
 
 test("manifest-owned render values must be declared strings", () => {
@@ -222,4 +227,46 @@ test("the unified manifest rejects passive source fingerprint changes before ins
   } finally {
     fs.unlinkSync(file);
   }
+});
+
+test("legacy extension cleanup preserves modified files and removes verified targets transactionally", () => {
+  const root = baseline(["codex"]);
+  const manifest = loadInitManifest();
+  (function installCoreOnly() {
+    const coreOnly = { ...manifest, managedFiles: manifest.managedFiles.filter((entry) => !entry.tools?.length) };
+    coreOnly.managedFiles.forEach((entry) => {
+      Object.defineProperty(entry, "sourceFile", { value: path.join(__dirname, "..", "..", "artifacts", entry.desired.source), enumerable: false });
+    });
+    installManagedFiles(root, coreOnly, ["codex"]);
+  })();
+  const modified = Buffer.from("modified legacy output\n");
+  const unchanged = Buffer.from("legacy output\n");
+  fs.mkdirSync(path.join(root, ".codex"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".codew", "ext-manifest.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    experimental: true,
+    extensions: {
+      monitor: { installed: { version: "1.0.0", system: false, artifacts: [
+        { id: "modified", kind: "file", target: "MODIFIED.md", installedSha256: sha256(Buffer.from("old\n")) },
+        { id: "unchanged", kind: "file", target: "UNCHANGED.md", installedSha256: sha256(unchanged) },
+      ] } },
+    },
+  }, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, "MODIFIED.md"), modified);
+  fs.writeFileSync(path.join(root, "UNCHANGED.md"), unchanged);
+  fs.writeFileSync(path.join(root, ".codex", "hooks.json"), "{}\n");
+  const plan = planLegacyExtensionCleanup(root);
+  assert.deepEqual(plan.files.filter((entry) => entry.action === "remove").map((entry) => entry.target), [
+    "UNCHANGED.md",
+    ".codew/ext-manifest.json",
+    ".codex/hooks.json",
+  ]);
+  assert.equal(plan.files.find((entry) => entry.target === "MODIFIED.md").action, "preserve");
+  const applied = applyLegacyExtensionCleanup(root, { confirmed: true });
+  assert.equal(applied.action, "cleanup");
+  assert(fs.readFileSync(path.join(root, "MODIFIED.md")).equals(modified));
+  assert(!fs.existsSync(path.join(root, "UNCHANGED.md")));
+  assert(!fs.existsSync(path.join(root, ".codew", "ext-manifest.json")));
+  assert(!fs.existsSync(path.join(root, ".codex", "hooks.json")));
+  assert.deepEqual(legacyExtensionDiagnostics(root), []);
 });

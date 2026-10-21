@@ -234,9 +234,6 @@ function validateDocumentedCommands(root, validateCommandReference) {
     ...collectMarkdownFiles(path.join(root, "README.md")),
     ...collectMarkdownFiles(path.join(root, "README.zh-CN.md")),
     ...collectMarkdownFiles(path.join(root, "artifacts", "templates")),
-    ...collectMarkdownFiles(path.join(root, "extensions")),
-    ...collectMarkdownFiles(path.join(root, "docs", "nexus-extension-registry.zh-CN.md")),
-    ...collectMarkdownFiles(path.join(root, "docs", "extension-development")),
   ];
   let checked = 0;
   for (const file of files) {
@@ -251,112 +248,6 @@ function validateDocumentedCommands(root, validateCommandReference) {
   }
   if (checked === 0) problems.push(problem("DOCUMENTED_COMMANDS_MISSING", "No documented codew commands were checked"));
   return { problems, checked };
-}
-
-function validateExtensionPackContract(registry, commandSource, coreSource) {
-  const definition = registry.COMMANDS.find((command) => command.path.join(" ") === "extension pack");
-  const expected = {
-    workspace: "none",
-    config: [],
-    interaction: "never",
-    effects: "planned-write",
-    args: [{ name: "source", required: true }],
-    options: { output: { type: "string", required: true } },
-  };
-  const problems = [];
-  if (!definition || JSON.stringify(definition, Object.keys(expected)) !== JSON.stringify(expected, Object.keys(expected))) {
-    problems.push(problem("EXTENSION_PACK_REGISTRY_INVALID", "extension pack must declare the Workspace-independent planned-write contract"));
-  }
-  if (!/require\(["']\.\.\/\.\.\/core\/extension-package["']\)/.test(commandSource) || !/\b(?:packExtensionToDirectory|packExtensionSourceToDirectory)\s*\(/.test(commandSource)) {
-    problems.push(problem("EXTENSION_PACK_COMMAND_LAYERING_INVALID", "extension pack command must orchestrate the core pack API", "src/cli/commands/extension.js"));
-  }
-  if (/\bfs\./.test(commandSource)) {
-    problems.push(problem("EXTENSION_PACK_COMMAND_RAW_FS", "extension pack command must not access the filesystem directly", "src/cli/commands/extension.js"));
-  }
-  for (const [pattern, message] of [
-    [/fs\.openSync\(target,\s*"wx"/, "extension pack must reserve the output without overwriting an existing target"],
-    [/fs\.renameSync\(temporaryTarget,\s*target\)/, "extension pack must atomically rename the verified temporary tarball"],
-    [/inspectExtensionTransportTarball\s*\(/, "extension pack must re-read and verify the temporary tarball"],
-    [/EXTENSION_PACK_OUTPUT_EXISTS/, "extension pack must use the stable existing-output error"],
-    [/fs\.rmSync\(temporaryRoot,\s*\{\s*recursive:\s*true,\s*force:\s*true\s*\}\)/, "extension pack must clean intermediate files after failure"],
-  ]) {
-    if (!pattern.test(coreSource)) {
-      problems.push(problem("EXTENSION_PACK_IMPLEMENTATION_INVALID", message, "src/core/extension-package.js"));
-    }
-  }
-  return problems;
-}
-
-function validateExtensionRegistryLifecycleContract(registry, commandSource, lifecycleSource) {
-  const expected = {
-    "extension search": {
-      workspace: "required",
-      config: ["identity", "language"],
-      interaction: "required",
-      effects: "planned-write",
-      args: [{ name: "query", required: false }],
-      options: { yes: { type: "boolean" } },
-    },
-    "extension info": {
-      workspace: "none",
-      config: [],
-      interaction: "never",
-      effects: "external",
-      args: [{ name: "name", required: true }],
-      options: {},
-    },
-    "extension install": {
-      workspace: "required",
-      config: ["identity", "language"],
-      interaction: "required",
-      effects: "planned-write",
-      args: [{ name: "name", required: false, variadic: true }],
-      options: {
-        yes: { type: "boolean" },
-        version: { type: "string" },
-        "allow-deprecated": { type: "boolean" },
-        offline: { type: "boolean" },
-      },
-    },
-    "extension upgrade": {
-      workspace: "required",
-      config: ["identity", "language"],
-      interaction: "required",
-      effects: "planned-write",
-      args: [{ name: "name", required: true, variadic: true }],
-      options: {
-        yes: { type: "boolean" },
-        offline: { type: "boolean" },
-      },
-    },
-  };
-  const problems = [];
-  for (const [label, contract] of Object.entries(expected)) {
-    const definition = registry.COMMANDS.find((command) => command.path.join(" ") === label);
-    if (!definition || JSON.stringify(definition, Object.keys(contract)) !== JSON.stringify(contract, Object.keys(contract))) {
-      problems.push(problem("EXTENSION_LIFECYCLE_REGISTRY_INVALID", `${label} must declare the complete Registry lifecycle contract`));
-    }
-  }
-  if (!/require\(["']\.\.\/\.\.\/core\/extension-registry-lifecycle["']\)/.test(commandSource)) {
-    problems.push(problem("EXTENSION_LIFECYCLE_COMMAND_LAYERING_INVALID", "extension Registry commands must orchestrate the core lifecycle service", "src/cli/commands/extension.js"));
-  }
-  for (const forbidden of [/\.npmrc/, /\bAuthorization\b/, /\bnpm\s+pack\b/, /\btar\.list\b/, /\btar\.extract\b/]) {
-    if (forbidden.test(commandSource)) {
-      problems.push(problem("EXTENSION_LIFECYCLE_COMMAND_BOUNDARY_INVALID", "extension Registry command module must not parse npm config, Authorization, or tar payloads", "src/cli/commands/extension.js"));
-    }
-  }
-  for (const [pattern, message] of [
-    [/function prepareRegistryExtensionPlans/, "extension lifecycle must freeze remote candidates before Workspace activation"],
-    [/function searchRegistryExtensions/, "extension lifecycle must provide search result conversion"],
-    [/function getRegistryExtensionInfo/, "extension lifecycle must provide metadata info conversion"],
-    [/EXTENSION_REGISTRY_PACKAGE_CONFLICT/, "extension lifecycle must detect same-version digest conflicts"],
-    [/EXTENSION_SYSTEM_MANAGED/, "extension lifecycle must preserve system-extension boundaries"],
-  ]) {
-    if (!pattern.test(lifecycleSource)) {
-      problems.push(problem("EXTENSION_LIFECYCLE_IMPLEMENTATION_INVALID", message, "src/core/extension-registry-lifecycle.js"));
-    }
-  }
-  return problems;
 }
 
 function runChecks(root) {
@@ -375,16 +266,6 @@ function runChecks(root) {
     const file = path.join(commandDirectory, name);
     problems.push(...inspectCommandSource(path.relative(root, file), fs.readFileSync(file, "utf8")));
   }
-  problems.push(...validateExtensionPackContract(
-    registry,
-    fs.readFileSync(path.join(commandDirectory, "extension.js"), "utf8"),
-    fs.readFileSync(path.join(root, "src", "core", "extension-package.js"), "utf8")
-  ));
-  problems.push(...validateExtensionRegistryLifecycleContract(
-    registry,
-    fs.readFileSync(path.join(commandDirectory, "extension.js"), "utf8"),
-    fs.readFileSync(path.join(root, "src", "core", "extension-registry-lifecycle.js"), "utf8")
-  ));
   const documented = validateDocumentedCommands(root, registry.validateCommandReference);
   problems.push(...documented.problems);
   return {
@@ -427,8 +308,6 @@ module.exports = {
   runChecks,
   validateDispatchCoverage,
   validateDocumentedCommands,
-  validateExtensionPackContract,
-  validateExtensionRegistryLifecycleContract,
   validateParserContracts,
   validateRegistry,
 };

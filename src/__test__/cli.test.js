@@ -15,11 +15,11 @@ function temporaryRoot() {
 }
 
 function run(cwd, args) {
-  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", env: { ...process.env, CODE_WORKSPACE_EXTENSION_STORE: path.join(cwd, ".extension-store-test") } });
+  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8" });
 }
 
 function runWithInput(cwd, args, input) {
-  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", input, env: { ...process.env, CODE_WORKSPACE_EXTENSION_STORE: path.join(cwd, ".extension-store-test") } });
+  return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", input });
 }
 
 function jsonData(result) {
@@ -97,7 +97,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "zhuiyi-jira-task-breakdown")));
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "zhuiyi-jira-issue-fix-summary")));
   assert(!fs.existsSync(path.join(root, ".claude", "skills", "zhuiyi-guangda-coding-spec")));
-  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 1);
+  assert.equal(output.managedFiles.filter((entry) => entry.action === "write").length, 10);
   assert.equal(output.workspace.language, "zh-CN");
   assert.match(fs.readFileSync(path.join(root, "USER_GUIDE.md"), "utf8"), /Code Workspace 用户指南/);
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
@@ -249,28 +249,14 @@ test("init --dev false skips workspace dependency installation and project guida
   assert.equal(loadWorkspaceYaml(root).workspace.dev, true);
 });
 
-test("init --dev false does not install or retain the system development extension", () => {
+test("init --dev false skips workspace dependency installation and project guidance", () => {
   const root = temporaryRoot();
-  const disabled = run(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--dev", "false", "--yes", "--json"]);
+  const disabled = run(root, ["init", ".", "--tools", "codex", "--dev", "false", "--yes", "--json"]);
   assert.equal(disabled.status, 0, disabled.stderr);
   const disabledData = jsonData(disabled);
   assert.equal(disabledData.dev, false);
-  assert.equal(disabledData.systemExtensions.enabled, false);
-  assert.deepEqual(disabledData.systemExtensions.results, []);
-  assert.equal(fs.existsSync(path.join(root, "AGENTS.md")), false);
-  assert.equal(fs.existsSync(path.join(root, ".codex", "skills", "codew-add-projects")), false);
-
-  const enabled = run(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--dev", "true", "--yes", "--json"]);
-  assert.equal(enabled.status, 0, enabled.stderr);
-  assert.equal(fs.existsSync(path.join(root, "AGENTS.md")), true);
-
-  const disabledAgain = run(root, ["init", ".", "--tools", "codex", "--extensions", "none", "--dev", "false", "--yes", "--json"]);
-  assert.equal(disabledAgain.status, 0, disabledAgain.stderr);
-  const disabledAgainData = jsonData(disabledAgain);
-  assert.equal(disabledAgainData.systemExtensions.enabled, false);
-  assert.deepEqual(disabledAgainData.systemExtensions.results.map((entry) => entry.status), ["uninstalled"]);
-  assert.equal(fs.existsSync(path.join(root, "AGENTS.md")), false);
-  assert.equal(fs.existsSync(path.join(root, ".codex", "skills", "codew-add-projects")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codew", "ext-manifest.json")), false);
+  assert(fs.existsSync(path.join(root, ".codex", "skills", "codew-add-projects", "SKILL.md")));
 });
 
 test("init rejects invalid dev values before writing the target", () => {
@@ -396,13 +382,15 @@ test("update migrates legacy workspace language state", () => {
   assert.equal(JSON.parse(fs.readFileSync(stateFile, "utf8")).workspaceLanguage, undefined);
 });
 
-test("doctor leaves system extension skill drift to extension state checks", () => {
+test("doctor reports built-in managed skill drift", () => {
   const root = temporaryRoot();
-  assert.equal(run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]).status, 0);
-  const target = path.join(root, ".codex", "skills", "codew-add-projects", "SKILL.md");
-  fs.appendFileSync(target, "\nlocal modification\n");
+  const initialized = run(root, ["init", ".", "--tools", "codex", "--yes", "--json"]);
+  assert.equal(initialized.status, 0, initialized.stderr);
+  const skill = path.join(root, ".codex", "skills", "codew-resolve-branch", "SKILL.md");
+  fs.appendFileSync(skill, "\nlocal edit\n");
   const result = run(root, ["doctor", "--json"]);
-  assert.equal(result.status, 0);
+  assert.equal(result.status, 1);
+  assert(JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === "MANAGED_FILE_UNKNOWN" && entry.message.includes(".codex/skills/codew-resolve-branch/SKILL.md")));
 });
 
 test("update and doctor preserve the workspace tool selection when --tools is omitted", () => {

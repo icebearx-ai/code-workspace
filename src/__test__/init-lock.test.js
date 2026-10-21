@@ -76,8 +76,6 @@ test("CLI reports INIT_ALREADY_RUNNING before writing the Workspace", async () =
       root,
       "--tools",
       "none",
-      "--extensions",
-      "none",
       "--yes",
       "--json",
     ], { cwd: root, encoding: "utf8" });
@@ -86,35 +84,6 @@ test("CLI reports INIT_ALREADY_RUNNING before writing the Workspace", async () =
     assert.equal(envelope.ok, false);
     assert.equal(envelope.diagnostics[0].code, "INIT_ALREADY_RUNNING");
     assert.equal(fs.existsSync(path.join(root, ".codew")), false);
-  } finally {
-    await release();
-  }
-});
-
-test("extension install and uninstall share the Workspace operation lock", async () => {
-  const root = temporaryRoot();
-  const initialized = spawnSync(process.execPath, [
-    cli,
-    "init",
-    root,
-    "--tools",
-    "codex",
-    "--extensions",
-    "none",
-    "--yes",
-    "--json",
-  ], { cwd: root, encoding: "utf8" });
-  assert.equal(initialized.status, 0, initialized.stderr);
-  const release = await acquireInitLock(root, { config: { update: 5000, stale: 30000 } });
-  try {
-    for (const args of [
-      ["extension", "install", "example-extension", "--yes", "--json"],
-      ["extension", "uninstall", "example-extension", "--yes", "--json"],
-    ]) {
-      const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: "utf8" });
-      assert.equal(result.status, 1);
-      assert.equal(JSON.parse(result.stdout).diagnostics[0].code, "INIT_ALREADY_RUNNING");
-    }
   } finally {
     await release();
   }

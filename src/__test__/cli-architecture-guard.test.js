@@ -77,45 +77,6 @@ test("CLI architecture guard rejects registered commands without a dispatch rout
   assert.match(problems[0].message, /orphan/);
 });
 
-test("CLI architecture guard rejects unsafe extension pack implementations", () => {
-  const registry = {
-    COMMANDS: [{
-      path: ["extension", "pack"],
-      args: [{ name: "source", required: true }],
-      workspace: "none",
-      config: [],
-      interaction: "never",
-      effects: "planned-write",
-      options: { output: { type: "string", required: true } },
-    }],
-  };
-  const commandSource = [
-    'const fs = require("node:fs");',
-    'const { packExtensionToDirectory } = require("../../core/extension-package");',
-    'await packExtensionToDirectory(source, output);',
-    'const { success } = require("../result");',
-    'success("extension.pack", fs.statSync(output));',
-    "",
-  ].join("\n");
-  const coreSource = "module.exports = {};";
-  const problems = validateExtensionPackContract(registry, commandSource, coreSource);
-  const codes = new Set(problems.map((entry) => entry.code));
-  assert(codes.has("EXTENSION_PACK_COMMAND_RAW_FS"));
-  assert(codes.has("EXTENSION_PACK_IMPLEMENTATION_INVALID"));
-});
-
-test("CLI architecture guard rejects unsafe Registry lifecycle implementations", () => {
-  const problems = validateExtensionRegistryLifecycleContract(
-    { COMMANDS: [] },
-    "module.exports = {};",
-    "module.exports = {};"
-  );
-  const codes = new Set(problems.map((entry) => entry.code));
-  assert(codes.has("EXTENSION_LIFECYCLE_REGISTRY_INVALID"));
-  assert(codes.has("EXTENSION_LIFECYCLE_COMMAND_LAYERING_INVALID"));
-  assert(codes.has("EXTENSION_LIFECYCLE_IMPLEMENTATION_INVALID"));
-});
-
 test("CLI architecture guard skill consumes repository-owned architecture checks", () => {
   const skill = fs.readFileSync(path.join(guardRoot, "SKILL.md"), "utf8");
   const reference = fs.readFileSync(path.join(repositoryRoot, "docs", "cli-architecture.md"), "utf8");

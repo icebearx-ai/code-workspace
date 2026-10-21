@@ -6,9 +6,6 @@ const { failure } = require("./cli/result");
 const { executeCompletion } = require("./cli/commands/completion");
 const { executeHelp, executeVersion } = require("./cli/commands/help");
 const { executeInit } = require("./cli/commands/init");
-const { executeConfig } = require("./cli/commands/config");
-const { executeExtension } = require("./cli/commands/extension");
-const { executeExt } = require("./cli/commands/ext");
 const { executePermissions } = require("./cli/commands/permissions");
 const { executeProject } = require("./cli/commands/project");
 const { executeProjectBranch } = require("./cli/commands/project-branch");
@@ -22,9 +19,6 @@ const {
 async function dispatch(invocation) {
   const key = invocation.definition.path.join(" ");
   if (key === "init") return executeInit(invocation);
-  if (key.startsWith("config ")) return executeConfig(invocation);
-  if (key.startsWith("extension ")) return executeExtension(invocation);
-  if (key === "ext") return executeExt(invocation);
   if (key === "project branch update-latest") return executeProjectBranchUpdateLatest(invocation);
   if (key.startsWith("project branch ")) return executeProjectBranch(invocation);
   if (key.startsWith("project ")) return executeProject(invocation);

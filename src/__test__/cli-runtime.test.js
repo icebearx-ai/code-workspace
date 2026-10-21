@@ -103,97 +103,6 @@ test("semantic parser accepts targeted project verification with valid option or
   assert.deepEqual(parse(argv("project", "verify", "service", "api", "--json")).args, ["service", "api"]);
 });
 
-test("extension install is an optional variadic planned-write contract", () => {
-  const definition = getCommand("extension install");
-  assert(definition);
-  assert.equal(definition.workspace, "required");
-  assert.deepEqual(definition.config, ["identity", "language"]);
-  assert.equal(definition.interaction, "required");
-  assert.equal(definition.effects, "planned-write");
-  assert.deepEqual(definition.args, [{ name: "name", required: false, variadic: true }]);
-  assert.deepEqual(definition.options, {
-    yes: { type: "boolean" },
-    local: { type: "boolean" },
-    version: { type: "string" },
-    "allow-deprecated": { type: "boolean" },
-    offline: { type: "boolean" },
-  });
-  assert.deepEqual(parse(argv("extension", "install")).args, []);
-  assert.deepEqual(parse(argv("extension", "install", "alpha", "beta", "--yes", "--json")).args, ["alpha", "beta"]);
-  assert.deepEqual(parse(argv("extension", "install", "--yes", "alpha")).args, ["alpha"]);
-  assert.throws(() => parse(argv("extension", "install", "alpha", "--force")), (error) => error.code === "CLI_UNKNOWN_OPTION");
-});
-
-test("extension search, info, and upgrade declare Registry lifecycle contracts", () => {
-  const search = getCommand("extension search");
-  const info = getCommand("extension info");
-  const upgrade = getCommand("extension upgrade");
-  assert.deepEqual(search, {
-    path: ["extension", "search"],
-    args: [{ name: "query", required: false }],
-    workspace: "required",
-    config: ["identity", "language"],
-    interaction: "required",
-    effects: "planned-write",
-    options: { yes: { type: "boolean" } },
-  });
-  assert.deepEqual(info, {
-    path: ["extension", "info"],
-    args: [{ name: "name", required: true }],
-    workspace: "none",
-    config: [],
-    interaction: "never",
-    effects: "external",
-    options: {},
-  });
-  assert.deepEqual(upgrade, {
-    path: ["extension", "upgrade"],
-    args: [{ name: "name", required: true, variadic: true }],
-    workspace: "required",
-    config: ["identity", "language"],
-    interaction: "required",
-    effects: "planned-write",
-    options: { yes: { type: "boolean" }, offline: { type: "boolean" } },
-  });
-
-  assert.deepEqual(parse(argv("--json", "extension", "search", "jira")).options, { json: true });
-  assert.deepEqual(parse(argv("extension", "search", "jira", "--json")).args, ["jira"]);
-  assert.deepEqual(parse(argv("extension", "info", "zhuiyi-jira-mcp", "--json")).args, ["zhuiyi-jira-mcp"]);
-  assert.deepEqual(parse(argv("extension", "upgrade", "alpha", "beta", "--yes", "--offline")).args, ["alpha", "beta"]);
-  assert.deepEqual(parse(argv("extension", "upgrade", "--yes", "alpha")).args, ["alpha"]);
-  assert.throws(() => parse(argv("extension", "search", "one", "two")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
-  assert.throws(() => parse(argv("extension", "info", "one", "two")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
-  assert.throws(() => parse(argv("extension", "upgrade")), (error) => error.code === "CLI_ARGUMENT_REQUIRED");
-  assert.throws(() => parse(argv("extension", "upgrade", "alpha", "--vresion", "1.0.0")), (error) => error.code === "CLI_UNKNOWN_OPTION");
-});
-
-test("extension pack is a Workspace-independent required-option contract", () => {
-  const definition = getCommand("extension pack");
-  assert(definition);
-  assert.equal(definition.workspace, "none");
-  assert.deepEqual(definition.config, []);
-  assert.equal(definition.interaction, "never");
-  assert.equal(definition.effects, "planned-write");
-  assert.deepEqual(definition.args, [{ name: "source", required: true }]);
-  assert.deepEqual(definition.options, { output: { type: "string", required: true } });
-  assert.deepEqual(parse(argv("extension", "pack", "extensions/example", "--output", "dist")).options, {
-    output: "dist",
-  });
-  assert.deepEqual(parse(argv("--json", "extension", "pack", "--output", "dist", "extensions/example")).args, ["extensions/example"]);
-  assert.throws(() => parse(argv("extension", "pack", "extensions/example")), (error) =>
-    error.code === "CLI_OPTION_REQUIRED" && error.details.option === "output"
-  );
-  assert.throws(() => parse(argv("extension", "pack", "extensions/example", "--output")), (error) =>
-    error.code === "CLI_OPTION_VALUE_REQUIRED"
-  );
-  assert.throws(() => parse(argv("extension", "pack", "one", "two", "--output", "dist")), (error) =>
-    error.code === "CLI_EXTRA_ARGUMENT"
-  );
-  assert.throws(() => parse(argv("extension", "pack", "extensions/example", "--output", "dist", "--force")), (error) =>
-    error.code === "CLI_UNKNOWN_OPTION"
-  );
-});
-
 test("project branch commands are registry-driven three-segment contracts", () => {
   const contracts = {
     "project branch inspect": { interaction: "never", effects: "read-only", options: [] },
@@ -266,13 +175,11 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /accept-actual/);
     assert.match(script, /use-registered/);
     assert.match(script, /update-latest/);
-    assert.match(script, /install/);
-    assert.match(script, /uninstall/);
-    assert.match(script, /pack/);
-    assert.match(script, /search/);
-    assert.match(script, /info/);
-    assert.match(script, /upgrade/);
     assert.doesNotMatch(script, /sync-branch/);
+    assert.doesNotMatch(script, /extension/);
+    assert.doesNotMatch(script, /install/);
+    assert.doesNotMatch(script, /uninstall/);
+    assert.doesNotMatch(script, /upgrade/);
   }
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
   const projectList = spec.commands.find((entry) => entry.path.join(" ") === "project list");
@@ -280,16 +187,8 @@ test("completion scripts include subcommands and command-specific options", () =
   assert(!projectList.options.includes("--projects-file"));
   assert(projectAdd.options.includes("--projects-file"));
   const permissionsApply = spec.commands.find((entry) => entry.path.join(" ") === "permissions apply");
-  const extensionPack = spec.commands.find((entry) => entry.path.join(" ") === "extension pack");
-  const extensionInstall = spec.commands.find((entry) => entry.path.join(" ") === "extension install");
-  const extensionUpgrade = spec.commands.find((entry) => entry.path.join(" ") === "extension upgrade");
   assert(permissionsApply.options.includes("--tools"));
   assert(permissionsApply.options.includes("--yes"));
-  assert(extensionPack.options.includes("--output"));
-  assert(extensionInstall.options.includes("--version"));
-  assert(extensionInstall.options.includes("--allow-deprecated"));
-  assert(extensionInstall.options.includes("--offline"));
-  assert(extensionUpgrade.options.includes("--offline"));
   assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("sync"));
   assert.deepEqual(
     new Set(spec.children.find((entry) => entry.path.join(" ") === "project branch").values),
@@ -358,7 +257,7 @@ test("documentation references are validated by the real semantic parser", () =>
   assert.equal(validateCommandReference('project branch use-registered "<name>" --yes --json').valid, true);
   assert.equal(validateCommandReference('project branch update-latest "<name>" --json').valid, true);
   assert.equal(validateCommandReference("permissions apply --tools claude,codex --yes --json").valid, true);
-  assert.equal(validateCommandReference("extension install <name> <name> --yes --json").valid, true);
+  assert.equal(validateCommandReference("extension install <name> <name> --yes --json").valid, false);
   assert.equal(validateCommandReference("update --tools").valid, false);
   assert.match(validateCommandReference("update --froce").reason, /CLI_UNKNOWN_OPTION/);
 });
@@ -1150,11 +1049,9 @@ test("final branch migration leaves no legacy public contract in implementation 
     "src/core/config.js",
     "src/core/project.js",
     "src/core/validation.js",
-    "README.md",
-    "README.zh-CN.md",
     "docs/code-workspace-flow.zh-CN.md",
-    "extensions/codew-workspace-guard/1.0.0/assets/templates/WORKSPACE_GUARD.md.template",
-    "extensions/codew-workspace-guard/1.0.0/assets/codew-resolve-branch.SKILL.md",
+    "artifacts/templates/agent/templates/WORKSPACE_GUARD.md.template",
+    "artifacts/templates/agent/codew-resolve-branch.SKILL.md",
     "artifacts/templates/user-guide/en-US.md",
     "artifacts/templates/user-guide/zh-CN.md",
   ];

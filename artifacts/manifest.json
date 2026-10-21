@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "releaseVersion": "1.1.0",
+  "releaseVersion": "2.0.0",
   "requirements": {
     "node": ">=20.19.0"
   },
@@ -13,13 +13,49 @@
       "id": "workspace-user-guide-en-US",
       "kind": "asset",
       "path": "templates/user-guide/en-US.md",
-      "sha256": "7babab78319aa76329e159753d7110a8bbc8a5b5f349eef9a7779e6b4172a6af"
+      "sha256": "98a6e3fb2fcefecbaf9d67a6d8a1c6a8bd9b2c666c5f1eaa958fe0494df6e030"
     },
     {
       "id": "workspace-user-guide-zh-CN",
       "kind": "asset",
       "path": "templates/user-guide/zh-CN.md",
-      "sha256": "aca3fc5997adc41bc44a64e0c3d7aed9470e343087da40303dad1e39f6cdbffb"
+      "sha256": "40be40b5c31534ca9a6b5cf467177a40e98a12ab298592d72024a315b7a8422f"
+    },
+    {
+      "id": "workspace-agent-codex-instructions",
+      "kind": "asset",
+      "path": "templates/agent/templates/WORKSPACE_GUARD.md.template",
+      "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
+    },
+    {
+      "id": "workspace-agent-add-projects-skill",
+      "kind": "asset",
+      "path": "templates/agent/codew-add-projects.SKILL.md",
+      "sha256": "866013dc43fd4b71c319ede739b31b97c5f65c44c6754f21a02552aa6118c32c"
+    },
+    {
+      "id": "workspace-agent-add-projects-openai",
+      "kind": "asset",
+      "path": "templates/agent/codex/add-projects-openai.yaml",
+      "sha256": "b09f6dc1d6d30f862ea3f8518a7f756f2a1c9e3c5a75c92dccd15f913c1bbe15"
+    },
+    {
+      "id": "workspace-agent-resolve-branch-skill",
+      "kind": "asset",
+      "path": "templates/agent/codew-resolve-branch.SKILL.md",
+      "sha256": "07ebc021c0fb587037f4e29efa81c9e8a5c955c804c46dc72053f7090c2b88f6"
+    },
+    {
+      "id": "workspace-agent-resolve-branch-openai",
+      "kind": "asset",
+      "path": "templates/agent/codex/resolve-branch-openai.yaml",
+      "sha256": "e854ad71826040b985bbf698c5adf7bd67da8b42465934a80fdeb09669ff4b23"
+    },
+    {
+      "id": "workspace-agent-claude-add-projects-command",
+      "kind": "asset",
+      "path": "templates/agent/claude/add-projects.md",
+      "sha256": "c073df218714d42a809b66c8ec47ff4a242630a3b63446701cad2babe4454a38"
     }
   ],
   "managedFiles": [
@@ -39,6 +75,157 @@
       "provenance": {
         "kind": "template"
       }
+    },
+    {
+      "id": "workspace-codex-instructions",
+      "target": "AGENTS.md",
+      "tools": [
+        "codex"
+      ],
+      "desired": {
+        "source": "templates/agent/templates/WORKSPACE_GUARD.md.template",
+        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
+      },
+      "render": {
+        "variables": [
+          "ADD_PROJECTS_INVOCATION"
+        ],
+        "values": {
+          "ADD_PROJECTS_INVOCATION": "$codew-add-projects /absolute/path/to/project"
+        }
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "codex-add-projects-skill",
+      "target": ".codex/skills/codew-add-projects/SKILL.md",
+      "tools": [
+        "codex"
+      ],
+      "desired": {
+        "source": "templates/agent/codew-add-projects.SKILL.md",
+        "sha256": "866013dc43fd4b71c319ede739b31b97c5f65c44c6754f21a02552aa6118c32c"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "codex-add-projects-openai",
+      "target": ".codex/skills/codew-add-projects/agents/openai.yaml",
+      "tools": [
+        "codex"
+      ],
+      "desired": {
+        "source": "templates/agent/codex/add-projects-openai.yaml",
+        "sha256": "b09f6dc1d6d30f862ea3f8518a7f756f2a1c9e3c5a75c92dccd15f913c1bbe15"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "codex-resolve-branch-skill",
+      "target": ".codex/skills/codew-resolve-branch/SKILL.md",
+      "tools": [
+        "codex"
+      ],
+      "desired": {
+        "source": "templates/agent/codew-resolve-branch.SKILL.md",
+        "sha256": "07ebc021c0fb587037f4e29efa81c9e8a5c955c804c46dc72053f7090c2b88f6"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "codex-resolve-branch-openai",
+      "target": ".codex/skills/codew-resolve-branch/agents/openai.yaml",
+      "tools": [
+        "codex"
+      ],
+      "desired": {
+        "source": "templates/agent/codex/resolve-branch-openai.yaml",
+        "sha256": "e854ad71826040b985bbf698c5adf7bd67da8b42465934a80fdeb09669ff4b23"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "workspace-claude-instructions",
+      "target": "CLAUDE.md",
+      "tools": [
+        "claude"
+      ],
+      "desired": {
+        "source": "templates/agent/templates/WORKSPACE_GUARD.md.template",
+        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
+      },
+      "render": {
+        "variables": [
+          "ADD_PROJECTS_INVOCATION"
+        ],
+        "values": {
+          "ADD_PROJECTS_INVOCATION": "/codew:add-projects /absolute/path/to/project"
+        }
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "claude-add-projects-skill",
+      "target": ".claude/skills/codew-add-projects/SKILL.md",
+      "tools": [
+        "claude"
+      ],
+      "desired": {
+        "source": "templates/agent/codew-add-projects.SKILL.md",
+        "sha256": "866013dc43fd4b71c319ede739b31b97c5f65c44c6754f21a02552aa6118c32c"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "claude-add-projects-command",
+      "target": ".claude/commands/codew/add-projects.md",
+      "tools": [
+        "claude"
+      ],
+      "desired": {
+        "source": "templates/agent/claude/add-projects.md",
+        "sha256": "c073df218714d42a809b66c8ec47ff4a242630a3b63446701cad2babe4454a38"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
+    },
+    {
+      "id": "claude-resolve-branch-skill",
+      "target": ".claude/skills/codew-resolve-branch/SKILL.md",
+      "tools": [
+        "claude"
+      ],
+      "desired": {
+        "source": "templates/agent/codew-resolve-branch.SKILL.md",
+        "sha256": "07ebc021c0fb587037f4e29efa81c9e8a5c955c804c46dc72053f7090c2b88f6"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      },
+      "allowMissing": true
     }
   ]
 }

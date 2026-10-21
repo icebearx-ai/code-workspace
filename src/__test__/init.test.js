@@ -11,7 +11,6 @@ const { loadInitManifest, installWorkspaceDependencies } = require("../core/init
 const { collectWorkspaceSetup, initializeWorkspace } = require("../core/initializer");
 const { createInitPlan } = require("../init/plan");
 const { collectInitPlan } = require("../init/wizard");
-const { mapPickerPage } = require("../cli/commands/init");
 
 function temporaryRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "code-workspace-init-"));
@@ -22,8 +21,9 @@ test("init manifest describes only workspace-owned assets", () => {
   assert.equal(manifest.schemaVersion, 2);
   assert.equal(manifest.releaseVersion, packageJson.version);
   assert.deepEqual(manifest.tools, ["claude", "codex"]);
-  assert.equal(manifest.sources.length, 2);
-  assert.equal(manifest.managedFiles.length, 1);
+  assert.equal(manifest.sources.length, 8);
+  assert.equal(manifest.managedFiles.length, 10);
+  assert(manifest.managedFiles.some((entry) => entry.provenance?.kind === "builtin-agent"));
   assert(manifest.sources.every((entry) => entry.kind === "asset"));
   assert(manifest.managedFiles.every((entry) => entry.desired.sha256.length === 64));
   assert.equal(manifest.resources, undefined);
@@ -104,7 +104,6 @@ test("interactive init offers independent Claude Code and Codex selections", asy
 test("interactive init can disable development mode and preserves the selected value in the plan", async () => {
   const root = temporaryRoot();
   const calls = [];
-  let preparedDev;
   const ui = {
     intro() {},
     note(title) { calls.push(title); },
@@ -113,93 +112,13 @@ test("interactive init can disable development mode and preserves the selected v
       if (label === "Development mode") return choices[1].value;
       return choices[0].value;
     },
-    multiselect: async (label) => label.startsWith("Extensions") ? [] : ["codex"],
+    multiselect: async () => ["codex"],
     confirm: async () => true,
     close() {},
   };
-  const plan = await collectInitPlan(root, loadInitManifest(), {
-    ui,
-    prepareSystemExtensions: (_tools, selectedDev) => {
-      preparedDev = selectedDev;
-      return [];
-    },
-  });
+  const plan = await collectInitPlan(root, loadInitManifest(), { ui });
   assert.equal(plan.workspace.dev, false);
-  assert.equal(preparedDev, false);
   assert(calls.includes("Ready to initialize"));
-});
-
-test("interactive init consumes the shared picker and freezes selected plans before confirmation", async () => {
-  const root = temporaryRoot();
-  const calls = [];
-  const ui = {
-    intro() {},
-    note(title) { calls.push(title); },
-    text: async () => "picker-workspace",
-    select: async (_label, choices) => choices[0].value,
-    multiselect: async () => ["codex"],
-    extensionPicker: async () => ({
-      status: "submitted",
-      selections: [{ id: "remote-extension", action: "update" }],
-    }),
-    confirm: async () => true,
-    close() {},
-  };
-  const plan = await collectInitPlan(root, loadInitManifest(), {
-    ui,
-    extensionPicker: async ({ ui: pickerUi }) => pickerUi.extensionPicker(),
-    prepareExtensions: async (selected, tools) => {
-      assert.deepEqual(selected, [{ id: "remote-extension", action: "update" }]);
-      assert.deepEqual(tools, ["codex"]);
-      return [{ id: "remote-extension", version: "2.0.0", extensionSpecVersion: 1, manifestSha256: "a".repeat(64) }];
-    },
-  });
-  assert.equal(plan.extensions[0].id, "remote-extension");
-  assert(calls.includes("Ready to initialize"));
-  assert.equal(fs.existsSync(path.join(root, ".codew")), false);
-});
-
-test("init picker mapping hides system extensions and exposes current/update states", () => {
-  const page = mapPickerPage({
-    pageIndex: 0,
-    hasNext: true,
-    items: [
-      { extensionId: "codew-workspace-guard", name: "Guard", latestCandidate: { version: "1.0.0", packageSha256: "a" } },
-      { extensionId: "current", name: "Current", latestCandidate: { version: "1.0.0", packageSha256: "b" } },
-      { extensionId: "outdated", name: "Outdated", latestCandidate: { version: "2.0.0", packageSha256: "c" } },
-    ],
-  }, {
-    extensions: {
-      current: { installed: { version: "1.0.0", packageSha256: "b" } },
-      outdated: { installed: { version: "1.0.0", packageSha256: "old" } },
-    },
-  }, new Set(["codew-workspace-guard"]));
-  assert.deepEqual(page.items.map((entry) => [entry.id, entry.status, entry.disabled]), [
-    ["current", "installed-current", false],
-    ["outdated", "installed-outdated", false],
-  ]);
-});
-
-test("interactive init skips ordinary extensions when the Nexus picker is unavailable", async () => {
-  const root = temporaryRoot();
-  const notes = [];
-  const ui = {
-    intro() {},
-    note(title, lines) { notes.push({ title, lines }); },
-    text: async () => "offline-workspace",
-    select: async (_label, choices) => choices[0].value,
-    multiselect: async () => ["codex"],
-    confirm: async () => true,
-    close() {},
-  };
-  const plan = await collectInitPlan(root, loadInitManifest(), {
-    ui,
-    extensionPicker: async () => { throw Object.assign(new Error("Nexus timeout"), { code: "EXTENSION_REGISTRY_TIMEOUT" }); },
-    prepareExtensions: async () => { throw new Error("must not prepare after picker failure"); },
-  });
-  assert.deepEqual(plan.extensions, []);
-  assert(notes.some((entry) => entry.title === "Extensions unavailable"));
-  assert.equal(fs.existsSync(path.join(root, ".codew")), false);
 });
 
 test("interactive init reads a v1 workspace through the legacy language compatibility path", async () => {

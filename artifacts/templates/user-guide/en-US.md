@@ -28,7 +28,7 @@ codew update
 codew doctor
 ```
 
-`update` refreshes managed instructions, Workspace skills, hooks, and this guide. It stops if a managed file contains unknown local changes. Review the file first; use `--force` only when replacing those changes is intentional.
+`update` refreshes managed instructions, Workspace skills, and this guide. It stops if a managed file contains unknown local changes. Review the file first; use `--force` only when replacing those changes is intentional.
 
 ## Workspace language
 
@@ -46,25 +46,6 @@ codew update --language en-US
 ```
 
 This also switches this managed guide. Existing project context is not translated.
-
-## Use the Agent monitor
-
-Monitoring ships as the built-in `monitor` extension. Install it in a workspace and start one global monitor for all workspaces:
-
-```bash
-codew extension install monitor --yes
-codew ext monitor
-```
-
-Open the printed local URL. The dashboard shows workspaces, execution state, pending approvals, completed turns, and live signals. Monitor language is selected on the page and is independent of `workspace.language`.
-
-Use another port when necessary:
-
-```bash
-codew ext monitor serve --port 8080
-```
-
-The extension reports to the URL recorded in `.codew/monitor-reporting.json`. After installation, review and trust the project hooks with `/hooks` in Codex.
 
 ## Practical commands
 
@@ -94,24 +75,10 @@ Installed by default during Workspace initialization:
 - `$codew-add-projects` — inspect and register local Git projects with concise AI-generated navigation context.
 - `$codew-resolve-branch` — safely resolve a selected project's branch mismatch and confirm branch alignment.
 
-The following skills are distributed as independent extensions. They are not installed by `init` or `update`; install or uninstall each one explicitly. The interactive extension picker starts with no extensions selected, and each choice shows the extension name and a short description:
-
-```bash
-codew extension install zhuiyi-jira-prd-analysis --yes
-codew extension install zhuiyi-jira-task-breakdown --yes
-codew extension install zhuiyi-jira-issue-fix-summary --yes
-codew extension install zhuiyi-guangda-coding-spec --yes
-codew extension uninstall zhuiyi-jira-prd-analysis --yes
-```
-
-- `$zhuiyi-jira-prd-analysis` — confirm Jira scope, then analyze requirement clarity, consistency, and code feasibility.
-- `$zhuiyi-jira-task-breakdown` — split a confirmed Jira requirement into executable frontend, backend, and test tasks.
-- `$zhuiyi-jira-issue-fix-summary` — summarize a completed fix and, after confirmation, publish it as a Jira comment.
-- `$zhuiyi-guangda-coding-spec` — apply research, security, testing, and release rules by risk area, only for China Everbright Bank customer projects.
-
-These extensions install skill instructions only. Install the `zhuiyi-jira-mcp` extension separately when the Jira-related skills require Jira access; the Guangda coding spec requires no MCP service.
-
 | Purpose | Codex | Claude Code |
+| --- | --- | --- |
+| Add workspace projects | `$codew-add-projects` | `/codew:add-projects` |
+| Resolve a project branch mismatch | `$codew-resolve-branch` | `/codew-resolve-branch` |
 | --- | --- | --- |
 | Add workspace projects | `$codew-add-projects` | `/codew:add-projects` |
 | Resolve a project branch mismatch | `$codew-resolve-branch` | `/codew-resolve-branch` |

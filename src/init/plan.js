@@ -1,11 +1,9 @@
-function createInitPlan({ root, workspace, tools, language, extensions = [], extensionRemovals = [] }) {
+function createInitPlan({ root, workspace, tools, language }) {
   return {
     root,
     workspace,
     tools: tools.slice(),
     language,
-    extensions: extensions.slice(),
-    extensionRemovals: extensionRemovals.slice(),
   };
 }
 

@@ -6,7 +6,7 @@
 
 - Workspace 不安装、检测或调用其他 OpenSpec CLI。
 - Workspace 不读取、创建、更新或归档 `openspec/` 下的记录。
-- Workspace 的写入范围是 `.codew/`、Workspace 自有 Agent 集成、Codex hook 与权限配置。
+- Workspace 的写入范围是 `.codew/`、Workspace 自有 Agent 集成与权限配置。
 - 项目生产代码只允许在已注册项目的 `location` 中修改；Workspace CLI 自身不执行生产代码修改。
 
 ## 初始化和维护流程
@@ -108,7 +108,7 @@ code-workspace project branch update-latest "<project-name>" --json
 
 | 层次 | 负责内容 |
 | --- | --- |
-| Workspace CLI | 项目注册表、定向/全量项目验证、经确认的安全分支协调、权限、Doctor、监控 |
+| Workspace CLI | 项目注册表、定向/全量项目验证、经确认的安全分支协调、权限、Doctor |
 | Workspace Agent 集成 | 显式添加项目、分支不一致恢复引导 |
 | 用户或外部工具 | `openspec/` 记录的创建、编辑、同步、归档和删除 |
 | 各项目仓库及用户 | 生产代码、测试、构建、分支创建、网络同步、脏 worktree 处理和冲突解决 |

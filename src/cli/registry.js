@@ -20,30 +20,17 @@ const COMMAND_SUMMARIES = {
   "project show": "Show one local project",
   "project verify": "Validate all local projects or selected projects",
   "permissions apply": "Apply registered project directory authorization",
-  "extension install": "Install one or more extensions into the Workspace",
-  "extension uninstall": "Uninstall one ordinary extension from the Workspace",
-  "extension pack": "Create a verified npm tarball from an extension package",
-  "extension init": "Create an extension package shell",
-  "extension digest update": "Update extension entry and package digests",
-  "extension search": "Search, install, or update extensions (TTY); read-only results in JSON/non-TTY",
-  "extension info": "Show extension metadata from the configured Registry",
-  "extension upgrade": "Upgrade installed ordinary extensions",
-  ext: "Run an extension runtime",
   doctor: "Report workspace health",
   completion: "Print shell completion script",
-  "config get": "Read a user-level Code Workspace setting",
-  "config list": "List user-level Code Workspace settings",
-  "config set": "Set a user-level Code Workspace setting",
-  "config delete": "Reset a user-level Code Workspace setting",
 };
 
 const COMMANDS = [
-  { path: ["config", "get"], args: [{ name: "key", required: false }], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },
-  { path: ["config", "list"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },
-  { path: ["config", "set"], args: [{ name: "key", required: true }, { name: "value", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: {} },
-  { path: ["config", "delete"], args: [{ name: "key", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: {} },
+
+
+
+
   { path: ["init"], args: [{ name: "path", required: false }], workspace: "target", config: [], interaction: "optional", effects: "planned-write", options: {
-    tools: { type: "string" }, extensions: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" }, dev: { type: "string" },
+    tools: { type: "string" }, "workspace-name": { type: "string" }, language: { type: "string" }, dev: { type: "string" },
     yes: { type: "boolean" }, force: { type: "boolean" },
   } },
   { path: ["update"], args: [], workspace: "required", config: [], interaction: "optional", effects: "planned-write", options: {
@@ -67,19 +54,15 @@ const COMMANDS = [
   { path: ["permissions", "apply"], args: [], workspace: "required", config: ["projects"], interaction: "required", effects: "planned-write", options: {
     tools: { type: "string" }, yes: { type: "boolean" },
   } },
-  { path: ["extension", "install"], args: [{ name: "name", required: false, variadic: true }], workspace: "required", config: ["identity", "language"], interaction: "required", effects: "planned-write", options: {
-    yes: { type: "boolean" }, local: { type: "boolean" }, version: { type: "string" }, "allow-deprecated": { type: "boolean" }, offline: { type: "boolean" },
-  } },
-  { path: ["extension", "uninstall"], args: [{ name: "name", required: true }], workspace: "required", config: [], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
-  { path: ["extension", "pack"], args: [{ name: "source", required: true }], workspace: "none", config: [], interaction: "never", effects: "planned-write", options: { output: { type: "string", required: true } } },
-  { path: ["extension", "init"], args: [{ name: "path", required: false }], workspace: "none", config: [], interaction: "optional", effects: "planned-write", options: {
-    id: { type: "string" }, name: { type: "string" }, description: { type: "string" }, version: { type: "string" }, yes: { type: "boolean" },
-  } },
-  { path: ["extension", "digest", "update"], args: [{ name: "path", required: false }], workspace: "none", config: [], interaction: "optional", effects: "planned-write", options: { yes: { type: "boolean" } } },
-  { path: ["extension", "search"], args: [{ name: "query", required: false }], workspace: "required", config: ["identity", "language"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
-  { path: ["extension", "info"], args: [{ name: "name", required: true }], workspace: "none", config: [], interaction: "never", effects: "external", options: {} },
-  { path: ["extension", "upgrade"], args: [{ name: "name", required: true, variadic: true }], workspace: "required", config: ["identity", "language"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" }, offline: { type: "boolean" } } },
-  { path: ["ext"], args: [{ name: "extension-id", required: true }, { name: "extension-argv", required: false, variadic: true }], workspace: "optional", config: [], interaction: "never", effects: "external", options: {} },
+
+
+
+
+
+
+
+
+
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
   { path: ["completion"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: { shell: { type: "string" } } },
   { path: ["help"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },

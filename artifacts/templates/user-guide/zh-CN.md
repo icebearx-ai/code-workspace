@@ -28,7 +28,7 @@ codew update
 codew doctor
 ```
 
-`update` 会更新托管指令、Workspace 技能、Hook 和本指南。如果托管文件包含未知的本地修改，更新会停止。请先检查文件；只有明确要覆盖这些修改时才使用 `--force`。
+`update` 会更新托管指令、Workspace 技能和本指南。如果托管文件包含未知的本地修改，更新会停止。请先检查文件；只有明确要覆盖这些修改时才使用 `--force`。
 
 ## 工作区语言
 
@@ -46,25 +46,6 @@ codew update --language zh-CN
 ```
 
 该操作也会切换本托管指南。已有项目 context 不会自动翻译。
-
-## 使用 Agent Monitor
-
-监控以内置 `monitor` 扩展的形式提供。先在 Workspace 中安装扩展，再为所有工作区启动一个全局 Monitor：
-
-```bash
-codew extension install monitor --yes
-codew ext monitor
-```
-
-打开命令输出的本地地址。面板会显示工作区、执行状态、待授权请求、已完成轮次和实时信号。Monitor 语言在页面中单独选择，与 `workspace.language` 相互独立。
-
-必要时可使用其他端口：
-
-```bash
-codew ext monitor serve --port 8080
-```
-
-扩展会向 `.codew/monitor-reporting.json` 中记录的 URL 上报。安装后，请在 Codex 中使用 `/hooks` 检查并信任项目 Hook。
 
 ## 实用命令
 
@@ -94,24 +75,10 @@ codew project verify <project-name>
 - `$codew-add-projects` — 检查并注册本地 Git 项目，同时生成供 AI 导航使用的简洁 context。
 - `$codew-resolve-branch` — 安全解决选中项目的分支不一致问题，并确认分支对齐。
 
-以下 Skill 以独立扩展提供，不会随 `init` 或 `update` 自动安装。需要时按名称安装，也可以单独卸载；交互式扩展选择默认不勾选任何扩展，每个选项会显示扩展名称和简短描述：
-
-```bash
-codew extension install zhuiyi-jira-prd-analysis --yes
-codew extension install zhuiyi-jira-task-breakdown --yes
-codew extension install zhuiyi-jira-issue-fix-summary --yes
-codew extension install zhuiyi-guangda-coding-spec --yes
-codew extension uninstall zhuiyi-jira-prd-analysis --yes
-```
-
-- `$zhuiyi-jira-prd-analysis` — 在确认 Jira 范围后分析需求清晰度、一致性和代码可行性。
-- `$zhuiyi-jira-task-breakdown` — 将已确认的 Jira 需求按前端、后端、测试拆分为可执行任务。
-- `$zhuiyi-jira-issue-fix-summary` — 总结已完成的问题修复，并在确认后发布到 Jira 评论。
-- `$zhuiyi-guangda-coding-spec` — 仅在项目属于中国光大银行客户项目时，按本次任务的风险域落实研发、安全、测试与投产规范。
-
-这些扩展只安装 Skill 指令。Jira 相关扩展需要实际访问 Jira 时，还应安装 `zhuiyi-jira-mcp` 扩展；光大规范扩展不依赖任何 MCP 服务。
-
 | 用途 | Codex | Claude Code |
+| --- | --- | --- |
+| 添加工作区项目 | `$codew-add-projects` | `/codew:add-projects` |
+| 解决项目分支不一致 | `$codew-resolve-branch` | `/codew-resolve-branch` |
 | --- | --- | --- |
 | 添加工作区项目 | `$codew-add-projects` | `/codew:add-projects` |
 | 解决项目分支不一致 | `$codew-resolve-branch` | `/codew-resolve-branch` |

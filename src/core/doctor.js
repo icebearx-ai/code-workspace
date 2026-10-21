@@ -1,5 +1,6 @@
 const { CURRENT_CONFIG_VERSION, inspectConfigDomains, loadState } = require("./config");
 const { add, result } = require("./diagnostics");
+const { legacyExtensionDiagnostics } = require("./legacy-extensions");
 const { inspectManagedFiles } = require("./managed-files");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { inspectProjectPermissions } = require("./permissions");
@@ -83,6 +84,8 @@ function doctorWorkspace(root, manifest, options = {}) {
       add(output, "error", error.code || "WORKSPACE_PERMISSION_INSPECTION_FAILED", error.message, error.details || {});
     }
   }
+
+  for (const diagnostic of legacyExtensionDiagnostics(root)) add(output, diagnostic.severity, diagnostic.code, diagnostic.message, diagnostic);
 
   const state = loadState(root);
   if (!options.allowIncompleteState) {

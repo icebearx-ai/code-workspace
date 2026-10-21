@@ -58,38 +58,7 @@ function parse(argv) {
   const resolved = resolveCommand(tokens);
   if (!resolved.command) return { command: null, positionals: [], args: [], options: resolved.leadingOptions };
   try {
-    if (resolved.command.path.length === 1 && resolved.command.path[0] === "ext") {
-      const options = { ...resolved.leadingOptions };
-      let index = resolved.index;
-      let separator = false;
-      while (index < tokens.length) {
-        const token = tokens[index];
-        if (token === "--") {
-          separator = true;
-          index += 1;
-          break;
-        }
-        if (!token.startsWith("-")) break;
-        const parsed = parseOption(token, GLOBAL_OPTIONS, tokens, index);
-        if (Object.prototype.hasOwnProperty.call(options, parsed.name)) {
-          throw new WorkspaceError("CLI_DUPLICATE_OPTION", `Option provided more than once: --${parsed.name}`, { option: parsed.name });
-        }
-        options[parsed.name] = parsed.value;
-        index = parsed.next;
-      }
-      const extensionId = tokens[index];
-      if (!options.help && extensionId === undefined) throw new WorkspaceError("CLI_ARGUMENT_REQUIRED", "ext requires <extension-id>", { argument: "extension-id" });
-      const args = extensionId === undefined ? [] : [extensionId, ...tokens.slice(index + 1)];
-      if (args[1] === "--") args.splice(1, 1);
-      return {
-        command: resolved.command,
-        args,
-        options,
-        positionals: [...resolved.command.path, ...args],
-        opaque: true,
-        separator,
-      };
-    }
+
     const definitions = { ...GLOBAL_OPTIONS, ...resolved.command.options };
     const options = { ...resolved.leadingOptions };
     const args = [];
@@ -152,14 +121,7 @@ function hostJsonRequested(argv) {
     if (isJson(tokens[index])) return true;
     index += 1;
   }
-  if (tokens[index] !== "ext") return tokens.some(isJson);
-  index += 1;
-  while (index < tokens.length && tokens[index].startsWith("-")) {
-    if (tokens[index] === "--") break;
-    if (isJson(tokens[index])) return true;
-    index += 1;
-  }
-  return false;
+  return tokens.some(isJson);
 }
 
 module.exports = { hostJsonRequested, parse, resolveCommand };

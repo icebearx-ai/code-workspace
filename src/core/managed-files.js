@@ -6,8 +6,6 @@ const { LOCAL_DIRECTORY, loadState, saveState } = require("./config");
 const { WorkspaceError } = require("./errors");
 const { atomicWrite, sha256 } = require("./fs");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
-const { CODEX_HOOKS_TARGET, composeHookContent } = require("./extension-artifacts");
-const { composeHookDocument } = require("./hooks");
 
 const PACKAGE_ROOT = path.resolve(__dirname, "..", "..");
 const ARTIFACTS_ROOT = path.join(PACKAGE_ROOT, "artifacts");
@@ -46,34 +44,8 @@ function renderManagedContent(entry, variables = {}) {
   return Buffer.from(content);
 }
 
-function extensionHookState(root, provided) {
-  if (provided !== undefined) return provided;
-  const file = path.join(root, LOCAL_DIRECTORY, "ext-manifest.json");
-  if (!fs.existsSync(file)) return { schemaVersion: 1, experimental: true, extensions: {} };
-  try {
-    const state = JSON.parse(fs.readFileSync(file, "utf8"));
-    return state?.schemaVersion === 1 && state.experimental === true && state.extensions && typeof state.extensions === "object" ? state : null;
-  } catch {
-    return null;
-  }
-}
-
-function hasExtensionHooks(state) {
-  if (!state) return false;
-  return Object.values(state.extensions || {}).some((value) =>
-    (value.installed?.artifacts || []).some((artifact) => artifact.kind === "codex-hooks") ||
-    (value.installed?.hooks || []).some((hook) => hook.tools?.includes("codex"))
-  );
-}
-
-function desiredManagedContent(root, entry, variables, extensionState, includeCore = true) {
-  if (entry.target !== CODEX_HOOKS_TARGET) return renderManagedContent(entry, variables);
-  const target = path.join(root, entry.target);
-  if (extensionState === null && fs.existsSync(target)) return fs.readFileSync(target);
-  const base = includeCore ? renderManagedContent(entry, variables) : Buffer.from('{\n  "hooks": {}\n}\n');
-  const legacy = composeHookContent(base, extensionState || { extensions: {} });
-  const composed = composeHookDocument(legacy, "codex", { extensions: {} }, extensionState || { extensions: {} });
-  return Buffer.from(`${JSON.stringify(composed, null, 2)}\n`);
+function desiredManagedContent(root, entry, variables) {
+  return renderManagedContent(entry, variables);
 }
 
 function resolveArtifact(relativePath) {
@@ -191,9 +163,9 @@ function previousInstalledSha(state, entry) {
   return previous?.installedSha256 || previous?.sha256 || null;
 }
 
-function classifyManagedFile(root, entry, state, variables = {}, extensionState, includeCore = true) {
+function classifyManagedFile(root, entry, state, variables = {}) {
   const target = path.join(root, entry.target);
-  const desiredSha256 = sha256(desiredManagedContent(root, entry, variables, extensionState, includeCore));
+  const desiredSha256 = sha256(desiredManagedContent(root, entry, variables));
   if (!fs.existsSync(target)) return { state: "missing", target, sha256: null, desiredSha256 };
   const actualSha256 = sha256(fs.readFileSync(target));
   if (actualSha256 === desiredSha256) return { state: "current", target, sha256: actualSha256, desiredSha256 };
@@ -204,16 +176,12 @@ function classifyManagedFile(root, entry, state, variables = {}, extensionState,
   return { state: "unknown", target, sha256: actualSha256, desiredSha256 };
 }
 
-function inspectManagedFiles(root, manifest, tools, variables = {}, options = {}) {
+function inspectManagedFiles(root, manifest, tools, variables = {}) {
   const state = loadState(root);
-  const hooksState = extensionHookState(root, options.extensionState);
-  const coreSelected = new Set(selectedManagedFiles(manifest, tools).map((entry) => entry.id));
-  const selected = new Set(coreSelected);
-  const hookEntry = manifest.managedFiles.find((entry) => entry.target === CODEX_HOOKS_TARGET);
-  if (hookEntry && (hasExtensionHooks(hooksState) || (hooksState === null && fs.existsSync(path.join(root, CODEX_HOOKS_TARGET))))) selected.add(hookEntry.id);
+  const selected = new Set(selectedManagedFiles(manifest, tools).map((entry) => entry.id));
   const output = { current: [], managedOld: [], replaceable: [], missing: [], unknown: [], files: [] };
   for (const entry of manifest.managedFiles.filter((entry) => selected.has(entry.id))) {
-    const classified = classifyManagedFile(root, entry, state, variables, hooksState, coreSelected.has(entry.id));
+    const classified = classifyManagedFile(root, entry, state, variables);
     const key = classified.state === "managed-old" ? "managedOld" : classified.state;
     output[key].push(entry.target);
     output.files.push({
@@ -231,11 +199,7 @@ function inspectManagedFiles(root, manifest, tools, variables = {}, options = {}
 function planManagedFiles(root, manifest, tools, options = {}) {
   const state = loadState(root) || { schemaVersion: 2, managedFiles: {} };
   const plans = [];
-  const hooksState = extensionHookState(root, options.extensionState);
-  const coreSelected = new Set(selectedManagedFiles(manifest, tools).map((entry) => entry.id));
-  const selected = new Set(coreSelected);
-  const hookEntry = manifest.managedFiles.find((entry) => entry.target === CODEX_HOOKS_TARGET);
-  if (hookEntry && (hasExtensionHooks(hooksState) || (hooksState === null && fs.existsSync(path.join(root, CODEX_HOOKS_TARGET))))) selected.add(hookEntry.id);
+  const selected = new Set(selectedManagedFiles(manifest, tools).map((entry) => entry.id));
   for (const entry of manifest.managedFiles) {
     if (!selected.has(entry.id)) {
       const previousSha = previousInstalledSha(state, entry);
@@ -256,7 +220,7 @@ function planManagedFiles(root, manifest, tools, options = {}) {
       });
       continue;
     }
-    const classified = classifyManagedFile(root, entry, state, options.variables, hooksState, coreSelected.has(entry.id));
+    const classified = classifyManagedFile(root, entry, state, options.variables);
     if (classified.state === "current") {
       plans.push({ entry, target: classified.target, action: "skip", previous: null, reason: "current", desiredSha256: classified.desiredSha256 });
       continue;
@@ -273,7 +237,7 @@ function planManagedFiles(root, manifest, tools, options = {}) {
       action: "write",
       reason: classified.state,
       previous: fs.existsSync(classified.target) ? fs.readFileSync(classified.target) : null,
-      content: desiredManagedContent(root, entry, options.variables, hooksState, coreSelected.has(entry.id)),
+      content: desiredManagedContent(root, entry, options.variables),
       desiredSha256: classified.desiredSha256,
     });
   }
