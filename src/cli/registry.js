@@ -17,6 +17,7 @@ const COMMAND_SUMMARIES = {
   "project branch use-registered": "Switch selected project worktrees to registered branches",
   "project branch update-latest": "Update selected enabled project branches to their latest upstream commits",
   "project list": "List local projects",
+  context: "Show workspace project context for Agent consumption",
   "project show": "Show one local project",
   "project verify": "Validate all local projects or selected projects",
   "permissions apply": "Apply registered project directory authorization",
@@ -63,6 +64,9 @@ const COMMANDS = [
 
 
 
+  { path: ["context"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
+  { path: ["plugin", "install"], args: [], workspace: "required", config: ["identity", "language"], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
+  { path: ["plugin", "uninstall"], args: [], workspace: "required", config: [], interaction: "required", effects: "planned-write", options: { yes: { type: "boolean" } } },
   { path: ["doctor"], args: [], workspace: "required", config: ["complete"], interaction: "never", effects: "read-only", options: {} },
   { path: ["completion"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: { shell: { type: "string" } } },
   { path: ["help"], args: [], workspace: "none", config: [], interaction: "never", effects: "read-only", options: {} },

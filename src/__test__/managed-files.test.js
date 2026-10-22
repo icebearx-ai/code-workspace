@@ -84,7 +84,7 @@ test("managed files respect selected tools while the user guide remains tool-neu
   assert.equal(result.length, 6);
   assert(!result.some((entry) => entry.target.startsWith(".claude/")));
   assert(!result.some((entry) => entry.target === "CLAUDE.md"));
-  assert(result.some((entry) => entry.target === "AGENTS.md"));
+  assert(!result.some((entry) => entry.target === "AGENTS.md"));
   assert(!result.some((entry) => entry.target === "AGENT.md"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
@@ -99,8 +99,8 @@ test("changing the selected tools removes previously managed tool assets", () =>
   installManagedFiles(root, manifest, ["codex"]);
   const changed = installManagedFiles(root, manifest, []);
   assert(!changed.some((entry) => entry.action !== "remove" && entry.target === "AGENTS.md"));
-  assert(changed.some((entry) => entry.action === "remove" && entry.target === "AGENTS.md"));
-  assert(!fs.existsSync(path.join(root, "AGENTS.md")));
+  assert(changed.some((entry) => entry.action === "remove" && entry.target === ".codex/skills/codew-add-projects/SKILL.md"));
+  assert(!fs.existsSync(path.join(root, ".codex/skills/codew-add-projects/SKILL.md")));
   assert(fs.existsSync(path.join(root, "USER_GUIDE.md")));
 });
 
@@ -149,56 +149,17 @@ test("core managed files no longer own Monitor hooks", () => {
   assert.equal(installManagedFiles(root, manifest, ["codex"]).length, 6);
 });
 
-test("one canonical template renders both workspace instructions with platform-specific add commands", () => {
-  const root = baseline();
-  const manifest = loadInitManifest();
-  installManagedFiles(root, manifest, ["claude", "codex"]);
-  const source = fs.readFileSync(path.join(__dirname, "..", "..", "artifacts", "templates", "agent", "templates", "WORKSPACE_GUARD.md.template"), "utf8");
-  const claude = source.replace("{{ADD_PROJECTS_INVOCATION}}", "/codew:add-projects /absolute/path/to/project");
-  const codex = source.replace("{{ADD_PROJECTS_INVOCATION}}", "$codew-add-projects /absolute/path/to/project");
-  const normalize = (content) => content
-    .replace("/codew:add-projects /absolute/path/to/project", "<add-projects>")
-    .replace("$codew-add-projects /absolute/path/to/project", "<add-projects>");
-  assert.equal(normalize(claude), normalize(codex));
-  assert.match(source, /\{\{ADD_PROJECTS_INVOCATION\}\}/);
-  assert.equal(source.trimEnd().split("\n").length <= 80, true);
-  for (const content of [claude, codex]) {
-    assert.match(content, /The workspace is not a project/);
-    assert.match(content, /codew project list --json/);
-    assert.match(content, /codew project show "<project\.name>" --json/);
-    assert.match(content, /codew project verify "<project\.name>" --json/);
-    assert.match(content, /codew-resolve-branch/);
-    assert.match(content, /PROJECT_BRANCH_MISMATCH/);
-    assert.match(content, /MUST NOT guess a project path/);
-    assert.match(content, /MUST NOT directly create, edit, move, or delete Workspace-owned files under the workspace root/);
-    assert.match(content, /registeredBranch.*expected state/);
-    assert.match(content, /actualBranch.*observed state/);
-    assert.match(content, /freeze the scope to that project/);
-    assert.match(content, /Do not list or verify unrelated projects/);
-    assert.match(content, /without rerunning targeted `project verify`/);
-    assert.match(content, /Do not rerun targeted `project verify` after update-latest/);
-    assert.match(content, /fastForwarded: true/);
-    assert.match(content, /re-read the project files and instructions/);
-    assert.doesNotMatch(content, /rerun targeted `project verify` for the successfully reconciled projects/);
-    assert.doesNotMatch(content, /discard pre-update context and rerun targeted `project verify`/);
-    assert.doesNotMatch(content, /OpenSpec owns|Cross-project|Every capability|proposal|archive workflow/);
-  }
-  assert.match(claude, /\/codew:add-projects \/absolute\/path\/to\/project/);
-  assert.doesNotMatch(claude, /\$codew-add-projects/);
-  assert.match(codex, /\$codew-add-projects \/absolute\/path\/to\/project/);
-  assert.doesNotMatch(codex, /\/codew:add-projects/);
-});
-
 test("Claude selection installs only the Claude root instruction template", () => {
   const root = baseline(["claude"]);
   const manifest = loadInitManifest();
   const result = installManagedFiles(root, manifest, ["claude"]);
-  assert(result.some((entry) => entry.target === "CLAUDE.md"));
+  assert(result.some((entry) => entry.target === ".claude/skills/codew-getting-started/SKILL.md"));
+  assert(!result.some((entry) => entry.target === "CLAUDE.md"));
   assert(!result.some((entry) => entry.target === "AGENTS.md"));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-")));
   assert(!result.some((entry) => entry.target.includes("zhuiyi-jira-issue-fix-summary")));
-  assert(fs.existsSync(path.join(root, "CLAUDE.md")));
-  assert(!fs.existsSync(path.join(root, "AGENTS.md")));
+  assert(!fs.existsSync(path.join(root, "CLAUDE.md")));
+  assert(!fs.existsSync(path.join(root, ".codex/skills/codew-add-projects/SKILL.md")));
   assert(fs.existsSync(path.join(root, ".claude", "skills", "codew-resolve-branch", "SKILL.md")));
 });
 

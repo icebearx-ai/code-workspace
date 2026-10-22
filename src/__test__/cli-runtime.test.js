@@ -77,7 +77,7 @@ test("semantic parser rejects unknown options, duplicates, and extra arguments",
   assert.throws(() => parse(argv("project", "list", "extra")), (error) => error.code === "CLI_EXTRA_ARGUMENT");
   assert.throws(() => parse(argv("project", "list", "--json", "--json")), (error) => error.code === "CLI_DUPLICATE_OPTION");
   assert.deepEqual(parse(argv("project", "verify", "service", "extra")).args, ["service", "extra"]);
-  assert.throws(() => parse(argv("context", "--change", "add-health")), (error) => error.code === "CLI_UNKNOWN_COMMAND");
+  assert.throws(() => parse(argv("context", "--change", "add-health")), (error) => error.code === "CLI_UNKNOWN_OPTION");
   assert.throws(() => parse(argv("project", "add", "/tmp/service", "--spec-prefix", "service")), (error) =>
     error.code === "CLI_UNKNOWN_OPTION" && error.details.command === "project.add" && error.details.option === "spec-prefix"
   );
@@ -177,11 +177,8 @@ test("completion scripts include subcommands and command-specific options", () =
     assert.match(script, /update-latest/);
     assert.doesNotMatch(script, /sync-branch/);
     assert.doesNotMatch(script, /extension/);
-    assert.doesNotMatch(script, /install/);
-    assert.doesNotMatch(script, /uninstall/);
-    assert.doesNotMatch(script, /upgrade/);
   }
-  assert(!spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
+  assert(spec.children.find((entry) => entry.path.length === 0).values.includes("context"));
   const projectList = spec.commands.find((entry) => entry.path.join(" ") === "project list");
   const projectAdd = spec.commands.find((entry) => entry.path.join(" ") === "project add");
   assert(!projectList.options.includes("--projects-file"));
@@ -229,8 +226,8 @@ test("codew is the recommended command while legacy aliases remain packaged", ()
   assert.match(result.stdout, /Usage: codew \[command\] \[options\]/);
 });
 
-test("removed context command is rejected before workspace discovery", () => {
-  const result = run(os.tmpdir(), ["context", "--json"]);
+test("unknown command is rejected before workspace discovery", () => {
+  const result = run(os.tmpdir(), ["nonexistent-command", "--json"]);
   assert.equal(result.status, 1);
   const envelope = JSON.parse(result.stdout);
   assert.equal(envelope.command, null);
@@ -1050,7 +1047,6 @@ test("final branch migration leaves no legacy public contract in implementation 
     "src/core/project.js",
     "src/core/validation.js",
     "docs/code-workspace-flow.zh-CN.md",
-    "artifacts/templates/agent/templates/WORKSPACE_GUARD.md.template",
     "artifacts/templates/agent/codew-resolve-branch.SKILL.md",
     "artifacts/templates/user-guide/en-US.md",
     "artifacts/templates/user-guide/zh-CN.md",

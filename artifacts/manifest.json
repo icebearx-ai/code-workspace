@@ -10,24 +10,6 @@
   ],
   "sources": [
     {
-      "id": "workspace-user-guide-en-US",
-      "kind": "asset",
-      "path": "templates/user-guide/en-US.md",
-      "sha256": "98a6e3fb2fcefecbaf9d67a6d8a1c6a8bd9b2c666c5f1eaa958fe0494df6e030"
-    },
-    {
-      "id": "workspace-user-guide-zh-CN",
-      "kind": "asset",
-      "path": "templates/user-guide/zh-CN.md",
-      "sha256": "40be40b5c31534ca9a6b5cf467177a40e98a12ab298592d72024a315b7a8422f"
-    },
-    {
-      "id": "workspace-agent-codex-instructions",
-      "kind": "asset",
-      "path": "templates/agent/templates/WORKSPACE_GUARD.md.template",
-      "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
-    },
-    {
       "id": "workspace-agent-add-projects-skill",
       "kind": "asset",
       "path": "templates/agent/codew-add-projects.SKILL.md",
@@ -56,6 +38,18 @@
       "kind": "asset",
       "path": "templates/agent/claude/add-projects.md",
       "sha256": "c073df218714d42a809b66c8ec47ff4a242630a3b63446701cad2babe4454a38"
+    },
+    {
+      "id": "workspace-agent-codex-getting-started",
+      "kind": "asset",
+      "path": "templates/agent/codex/skills/codew-getting-started/SKILL.md",
+      "sha256": "df25d83ab85c1820e658c7fb729c24b674c6b480cca5dbb17d8b36a77f3477d9"
+    },
+    {
+      "id": "workspace-agent-claude-getting-started",
+      "kind": "asset",
+      "path": "templates/agent/claude/skills/codew-getting-started/SKILL.md",
+      "sha256": "f39e0e577593fa2a23be3a8be0c9c3cf274f7019d80c0d244b19367c98a609f4"
     }
   ],
   "managedFiles": [
@@ -75,29 +69,6 @@
       "provenance": {
         "kind": "template"
       }
-    },
-    {
-      "id": "workspace-codex-instructions",
-      "target": "AGENTS.md",
-      "tools": [
-        "codex"
-      ],
-      "desired": {
-        "source": "templates/agent/templates/WORKSPACE_GUARD.md.template",
-        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
-      },
-      "render": {
-        "variables": [
-          "ADD_PROJECTS_INVOCATION"
-        ],
-        "values": {
-          "ADD_PROJECTS_INVOCATION": "$codew-add-projects /absolute/path/to/project"
-        }
-      },
-      "provenance": {
-        "kind": "builtin-agent"
-      },
-      "allowMissing": true
     },
     {
       "id": "codex-add-projects-skill",
@@ -160,29 +131,6 @@
       "allowMissing": true
     },
     {
-      "id": "workspace-claude-instructions",
-      "target": "CLAUDE.md",
-      "tools": [
-        "claude"
-      ],
-      "desired": {
-        "source": "templates/agent/templates/WORKSPACE_GUARD.md.template",
-        "sha256": "974d611008ec9206b34accea60d75c89d8b8acb68217e26f5649426ff676d466"
-      },
-      "render": {
-        "variables": [
-          "ADD_PROJECTS_INVOCATION"
-        ],
-        "values": {
-          "ADD_PROJECTS_INVOCATION": "/codew:add-projects /absolute/path/to/project"
-        }
-      },
-      "provenance": {
-        "kind": "builtin-agent"
-      },
-      "allowMissing": true
-    },
-    {
       "id": "claude-add-projects-skill",
       "target": ".claude/skills/codew-add-projects/SKILL.md",
       "tools": [
@@ -226,6 +174,36 @@
         "kind": "builtin-agent"
       },
       "allowMissing": true
+    },
+    {
+      "id": "codex-getting-started-skill",
+      "target": ".codex/skills/codew-getting-started/SKILL.md",
+      "tools": [
+        "codex"
+      ],
+      "allowMissing": true,
+      "desired": {
+        "source": "templates/agent/codex/skills/codew-getting-started/SKILL.md",
+        "sha256": "df25d83ab85c1820e658c7fb729c24b674c6b480cca5dbb17d8b36a77f3477d9"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      }
+    },
+    {
+      "id": "claude-getting-started-skill",
+      "target": ".claude/skills/codew-getting-started/SKILL.md",
+      "tools": [
+        "claude"
+      ],
+      "allowMissing": true,
+      "desired": {
+        "source": "templates/agent/claude/skills/codew-getting-started/SKILL.md",
+        "sha256": "f39e0e577593fa2a23be3a8be0c9c3cf274f7019d80c0d244b19367c98a609f4"
+      },
+      "provenance": {
+        "kind": "builtin-agent"
+      }
     }
   ]
 }

@@ -80,12 +80,12 @@ test("init installs only workspace-owned integrations and does not create opensp
     ".claude/commands/codew/add-projects.md",
     ".claude/skills/codew-add-projects/SKILL.md",
     ".claude/skills/codew-resolve-branch/SKILL.md",
+    ".claude/skills/codew-getting-started/SKILL.md",
+    ".codex/skills/codew-getting-started/SKILL.md",
     ".codex/skills/codew-add-projects/SKILL.md",
     ".codex/skills/codew-add-projects/agents/openai.yaml",
     ".codex/skills/codew-resolve-branch/SKILL.md",
     ".codex/skills/codew-resolve-branch/agents/openai.yaml",
-    "CLAUDE.md",
-    "AGENTS.md",
     "USER_GUIDE.md",
   ];
   for (const file of expected) assert(fs.existsSync(path.join(root, file)), file);
@@ -101,35 +101,9 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.equal(output.workspace.language, "zh-CN");
   assert.match(fs.readFileSync(path.join(root, "USER_GUIDE.md"), "utf8"), /Code Workspace 用户指南/);
   assert.equal(fs.existsSync(path.join(root, "openspec")), false);
-  const claudeInstructions = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
-  const codexInstructions = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
-  assert.match(claudeInstructions, /The workspace is not a project/);
-  assert.match(claudeInstructions, /\/codew:add-projects \/absolute\/path\/to\/project/);
-  assert.match(codexInstructions, /The workspace is not a project/);
-  assert.match(codexInstructions, /\$codew-add-projects \/absolute\/path\/to\/project/);
-  for (const instructions of [claudeInstructions, codexInstructions]) {
-    assert.match(instructions, /codew project list --json/);
-    assert.match(instructions, /codew project show "<project\.name>" --json/);
-    assert.match(instructions, /codew project verify "<project\.name>" --json/);
-    assert.match(instructions, /codew-resolve-branch/);
-    assert.match(instructions, /registeredBranch.*expected state/);
-    assert.match(instructions, /actualBranch.*observed state/);
-    assert.match(instructions, /freeze the scope to that project/);
-    assert.match(instructions, /one combined choice/);
-    assert.match(instructions, /one targeted `project verify` invocation/);
-    assert.match(instructions, /project branch update-latest/);
-    assert.match(instructions, /without rerunning targeted `project verify`/);
-    assert.match(instructions, /Do not rerun targeted `project verify` after update-latest/);
-    assert.match(instructions, /fastForwarded: true/);
-    assert.match(instructions, /re-read the project files and instructions/);
-    assert.match(instructions, /Users may manually edit `\.codew\/config\.yaml`/);
-    assert.match(instructions, /AI\/Agent must not imitate that edit/);
-    assert.match(instructions, /effects, diagnostics, transactions, and verification results remain project-isolated/);
-    assert.match(instructions, /even when the top-level `ok` is false/);
-    assert.doesNotMatch(instructions, /rerun targeted `project verify` for the successfully reconciled projects/);
-    assert.doesNotMatch(instructions, /discard pre-update context and rerun targeted `project verify`/);
-    assert.doesNotMatch(instructions, /OpenSpec owns|Cross-project|Every capability/);
-  }
+  assert(!fs.existsSync(path.join(root, "CLAUDE.md")));
+  assert(!fs.existsSync(path.join(root, "AGENTS.md")));
+
   const addProjectsSkill = fs.readFileSync(path.join(root, ".codex", "skills", "codew-add-projects", "SKILL.md"), "utf8");
   const resolveBranchSkill = fs.readFileSync(path.join(root, ".codex", "skills", "codew-resolve-branch", "SKILL.md"), "utf8");
   const addProjectsCommand = fs.readFileSync(path.join(root, ".claude", "commands", "codew", "add-projects.md"), "utf8");

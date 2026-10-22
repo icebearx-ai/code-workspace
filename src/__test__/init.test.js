@@ -21,7 +21,7 @@ test("init manifest describes only workspace-owned assets", () => {
   assert.equal(manifest.schemaVersion, 2);
   assert.equal(manifest.releaseVersion, packageJson.version);
   assert.deepEqual(manifest.tools, ["claude", "codex"]);
-  assert.equal(manifest.sources.length, 8);
+  assert.equal(manifest.sources.length, 7);
   assert.equal(manifest.managedFiles.length, 10);
   assert(manifest.managedFiles.some((entry) => entry.provenance?.kind === "builtin-agent"));
   assert(manifest.sources.every((entry) => entry.kind === "asset"));
