@@ -59,6 +59,7 @@ test("init installs only workspace-owned integrations and does not create opensp
     "Install workspace dependencies",
     "Remove obsolete managed files",
     "Install managed files",
+    "Distribute Agent skills",
     "Prepare local workspace configuration",
     "Apply Agent workspace permissions",
     "Run strict workspace doctor",

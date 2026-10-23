@@ -26,7 +26,9 @@ const {
   runCommand,
 } = require("./init");
 const { applyPermissionPlan, permissionTargets, planPermissionChanges } = require("./permissions");
+const { filterPermissionCapable } = require("./agent-tools");
 const { installManagedFiles } = require("./managed-files");
+const { distributeSkillsToTools } = require("./agent-skill-distribution");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { planWorkspaceMaintenance } = require("./migration");
 const { createFileTransaction } = require("./transaction");
@@ -38,6 +40,7 @@ const INITIALIZATION_STAGE_IDS = Object.freeze({
   "Install workspace dependencies": "install-dependencies",
   "Remove obsolete managed files": "cleanup-obsolete",
   "Install managed files": "install-managed-files",
+  "Distribute Agent skills": "distribute-agent-skills",
   "Prepare local workspace configuration": "save-config",
   "Apply Agent workspace permissions": "apply-permissions",
   "Run strict workspace doctor": "strict-doctor",
@@ -135,6 +138,10 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     })
   );
 
+  const agentSkills = await stage("Distribute Agent skills", () =>
+    distributeSkillsToTools(root, manifest, options.tools || [])
+  );
+
   const localConfig = await stage("Prepare local workspace configuration", () => {
     const file = configPath(root);
     const action = fs.existsSync(file) ? "skip" : "write";
@@ -148,9 +155,11 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     throw new Error(`Local project verification failed: ${projects.errors.join("; ")}`);
   }
   const permissions = await stage("Apply Agent workspace permissions", () => {
+    const permissionTools = filterPermissionCapable(options.tools);
+    if (permissionTools.length === 0) return { action: "skip", reason: "no-permission-capable-tools", tools: [] };
     const permissionPlan = planPermissionChanges({
       root,
-      tools: options.tools,
+      tools: permissionTools,
       grants: config.projects.map((project) => project.location),
     });
     return applyPermissionPlan(permissionPlan, { transaction: options.transaction });
@@ -160,7 +169,7 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     const result = doctorWorkspace(root, manifest, {
       allowIncompleteState: true,
       run,
-      tools: options.tools,
+      tools: filterPermissionCapable(options.tools),
     });
     if (result.errors.length > 0) throw new Error(`Workspace doctor failed: ${result.errors.join("; ")}`);
     return { warnings: result.warnings, projects: config.projects.length };
@@ -175,7 +184,7 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
   );
 
   const verification = await stage("Verify local initialization state", () => {
-    const result = doctorWorkspace(root, manifest, { run, tools: options.tools });
+    const result = doctorWorkspace(root, manifest, { run, tools: filterPermissionCapable(options.tools) });
     if (result.errors.length > 0) throw new Error(`Final workspace verification failed: ${result.errors.join("; ")}`);
     return { warnings: result.warnings, projects: config.projects.length };
   });
@@ -189,6 +198,7 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     dependencies,
     obsoleteFiles,
     managedFiles,
+    agentSkills,
     localConfig,
     workspaceConfig: config,
     permissions,
@@ -211,7 +221,7 @@ async function initializeWorkspace(rootInput, options = {}) {
     projectFile,
     path.join(root, ".gitignore"),
     path.join(root, ".codex", "config.toml"),
-    ...permissionTargets(root, options.tools),
+    ...permissionTargets(root, filterPermissionCapable(options.tools)),
     ...manifest.managedFiles.map((entry) => path.join(root, entry.target)),
     ...OBSOLETE_ASSETS.map((target) => path.join(root, target)),
   ];

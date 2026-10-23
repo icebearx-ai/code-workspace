@@ -6,6 +6,7 @@ const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { inspectProjectPermissions } = require("./permissions");
 const { validateProjects } = require("./validation");
 const { resolveWorkspaceTools } = require("./tools");
+const { filterPermissionCapable } = require("./agent-tools");
 
 function merge(target, source) {
   target.errors.push(...source.errors);
@@ -69,7 +70,7 @@ function doctorWorkspace(root, manifest, options = {}) {
   }
   if (inspection.projects.valid && config.projects.length > 0) {
     try {
-      output.permissionInspection = inspectProjectPermissions({ root, tools, projects: config.projects });
+      output.permissionInspection = inspectProjectPermissions({ root, tools: filterPermissionCapable(tools), projects: config.projects });
       for (const tool of output.permissionInspection) {
         for (const directory of tool.missing) {
           add(output, "error", "WORKSPACE_PERMISSION_MISSING", `Registered project directory is not authorized for ${tool.tool}: ${directory}`, {
