@@ -16,7 +16,6 @@ const {
   executeLanguage,
 } = require("./cli/commands/workspace");
 const { executeContext } = require("./cli/commands/context");
-const { executePlugin } = require("./cli/commands/plugin");
 
 async function dispatch(invocation) {
   const key = invocation.definition.path.join(" ");
@@ -28,7 +27,6 @@ async function dispatch(invocation) {
   if (key === "language") return executeLanguage(invocation);
   if (key === "permissions apply") return executePermissions(invocation);
   if (key === "context") return executeContext(invocation);
-  if (key.startsWith("plugin ")) return executePlugin(invocation);
   if (key === "doctor") return executeDoctor(invocation);
   if (key === "completion") return executeCompletion(invocation);
   if (key === "help") return executeHelp();

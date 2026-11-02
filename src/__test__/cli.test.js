@@ -60,6 +60,7 @@ test("init installs only workspace-owned integrations and does not create opensp
     "Remove obsolete managed files",
     "Install managed files",
     "Distribute Agent skills",
+    "Install Agent hooks",
     "Prepare local workspace configuration",
     "Apply Agent workspace permissions",
     "Run strict workspace doctor",
@@ -72,7 +73,7 @@ test("init installs only workspace-owned integrations and does not create opensp
   assert.equal(output.workspace.name, "code-workspace");
   assert.match(output.workspace.uuid, /^[0-9a-f-]{36}$/);
   assert.equal(output.monitor, undefined);
-  assert.equal(fs.existsSync(path.join(root, ".codex", "hooks.json")), false);
+  assert.equal(fs.existsSync(path.join(root, ".codex", "hooks.json")), true);
   const mainConfig = loadWorkspaceYaml(root);
   assert.deepEqual(mainConfig.projects, { ref: "config-projects.yaml" });
   assert.deepEqual(loadProjectYaml(root), { schemaVersion: 1, projects: [] });

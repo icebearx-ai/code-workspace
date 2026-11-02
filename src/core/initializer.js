@@ -29,6 +29,7 @@ const { applyPermissionPlan, permissionTargets, planPermissionChanges } = requir
 const { filterPermissionCapable } = require("./agent-tools");
 const { installManagedFiles } = require("./managed-files");
 const { distributeSkillsToTools } = require("./agent-skill-distribution");
+const { installAgentHooks } = require("./command-adapters");
 const { DEFAULT_WORKSPACE_LANGUAGE, workspaceGuide } = require("./language");
 const { planWorkspaceMaintenance } = require("./migration");
 const { createFileTransaction } = require("./transaction");
@@ -41,6 +42,7 @@ const INITIALIZATION_STAGE_IDS = Object.freeze({
   "Remove obsolete managed files": "cleanup-obsolete",
   "Install managed files": "install-managed-files",
   "Distribute Agent skills": "distribute-agent-skills",
+  "Install Agent hooks": "install-agent-hooks",
   "Prepare local workspace configuration": "save-config",
   "Apply Agent workspace permissions": "apply-permissions",
   "Run strict workspace doctor": "strict-doctor",
@@ -142,6 +144,10 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     distributeSkillsToTools(root, manifest, options.tools || [])
   );
 
+  const agentHooks = await stage("Install Agent hooks", () =>
+    installAgentHooks(root, options.tools || [])
+  );
+
   const localConfig = await stage("Prepare local workspace configuration", () => {
     const file = configPath(root);
     const action = fs.existsSync(file) ? "skip" : "write";
@@ -199,6 +205,7 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     obsoleteFiles,
     managedFiles,
     agentSkills,
+    agentHooks,
     localConfig,
     workspaceConfig: config,
     permissions,
@@ -207,6 +214,21 @@ async function initializeWorkspaceStages(rootInput, options = {}) {
     initPlan: options.initPlan || null,
     stages,
   };
+}
+
+function getHookFilePaths(root, tools) {
+  const { getAdaptersForTools } = require("./command-adapters");
+  const paths = [];
+  for (const adapter of getAdaptersForTools(tools)) {
+    if (!adapter.hook?.supported) continue;
+    paths.push(path.join(root, adapter.hook.configPath));
+  }
+  paths.push(getContextScriptFilePath(root));
+  return paths;
+}
+
+function getContextScriptFilePath(root) {
+  return path.join(root, "scripts", "codew-context.sh");
 }
 
 async function initializeWorkspace(rootInput, options = {}) {
@@ -224,6 +246,7 @@ async function initializeWorkspace(rootInput, options = {}) {
     ...permissionTargets(root, filterPermissionCapable(options.tools)),
     ...manifest.managedFiles.map((entry) => path.join(root, entry.target)),
     ...OBSOLETE_ASSETS.map((target) => path.join(root, target)),
+    ...getHookFilePaths(root, options.tools || []),
   ];
   const transaction = createFileTransaction(files);
   try {

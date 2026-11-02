@@ -114,6 +114,8 @@ async function executeInitUnlocked(invocation, root) {
     dependencies: result.dependencies,
     obsoleteFiles: result.obsoleteFiles,
     managedFiles: result.managedFiles,
+    agentSkills: result.agentSkills,
+    agentHooks: result.agentHooks,
     localConfig: result.localConfig,
     workspace: result.workspaceConfig.workspace,
     dev: result.workspaceConfig.workspace.dev,

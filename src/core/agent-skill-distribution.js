@@ -9,15 +9,15 @@ const { WorkspaceError } = require("./errors");
 
 // Skills that should be distributed to all selected tools
 const SKILL_DISTRIBUTION = Object.freeze([
-  { id: "codew-getting-started", manifestId: "getting-started-skill" },
-  { id: "codew-add-projects", manifestId: "add-projects-skill" },
-  { id: "codew-resolve-branch", manifestId: "resolve-branch-skill" },
+  { id: "codew-getting-started" },
+  { id: "codew-add-projects" },
+  { id: "codew-resolve-branch" },
 ]);
 
 // Find the source SKILL.md for a skill from existing managed files
 function findSkillSource(manifest, skillId) {
   // Look for a managed file whose target contains this skill name
-  const pattern = new RegExp(`codew-${skillId}/SKILL\\.md$`);
+  const pattern = new RegExp(`${skillId}/SKILL\\.md$`);
   const entry = manifest.managedFiles.find((e) => pattern.test(e.target));
   if (!entry) return null;
   return entry;

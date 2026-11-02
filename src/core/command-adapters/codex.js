@@ -12,7 +12,12 @@ const codexAdapter = {
   toolId: "codex",
   skillsDir: ".codex/skills",
   commandsDir: null,
-  hookSupport: false,
+  hook: {
+    supported: true,
+    configPath: path.join(".codex", "hooks.json"),
+    outputFormat: "additionalContext",
+    envVar: "CODEX_HOME",
+  },
   getCommandPath(commandId) {
     return path.join(getCodexHome(), "prompts", `codew-${commandId}.md`);
   },
@@ -24,6 +29,26 @@ argument-hint: command arguments
 
 ${content.body}
 `;
+  },
+  getHookConfig(contextScriptRelativePath) {
+    return {
+      hooks: {
+        SessionStart: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `bash "./${contextScriptRelativePath}"`,
+              },
+            ],
+          },
+        ],
+      },
+    };
+  },
+  formatContextOutput(contextData) {
+    const context = JSON.stringify(contextData).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+    return JSON.stringify({ additionalContext: context });
   },
 };
 
